@@ -1,0 +1,6 @@
+[
+  { "id": "6s-hat",     "name": "6S Ranch hat",    "price": 28, "category": "hats",        "image": "/images/shop/placeholder.jpg" },
+  { "id": "classic-tee","name": "Classic tee",     "price": 25, "category": "tees",        "image": "/images/shop/placeholder.jpg" },
+  { "id": "spur-hoodie","name": "Spur hoodie",     "price": 45, "category": "hoodies",     "image": "/images/shop/placeholder.jpg" },
+  { "id": "sticker-pack","name": "Sticker pack",   "price": 8,  "category": "accessories", "image": "/images/shop/placeholder.jpg" }
+]

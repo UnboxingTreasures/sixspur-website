@@ -1,0 +1,9 @@
+[
+  { "id": "cows",        "name": "Cows",        "count": 3,   "icon": "cow"      },
+  { "id": "goats",       "name": "Goats",       "count": 8,   "icon": "goat"     },
+  { "id": "ducks",       "name": "Ducks",       "count": 7,   "icon": "duck"     },
+  { "id": "geese",       "name": "Geese",       "count": 5,   "icon": "goose"    },
+  { "id": "chickens",    "name": "Chickens",    "count": 22,  "icon": "chicken"  },
+  { "id": "donkeys",     "name": "Donkeys",     "count": 4,   "icon": "donkey"   },
+  { "id": "minidonkeys", "name": "Mini donkeys","count": 2,   "icon": "donkey"   }
+]

@@ -1,0 +1,18 @@
+[
+  {
+    "id": "ranger-adoption",
+    "title": "Dog of the month: Ranger is ready to ride",
+    "category": "Adoption",
+    "date": "2026-06-01",
+    "excerpt": "Meet Ranger, our featured adoptable dog this month.",
+    "image": "/images/news/placeholder.jpg"
+  },
+  {
+    "id": "mini-donkeys",
+    "title": "Meet our two new mini donkeys",
+    "category": "Farm life",
+    "date": "2026-05-20",
+    "excerpt": "Two adorable mini donkeys have joined the Six Spur family.",
+    "image": "/images/news/placeholder.jpg"
+  }
+]

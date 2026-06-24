@@ -1,0 +1,22 @@
+[
+  {
+    "id": "ranger",
+    "name": "Ranger",
+    "age": "2 years",
+    "gender": "Male",
+    "breed": "Lab mix",
+    "status": "available",
+    "description": "Ranger is a sweet, energetic boy who loves everyone he meets.",
+    "image": "/images/dogs/placeholder.jpg"
+  },
+  {
+    "id": "daisy",
+    "name": "Daisy",
+    "age": "4 years",
+    "gender": "Female",
+    "breed": "Heeler mix",
+    "status": "available",
+    "description": "Daisy is a calm, loyal girl who does great with kids.",
+    "image": "/images/dogs/placeholder.jpg"
+  }
+]

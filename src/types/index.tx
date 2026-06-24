@@ -1,0 +1,52 @@
+export interface Dog {
+  id: string
+  name: string
+  age: string
+  gender: string
+  breed: string
+  status: 'available' | 'pending' | 'adopted'
+  description: string
+  image: string
+}
+
+export interface FarmAnimal {
+  id: string
+  name: string
+  count: number
+  icon: string
+}
+
+export interface Fundraiser {
+  id: string
+  title: string
+  description: string
+  goal: number
+  raised: number
+  donors: number
+  deadline: string
+  active: boolean
+}
+export interface ShopItem {
+  id: string
+  name: string
+  price: number
+  category: 'hats' | 'tees' | 'hoodies' | 'accessories'
+  image: string
+}
+
+export interface NewsPost {
+  id: string
+  title: string
+  category: string
+  date: string
+  excerpt: string
+  image: string
+}
+
+export interface Subscriber {
+  email: string
+  firstName?: string
+  subscribedAt: string
+  source: string
+  status: 'active' | 'unsubscribed'
+}
