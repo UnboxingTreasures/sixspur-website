@@ -1,37 +1,116 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 
 const farmResidents = [
   {
-    id: 'longhorns',
-    name: 'The Longhorns',
-    description: 'Our longhorns are the heart of the ranch. These gentle giants roam the pastures and greet every visitor with quiet curiosity.',
-    image: '/images/animals/cow-longhorn-haybale.jpg',
+    id: 'cattle',
+    name: 'Cattle',
+    description: 'Longhorns, mama cows, and calves — our cattle are the backbone of Six Spur.',
+    image: '/images/cattle/cow-mama-calf-nuzzle.jpg',
     count: 'Several residents',
   },
   {
-    id: 'calves',
-    name: 'Mama & Calves',
-    description: 'Nothing captures the spirit of Six Spur quite like watching a mama longhorn tend to her calf. Family is everything here.',
-    image: '/images/animals/cow-mama-calf-nuzzle.jpg',
-    count: 'Born on the ranch',
-  },
-  {
     id: 'donkeys',
-    name: 'The Donkeys',
-    description: 'Equal parts stubborn and sweet, our donkeys are fan favorites. They love attention and will follow you around the pasture.',
-    image: '/images/animals/donkey-mini-pair.jpg',
+    name: 'Donkeys',
+    description: 'Equal parts stubborn and sweet — our donkeys will follow you around the pasture all day.',
+    image: '/images/donkeys/donkey-white-portrait.jpg',
     count: '6 residents',
   },
   {
+    id: 'minidonkeys',
+    name: 'Mini Donkeys',
+    description: 'Small in size, huge in personality. Our mini donkeys are fan favorites with every visitor.',
+    image: '/images/mini_donkeys/minidonkey-grazing-dry-field.jpg',
+    count: '2 residents',
+  },
+  {
     id: 'goats',
-    name: 'The Goats',
-    description: 'Curious, playful, and always getting into something — our goats bring energy and laughter to the ranch every single day.',
-    image: '/images/ranch/ranch-goats-sunset.jpg',
+    name: 'Goats',
+    description: 'Curious, playful, and always getting into something — our goats bring energy to the ranch every day.',
+    image: '/images/goats/goat-mama-kids-barn.jpg',
     count: '8 residents',
   },
+  {
+    id: 'chickens',
+    name: 'Chickens',
+    description: 'The Breakfast Factory is open year round. Colorful, busy, and endlessly entertaining.',
+    image: '/images/chickens/chicken-breakfast-factory.jpg',
+    count: '22 residents',
+  },
+  {
+    id: 'ducks',
+    name: 'Ducks',
+    description: 'Waddling around the ranch and keeping everyone entertained — our ducks are a daily delight.',
+    image: '/images/ducks/duck-portrait-standing.jpg',
+    count: '7 residents',
+  },
+  {
+    id: 'geese',
+    name: 'Geese',
+    description: 'The self-appointed welcoming committee. Loud, proud, and impossible to ignore.',
+    image: '/images/geese/geese-pair-necks-portrait.jpg',
+    count: '5 residents',
+  },
+  {
+    id: 'horses',
+    name: 'Horses',
+    description: 'Our paint horses are a beautiful sight on the ranch — graceful, strong, and always curious.',
+    image: '/images/horses/horse-paint-grazing-closeup.jpg',
+    count: 'Several residents',
+  },
+  {
+    id: 'dogs',
+    name: 'Ranch Dogs',
+    description: 'Not every dog at Six Spur is up for adoption — some are permanent members of the ranch family, keeping watch and keeping things lively.',
+    image: '/images/ranch/ranch-dogs-deck-logo.jpg',
+    count: 'Several residents',
+  },
 ];
+
+function FarmCard({ resident }: { resident: typeof farmResidents[0] }) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <div
+      style={{ background: '#1A1A1A', border: '1px solid #2a2a2a', borderRadius: '2px', overflow: 'hidden', cursor: 'pointer' }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {/* Image */}
+      <div style={{ position: 'relative', overflow: 'hidden' }}>
+        <img
+          src={resident.image}
+          alt={resident.name}
+          style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', display: 'block', transform: hovered ? 'scale(1.04)' : 'scale(1)', transition: 'transform 0.4s ease' }}
+        />
+        {/* Hover overlay */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'rgba(17,17,17,0.75)',
+          opacity: hovered ? 1 : 0,
+          transition: 'opacity 0.3s ease',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.25rem',
+        }}>
+          <p style={{ color: '#D1C0B0', fontSize: '0.85rem', lineHeight: 1.65, textAlign: 'center', margin: 0 }}>
+            {resident.description}
+          </p>
+        </div>
+      </div>
+
+      {/* Name bar */}
+      <div style={{ padding: '0.875rem 1rem' }}>
+        <div style={{ color: '#FFFFFF', fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.2rem' }}>
+          {resident.name}
+        </div>
+        <div style={{ color: '#E77A2D', fontSize: '0.75rem', fontWeight: 600 }}>
+          {resident.count}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function FarmFamily() {
   return (
@@ -48,70 +127,14 @@ export default function FarmFamily() {
             <span style={{ color: '#E77A2D' }}>home.</span>
           </h2>
           <p style={{ color: '#D1C0B0', fontSize: '1.05rem', lineHeight: 1.8, margin: 0 }}>
-            Not every animal at Six Spur is here temporarily. Our farm residents are permanent members of the family — longhorns, donkeys, goats, ducks, chickens, and geese that live out their lives on the ranch. Your donations keep them fed, healthy, and happy year-round.
+            Not every animal at Six Spur is here temporarily. Our farm residents are permanent members of the family that live out their lives on the ranch. Your donations keep them fed, healthy, and happy year-round.
           </p>
         </div>
 
-        {/* Photo grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1px', marginBottom: '3rem', background: '#2a2a2a' }}>
-          {farmResidents.map((resident, index) => (
-            <div
-              key={resident.id}
-              style={{ position: 'relative', aspectRatio: index === 0 ? '16/9' : '4/3', overflow: 'hidden', gridColumn: index === 0 ? 'span 2' : 'span 1' }}
-              onMouseEnter={(e) => {
-                const overlay = e.currentTarget.querySelector('.farm-overlay') as HTMLDivElement;
-                if (overlay) overlay.style.opacity = '1';
-              }}
-              onMouseLeave={(e) => {
-                const overlay = e.currentTarget.querySelector('.farm-overlay') as HTMLDivElement;
-                if (overlay) overlay.style.opacity = '0';
-              }}
-            >
-              {/* Photo */}
-              <img
-                src={resident.image}
-                alt={resident.name}
-                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transition: 'transform 0.4s ease' }}
-              />
-
-              {/* Always-visible name bar at bottom */}
-              <div style={{
-                position: 'absolute', bottom: 0, left: 0, right: 0,
-                background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%)',
-                padding: '2rem 1.25rem 1.25rem',
-              }}>
-                <div style={{ color: '#D1C0B0', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
-                  {resident.count}
-                </div>
-                <div style={{ color: '#FFFFFF', fontSize: '1.1rem', fontWeight: 700 }}>
-                  {resident.name}
-                </div>
-              </div>
-
-              {/* Hover overlay with description */}
-              <div
-                className="farm-overlay"
-                style={{
-                  position: 'absolute', inset: 0,
-                  background: 'rgba(17,17,17,0.82)',
-                  display: 'flex', flexDirection: 'column',
-                  justifyContent: 'center', alignItems: 'flex-start',
-                  padding: '2rem',
-                  opacity: 0,
-                  transition: 'opacity 0.3s ease',
-                }}
-              >
-                <div style={{ color: '#E77A2D', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
-                  {resident.count}
-                </div>
-                <h3 style={{ color: '#FFFFFF', fontSize: '1.3rem', fontWeight: 800, marginBottom: '0.75rem' }}>
-                  {resident.name}
-                </h3>
-                <p style={{ color: '#D1C0B0', fontSize: '0.9rem', lineHeight: 1.7, margin: 0 }}>
-                  {resident.description}
-                </p>
-              </div>
-            </div>
+        {/* Animal grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '3rem' }}>
+          {farmResidents.map((resident) => (
+            <FarmCard key={resident.id} resident={resident} />
           ))}
         </div>
 
@@ -131,26 +154,13 @@ export default function FarmFamily() {
           <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
             <Link
               href="/donate"
-              style={{
-                background: '#E77A2D', color: '#FFFFFF',
-                padding: '0.875rem 2rem', fontSize: '0.85rem',
-                fontWeight: 700, letterSpacing: '0.08em',
-                textTransform: 'uppercase', textDecoration: 'none',
-                borderRadius: '2px', whiteSpace: 'nowrap',
-              }}
+              style={{ background: '#E77A2D', color: '#FFFFFF', padding: '0.875rem 2rem', fontSize: '0.85rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', textDecoration: 'none', borderRadius: '2px', whiteSpace: 'nowrap' }}
             >
               Donate now
             </Link>
             <Link
               href="/farm"
-              style={{
-                background: 'transparent', color: '#D1C0B0',
-                padding: '0.875rem 2rem', fontSize: '0.85rem',
-                fontWeight: 700, letterSpacing: '0.08em',
-                textTransform: 'uppercase', textDecoration: 'none',
-                borderRadius: '2px', border: '1px solid #2a2a2a',
-                whiteSpace: 'nowrap',
-              }}
+              style={{ background: 'transparent', color: '#D1C0B0', padding: '0.875rem 2rem', fontSize: '0.85rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', textDecoration: 'none', borderRadius: '2px', border: '1px solid #2a2a2a', whiteSpace: 'nowrap' }}
             >
               Meet them all →
             </Link>

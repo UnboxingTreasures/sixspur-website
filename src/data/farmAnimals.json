@@ -1,9 +1,51 @@
 [
-  { "id": "cows",        "name": "Cows",        "count": 3,   "icon": "cow"      },
-  { "id": "goats",       "name": "Goats",       "count": 8,   "icon": "goat"     },
-  { "id": "ducks",       "name": "Ducks",       "count": 7,   "icon": "duck"     },
-  { "id": "geese",       "name": "Geese",       "count": 5,   "icon": "goose"    },
-  { "id": "chickens",    "name": "Chickens",    "count": 22,  "icon": "chicken"  },
-  { "id": "donkeys",     "name": "Donkeys",     "count": 4,   "icon": "donkey"   },
-  { "id": "minidonkeys", "name": "Mini donkeys","count": 2,   "icon": "donkey"   }
+  {
+    "id": "cattle",
+    "name": "Cattle",
+    "count": 3,
+    "icon": "cow",
+    "image": "/images/cattle/cow-longhorn-haybale.jpg"
+  },
+  {
+    "id": "goats",
+    "name": "Goats",
+    "count": 8,
+    "icon": "goat",
+    "image": "/images/goats/goat-kid-closeup-portrait.jpg"
+  },
+  {
+    "id": "ducks",
+    "name": "Ducks",
+    "count": 7,
+    "icon": "duck",
+    "image": "/images/ducks/duck-portrait-standing.jpg"
+  },
+  {
+    "id": "geese",
+    "name": "Geese",
+    "count": 5,
+    "icon": "goose",
+    "image": "/images/geese/goose-walking-portrait.jpg"
+  },
+  {
+    "id": "chickens",
+    "name": "Chickens",
+    "count": 22,
+    "icon": "chicken",
+    "image": "/images/chickens/rooster-black-portrait.jpg"
+  },
+  {
+    "id": "donkeys",
+    "name": "Donkeys",
+    "count": 4,
+    "icon": "donkey",
+    "image": "/images/donkeys/donkey-white-portrait.jpg"
+  },
+  {
+    "id": "minidonkeys",
+    "name": "Mini Donkeys",
+    "count": 2,
+    "icon": "donkey",
+    "image": "/images/mini_donkeys/minidonkey-grazing-dry-field.jpg"
+  }
 ]
