@@ -1,0 +1,50 @@
+[
+  {
+    "id": "richard",
+    "name": "Richard McGuire",
+    "title": "Founder & Ranch Manager",
+    "bio": "Placeholder bio — awaiting from client.",
+    "duties": ["Daily animal care", "Adoptions", "Ranch operations", "Donor relations"],
+    "image": "/images/team/richard.jpg"
+  },
+  {
+    "id": "krista",
+    "name": "Krista",
+    "title": "Animal Caretaker",
+    "bio": "Placeholder bio — awaiting from client.",
+    "duties": ["Daily animal feeding and care", "Health monitoring", "Animal socialization"],
+    "image": "/images/team/krista.jpg"
+  },
+  {
+    "id": "jay",
+    "name": "Jay",
+    "title": "Digital Marketing Manager",
+    "bio": "Placeholder bio — awaiting from client.",
+    "duties": ["Social media management", "Website content", "Online outreach"],
+    "image": "/images/team/jay.jpg"
+  },
+  {
+    "id": "lisa",
+    "name": "Lisa",
+    "title": "Ranch Caretaker",
+    "bio": "Placeholder bio — awaiting from client.",
+    "duties": ["Ranch maintenance", "Pasture management", "Facility upkeep"],
+    "image": "/images/team/lisa.jpg"
+  },
+  {
+    "id": "travis",
+    "name": "Travis",
+    "title": "Ranch Hand",
+    "bio": "Placeholder bio — awaiting from client.",
+    "duties": ["Animal feeding", "Pasture work", "Equipment maintenance"],
+    "image": "/images/team/travis.jpg"
+  },
+  {
+    "id": "lilly",
+    "name": "Lilly",
+    "title": "Ranch Apprentice",
+    "bio": "Placeholder bio — awaiting from client.",
+    "duties": ["Animal care assistance", "Ranch operations support"],
+    "image": "/images/team/lilly.jpg"
+  }
+]

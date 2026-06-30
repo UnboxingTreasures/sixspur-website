@@ -7,7 +7,7 @@
     "breed": "Lab mix",
     "status": "available",
     "description": "Ranger is a sweet, energetic boy who loves everyone he meets.",
-    "image": "/images/dogs/placeholder.jpg"
+    "image": "/images/dogs/dog-beagle-hat.jpg"
   },
   {
     "id": "daisy",
@@ -17,6 +17,6 @@
     "breed": "Heeler mix",
     "status": "available",
     "description": "Daisy is a calm, loyal girl who does great with kids.",
-    "image": "/images/dogs/placeholder.jpg"
+    "image": "/images/dogs/dog-cream-couch.jpg"
   }
 ]
