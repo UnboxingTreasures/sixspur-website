@@ -1,0 +1,12 @@
+{
+  "name": "sixspur-process-incoming-email",
+  "version": "1.0.0",
+  "description": "Parses inbound SES emails from S3 and writes them into contact_messages",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.600.0",
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0",
+    "mailparser": "^3.7.1"
+  }
+}

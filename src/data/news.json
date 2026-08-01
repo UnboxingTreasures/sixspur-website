@@ -1,18 +1,26 @@
 [
   {
-    "id": "ranger-adoption",
-    "title": "Dog of the month: Ranger is ready to ride",
-    "category": "Adoption",
-    "date": "2026-06-01",
-    "excerpt": "Meet Ranger, our featured adoptable dog this month.",
-    "image": "/images/news/placeholder.jpg"
+    "id": "welcome-to-six-spur",
+    "title": "Welcome to Six Spur Ranch and Rescue",
+    "category": "Ranch Updates",
+    "date": "2026-07-01",
+    "excerpt": "We're thrilled to launch our new website and share our mission with the world. Learn more about who we are and what drives us every day.",
+    "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch/ranch-dogs-deck-logo.jpg"
   },
   {
-    "id": "mini-donkeys",
-    "title": "Meet our two new mini donkeys",
-    "category": "Farm life",
-    "date": "2026-05-20",
-    "excerpt": "Two adorable mini donkeys have joined the Six Spur family.",
-    "image": "/images/news/placeholder.jpg"
+    "id": "new-arrivals-june-2026",
+    "title": "New Arrivals: June 2026",
+    "category": "Rescue Stories",
+    "date": "2026-06-15",
+    "excerpt": "This month brought some new faces to the ranch. Meet the latest animals to call Six Spur home and hear their stories.",
+    "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/goats/goat-kid-closeup-portrait.jpg"
+  },
+  {
+    "id": "summer-donation-drive",
+    "title": "Summer Donation Drive",
+    "category": "Donations",
+    "date": "2026-06-01",
+    "excerpt": "Summer heat means higher costs for water, feed, and veterinary care. Every dollar makes a difference — here's how you can help.",
+    "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/cattle/cattle-newborn-calf-fence.jpg"
   }
 ]

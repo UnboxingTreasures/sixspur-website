@@ -1,0 +1,30 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadIncomingMailBucket",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": "arn:aws:s3:::sixspurranch-incoming-mail/*"
+    },
+    {
+      "Sid": "ContactMessagesReadWrite",
+      "Effect": "Allow",
+      "Action": ["dynamodb:PutItem", "dynamodb:Query"],
+      "Resource": [
+        "arn:aws:dynamodb:us-east-1:658965339779:table/contact_messages",
+        "arn:aws:dynamodb:us-east-1:658965339779:table/contact_messages/index/*"
+      ]
+    },
+    {
+      "Sid": "Logging",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:us-east-1:658965339779:*"
+    }
+  ]
+}

@@ -8,7 +8,7 @@ export default function Hero() {
     <section style={{ position: 'relative', width: '100%', minHeight: '100vh', overflow: 'hidden' }}>
       {/* Background image */}
       <Image
-        src="/images/hero/hero-boots-sunset.jpg"
+        src="https://d1s8s7aw8vf5zu.cloudfront.net/images/hero/hero-boots-sunset.jpg"
         alt="Cowboy boots and longhorns at sunset on Six Spur Ranch"
         fill
         priority
@@ -95,7 +95,7 @@ export default function Hero() {
         >
           {/* Primary — Donate */}
           <Link
-            href="/donate"
+            href="/ways-to-give"
             style={{
               backgroundColor: '#E77A2D',
               color: '#FFFFFF',

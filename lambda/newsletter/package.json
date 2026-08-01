@@ -1,0 +1,10 @@
+{
+  "name": "sixspur-newsletter",
+  "version": "1.0.0",
+  "description": "Newsletter subscription endpoint",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "sixspur-contact-form",
+  "version": "1.0.0",
+  "description": "Contact form Lambda: saves to DynamoDB, sends SES emails, texts Richard via SNS",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0",
+    "@aws-sdk/client-ses": "^3.600.0",
+    "@aws-sdk/client-sns": "^3.600.0"
+  }
+}

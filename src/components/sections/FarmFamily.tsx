@@ -1,89 +1,84 @@
 'use client';
-
+import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
-
+const CDN = 'https://d1s8s7aw8vf5zu.cloudfront.net';
 const farmResidents = [
   {
     id: 'cattle',
     name: 'Cattle',
     description: 'Longhorns, mama cows, and calves — our cattle are the backbone of Six Spur.',
-    image: '/images/cattle/cow-mama-calf-nuzzle.jpg',
-    count: 'Several residents',
+    image: `${CDN}/images/cattle/cattle-newborn-calf-fence.jpg`,
   },
   {
     id: 'donkeys',
     name: 'Donkeys',
     description: 'Equal parts stubborn and sweet — our donkeys will follow you around the pasture all day.',
-    image: '/images/donkeys/donkey-white-portrait.jpg',
-    count: '6 residents',
+    image: `${CDN}/images/donkeys/donkey-mama-foal-ranch.jpg`,
   },
   {
     id: 'minidonkeys',
     name: 'Mini Donkeys',
     description: 'Small in size, huge in personality. Our mini donkeys are fan favorites with every visitor.',
-    image: '/images/mini_donkeys/minidonkey-grazing-dry-field.jpg',
-    count: '2 residents',
+    image: `${CDN}/images/mini_donkeys/minidonkey-grazing-dry-field.jpg`,
   },
   {
     id: 'goats',
     name: 'Goats',
     description: 'Curious, playful, and always getting into something — our goats bring energy to the ranch every day.',
-    image: '/images/goats/goat-mama-kids-barn.jpg',
-    count: '8 residents',
+    image: `${CDN}/images/goats/goat-mama-kids-barn.jpg`,
   },
   {
     id: 'chickens',
     name: 'Chickens',
     description: 'The Breakfast Factory is open year round. Colorful, busy, and endlessly entertaining.',
-    image: '/images/chickens/chicken-breakfast-factory.jpg',
-    count: '22 residents',
+    image: `${CDN}/images/chickens/chicken-breakfast-factory.jpg`,
   },
   {
     id: 'ducks',
     name: 'Ducks',
     description: 'Waddling around the ranch and keeping everyone entertained — our ducks are a daily delight.',
-    image: '/images/ducks/duck-portrait-standing.jpg',
-    count: '7 residents',
+    image: `${CDN}/images/ducks/duck-portrait-standing.jpg`,
   },
   {
     id: 'geese',
     name: 'Geese',
     description: 'The self-appointed welcoming committee. Loud, proud, and impossible to ignore.',
-    image: '/images/geese/geese-pair-necks-portrait.jpg',
-    count: '5 residents',
+    image: `${CDN}/images/geese/geese-pair-necks-portrait.jpg`,
   },
   {
     id: 'horses',
     name: 'Horses',
     description: 'Our paint horses are a beautiful sight on the ranch — graceful, strong, and always curious.',
-    image: '/images/horses/horse-paint-grazing-closeup.jpg',
-    count: 'Several residents',
+    image: `${CDN}/images/horses/horse-paint-grazing-field.jpg`,
   },
   {
     id: 'dogs',
     name: 'Ranch Dogs',
     description: 'Not every dog at Six Spur is up for adoption — some are permanent members of the ranch family, keeping watch and keeping things lively.',
-    image: '/images/ranch/ranch-dogs-deck-logo.jpg',
-    count: 'Several residents',
+    image: `${CDN}/images/dogs/ranch-dogs-snow.jpg`,
   },
 ];
-
 function FarmCard({ resident }: { resident: typeof farmResidents[0] }) {
   const [hovered, setHovered] = useState(false);
-
   return (
+    <Link
+      href={`/farm-animals/${resident.id}`}
+      style={{ textDecoration: 'none', display: 'block' }}
+    >
     <div
       style={{ background: '#1A1A1A', border: '1px solid #2a2a2a', borderRadius: '2px', overflow: 'hidden', cursor: 'pointer' }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
       {/* Image */}
-      <div style={{ position: 'relative', overflow: 'hidden' }}>
-        <img
+      <div style={{ position: 'relative', overflow: 'hidden', aspectRatio: '4/3' }}>
+        <Image
           src={resident.image}
           alt={resident.name}
-          style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', display: 'block', transform: hovered ? 'scale(1.04)' : 'scale(1)', transition: 'transform 0.4s ease' }}
+          fill
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 300px"
+          style={{ objectFit: 'cover', transform: hovered ? 'scale(1.04)' : 'scale(1)', transition: 'transform 0.4s ease' }}
         />
         {/* Hover overlay */}
         <div style={{
@@ -98,25 +93,22 @@ function FarmCard({ resident }: { resident: typeof farmResidents[0] }) {
           </p>
         </div>
       </div>
-
       {/* Name bar */}
       <div style={{ padding: '0.875rem 1rem' }}>
         <div style={{ color: '#FFFFFF', fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.2rem' }}>
           {resident.name}
         </div>
         <div style={{ color: '#E77A2D', fontSize: '0.75rem', fontWeight: 600 }}>
-          {resident.count}
         </div>
       </div>
     </div>
+    </Link>
   );
 }
-
 export default function FarmFamily() {
   return (
     <section style={{ background: '#111111', padding: '6rem 1.5rem' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-
         {/* Header */}
         <div style={{ marginBottom: '3.5rem', maxWidth: '640px' }}>
           <p style={{ color: '#E77A2D', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
@@ -130,14 +122,12 @@ export default function FarmFamily() {
             Not every animal at Six Spur is here temporarily. Our farm residents are permanent members of the family that live out their lives on the ranch. Your donations keep them fed, healthy, and happy year-round.
           </p>
         </div>
-
         {/* Animal grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '3rem' }}>
           {farmResidents.map((resident) => (
             <FarmCard key={resident.id} resident={resident} />
           ))}
         </div>
-
         {/* Support CTA */}
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '2rem', borderTop: '1px solid #2a2a2a', paddingTop: '3rem' }}>
           <div>
@@ -159,14 +149,13 @@ export default function FarmFamily() {
               Donate now
             </Link>
             <Link
-              href="/farm"
+              href="/farm-animals"
               style={{ background: 'transparent', color: '#D1C0B0', padding: '0.875rem 2rem', fontSize: '0.85rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', textDecoration: 'none', borderRadius: '2px', border: '1px solid #2a2a2a', whiteSpace: 'nowrap' }}
             >
               Meet them all →
             </Link>
           </div>
         </div>
-
       </div>
     </section>
   );

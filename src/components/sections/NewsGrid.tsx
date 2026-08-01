@@ -1,18 +1,41 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import news from '@/data/news.json';
+
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  'https://vvabeaemg5.execute-api.us-east-1.amazonaws.com';
+
+interface Post {
+  slug: string;
+  title: string;
+  category: string;
+  excerpt: string;
+  image: string;
+  publishedAt: string;
+}
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
 export default function NewsGrid() {
+  const [posts, setPosts] = useState<Post[]>([]);
+
+  useEffect(() => {
+    fetch(`${API_URL}/news`)
+      .then((res) => res.json())
+      .then((data) => setPosts(Array.isArray(data) ? data.slice(0, 3) : []))
+      .catch((err) => console.error('Error fetching news:', err));
+  }, []);
+
+  if (posts.length === 0) return null;
+
   return (
     <section style={{ background: '#F7F4F0', padding: '6rem 1.5rem' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
 
-        {/* Header */}
         <div style={{ marginBottom: '3rem' }}>
           <p style={{ color: '#E77A2D', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
             News & Updates
@@ -31,12 +54,11 @@ export default function NewsGrid() {
           </div>
         </div>
 
-        {/* News cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.5rem' }}>
-          {news.map((item) => (
+          {posts.map((item) => (
             <Link
-              key={item.id}
-              href={`/news/${item.id}`}
+              key={item.slug}
+              href={`/news/${item.slug}`}
               style={{ textDecoration: 'none', display: 'block' }}
             >
               <div
@@ -50,7 +72,6 @@ export default function NewsGrid() {
                   (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
                 }}
               >
-                {/* Thumbnail */}
                 <div style={{ width: '100%', aspectRatio: '16/9', background: '#D1C0B0', overflow: 'hidden' }}>
                   <img
                     src={item.image}
@@ -60,14 +81,13 @@ export default function NewsGrid() {
                   />
                 </div>
 
-                {/* Content */}
                 <div style={{ padding: '1.5rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
                     <span style={{ background: '#E77A2D', color: '#FFFFFF', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: '2px' }}>
                       {item.category}
                     </span>
                     <span style={{ color: '#999999', fontSize: '0.8rem' }}>
-                      {formatDate(item.date)}
+                      {formatDate(item.publishedAt)}
                     </span>
                   </div>
                   <h3 style={{ color: '#111111', fontSize: '1rem', fontWeight: 700, lineHeight: 1.4, margin: '0 0 0.75rem' }}>

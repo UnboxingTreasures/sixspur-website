@@ -2,6 +2,10 @@
 
 import { useState } from 'react';
 
+const NEWSLETTER_API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  'https://vvabeaemg5.execute-api.us-east-1.amazonaws.com';
+
 export default function Newsletter() {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -12,7 +16,7 @@ export default function Newsletter() {
     setStatus('loading');
 
     try {
-      const res = await fetch('/api/newsletter', {
+      const res = await fetch(`${NEWSLETTER_API_URL}/api/newsletter`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),

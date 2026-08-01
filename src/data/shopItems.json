@@ -1,6 +1,6 @@
 [
-  { "id": "6s-hat",     "name": "6S Ranch hat",    "price": 28, "category": "hats",        "image": "/images/shop/placeholder.jpg" },
-  { "id": "classic-tee","name": "Classic tee",     "price": 25, "category": "tees",        "image": "/images/shop/placeholder.jpg" },
-  { "id": "spur-hoodie","name": "Spur hoodie",     "price": 45, "category": "hoodies",     "image": "/images/shop/placeholder.jpg" },
-  { "id": "sticker-pack","name": "Sticker pack",   "price": 8,  "category": "accessories", "image": "/images/shop/placeholder.jpg" }
+  { "id": "hat-black-grey",  "name": "6S Trucker Hat — Black/Grey",  "price": 24.95, "category": "hats",        "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/shop/hat-black-grey.jpg" },
+  { "id": "hat-brown-tan",   "name": "6S Trucker Hat — Brown/Tan",   "price": 24.95, "category": "hats",        "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/shop/hat-brown-tan.jpg" },
+  { "id": "hat-orange-navy", "name": "6S Trucker Hat — Orange/Navy", "price": 24.95, "category": "hats",        "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/shop/hat-orange-navy.jpg" },
+  { "id": "tumbler-black",   "name": "6S Logo Tumbler — Black",      "price": 14.95, "category": "accessories", "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/shop/tumbler-black.jpg" }
 ]

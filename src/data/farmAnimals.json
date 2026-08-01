@@ -1,51 +1,11 @@
 [
-  {
-    "id": "cattle",
-    "name": "Cattle",
-    "count": 3,
-    "icon": "cow",
-    "image": "/images/cattle/cow-longhorn-haybale.jpg"
-  },
-  {
-    "id": "goats",
-    "name": "Goats",
-    "count": 8,
-    "icon": "goat",
-    "image": "/images/goats/goat-kid-closeup-portrait.jpg"
-  },
-  {
-    "id": "ducks",
-    "name": "Ducks",
-    "count": 7,
-    "icon": "duck",
-    "image": "/images/ducks/duck-portrait-standing.jpg"
-  },
-  {
-    "id": "geese",
-    "name": "Geese",
-    "count": 5,
-    "icon": "goose",
-    "image": "/images/geese/goose-walking-portrait.jpg"
-  },
-  {
-    "id": "chickens",
-    "name": "Chickens",
-    "count": 22,
-    "icon": "chicken",
-    "image": "/images/chickens/rooster-black-portrait.jpg"
-  },
-  {
-    "id": "donkeys",
-    "name": "Donkeys",
-    "count": 4,
-    "icon": "donkey",
-    "image": "/images/donkeys/donkey-white-portrait.jpg"
-  },
-  {
-    "id": "minidonkeys",
-    "name": "Mini Donkeys",
-    "count": 2,
-    "icon": "donkey",
-    "image": "/images/mini_donkeys/minidonkey-grazing-dry-field.jpg"
-  }
+  { "id": "cattle",      "name": "Cattle",      "icon": "cow",     "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/cattle/cattle-newborn-calf-fence.jpg" },
+  { "id": "goats",       "name": "Goats",        "icon": "goat",    "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/goats/goat-kid-closeup-portrait.jpg" },
+  { "id": "ducks",       "name": "Ducks",        "icon": "duck",    "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/ducks/duck-portrait-standing.jpg" },
+  { "id": "geese",       "name": "Geese",        "icon": "goose",   "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/geese/goose-walking-portrait.jpg" },
+  { "id": "chickens",    "name": "Chickens",     "icon": "chicken", "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/chickens/rooster-black-portrait.jpg" },
+  { "id": "donkeys",     "name": "Donkeys",      "icon": "donkey",  "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/donkeys/donkey-mama-foal-ranch.jpg" },
+  { "id": "minidonkeys", "name": "Mini Donkeys", "icon": "donkey",  "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/mini_donkeys/minidonkey-grazing-dry-field.jpg" },
+  { "id": "horses",      "name": "Horses",       "icon": "horse",   "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/horses/horse-paint-grazing-field.jpg" },
+  { "id": "dogs",        "name": "Ranch Dogs",   "icon": "dog",     "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/dogs/ranch-dogs-snow.jpg" }
 ]

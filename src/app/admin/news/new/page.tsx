@@ -1,0 +1,185 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://vvabeaemg5.execute-api.us-east-1.amazonaws.com";
+
+const CATEGORIES = ["Ranch Updates", "Rescue Stories", "Donations"];
+
+export default function AdminNewsEditPage() {
+  const router = useRouter();
+  const [form, setForm] = useState({
+    title: "",
+    slug: "",
+    category: CATEGORIES[0],
+    excerpt: "",
+    content: "",
+    image: "",
+    author: "Richard McGuire",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({
+      ...prev,
+      [name]: value,
+      ...(name === "title"
+        ? { slug: value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") }
+        : {}),
+    }));
+  };
+
+  const handleSave = async (published: boolean) => {
+    if (!form.title.trim() || !form.content.trim()) {
+      setError("Title and content are required.");
+      return;
+    }
+    try {
+      setSaving(true);
+      const res = await fetch(`${API_URL}/admin/news`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, published }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to save post");
+      }
+      router.push("/admin/news");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save post. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="bg-spur-black px-7 py-4 flex items-center justify-between">
+        <div>
+          <div className="text-white font-bold text-base">New Post</div>
+          <div className="text-white/50 text-xs">Create a news or update post</div>
+        </div>
+        <div className="flex gap-3">
+          <button onClick={() => router.push("/admin/news")} className="text-white/60 text-sm hover:text-white transition-colors">
+            Cancel
+          </button>
+          <button
+            onClick={() => handleSave(false)}
+            disabled={saving}
+            className="bg-white/10 text-white text-sm font-semibold px-4 py-2 rounded hover:bg-white/20 transition-colors disabled:opacity-50"
+          >
+            Save Draft
+          </button>
+          <button
+            onClick={() => handleSave(true)}
+            disabled={saving}
+            className="bg-spur-orange text-white text-sm font-semibold px-4 py-2 rounded hover:bg-spur-orange-dark transition-colors disabled:opacity-50"
+          >
+            {saving ? "Saving..." : "Publish"}
+          </button>
+        </div>
+      </div>
+
+      <div className="min-h-screen bg-spur-tan-light p-8">
+        <div className="max-w-3xl mx-auto space-y-6">
+          {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">{error}</div>}
+
+          <div className="bg-white rounded shadow p-6 space-y-5">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">
+                Title <span className="text-spur-orange">*</span>
+              </label>
+              <input
+                name="title"
+                value={form.title}
+                onChange={handleChange}
+                placeholder="Post title"
+                className="w-full px-4 py-3 border border-gray-200 rounded focus:outline-none focus:border-spur-orange transition-colors text-spur-black"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Slug</label>
+              <input
+                name="slug"
+                value={form.slug}
+                onChange={handleChange}
+                placeholder="auto-generated-from-title"
+                className="w-full px-4 py-3 border border-gray-200 rounded focus:outline-none focus:border-spur-orange transition-colors text-spur-black font-mono text-sm"
+              />
+              <p className="text-xs text-gray-400 mt-1">URL: /news/{form.slug || "post-slug"}</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Category</label>
+              <select
+                name="category"
+                value={form.category}
+                onChange={handleChange}
+                className="w-full px-4 py-3 border border-gray-200 rounded focus:outline-none focus:border-spur-orange transition-colors text-spur-black bg-white"
+              >
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Image Path</label>
+              <input
+                name="image"
+                value={form.image}
+                onChange={handleChange}
+                placeholder="/images/ranch/example.jpg"
+                className="w-full px-4 py-3 border border-gray-200 rounded focus:outline-none focus:border-spur-orange transition-colors text-spur-black font-mono text-sm"
+              />
+              <p className="text-xs text-gray-400 mt-1">Path to an image already in public/images/. Photo upload is coming in Session 8.</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Author</label>
+              <input
+                name="author"
+                value={form.author}
+                onChange={handleChange}
+                className="w-full px-4 py-3 border border-gray-200 rounded focus:outline-none focus:border-spur-orange transition-colors text-spur-black"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Excerpt</label>
+              <textarea
+                name="excerpt"
+                value={form.excerpt}
+                onChange={handleChange}
+                rows={2}
+                placeholder="Short summary shown on the news listing page"
+                className="w-full px-4 py-3 border border-gray-200 rounded focus:outline-none focus:border-spur-orange transition-colors text-spur-black resize-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">
+                Content <span className="text-spur-orange">*</span>
+              </label>
+              <textarea
+                name="content"
+                value={form.content}
+                onChange={handleChange}
+                rows={16}
+                placeholder="Write your post here. Separate paragraphs with a blank line."
+                className="w-full px-4 py-3 border border-gray-200 rounded focus:outline-none focus:border-spur-orange transition-colors text-spur-black resize-none font-sans"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
