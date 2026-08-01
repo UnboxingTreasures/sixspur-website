@@ -18,7 +18,7 @@ const ways = [
     title: 'Monthly giving',
     description: 'Become a ranch supporter with a recurring gift. Monthly donors are the backbone of what we do here.',
     cta: 'Give monthly',
-    href: '/give#monthly',
+    href: '/ways-to-give',
     highlight: false,
   },
   {
@@ -27,7 +27,7 @@ const ways = [
     title: 'Wish lists',
     description: 'Send supplies directly from our Amazon and Chewy wish lists. Dog food, hay, medical supplies — it all helps.',
     cta: 'View wish lists',
-    href: '/give#wishlists',
+    href: '/ways-to-give',
     highlight: false,
   },
 ];
