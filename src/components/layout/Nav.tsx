@@ -135,7 +135,7 @@ export default function Nav() {
       `}</style>
       <div style={{ background: '#E77A2D', overflow: 'hidden', position: 'relative', zIndex: 49 }}>
         <div className="six-spur-marquee-track">
-          {Array.from({ length: 8 }).map((_, i) => (
+          {Array.from({ length: 6 }).map((_, i) => (
             <span
               key={i}
               style={{
@@ -145,7 +145,7 @@ export default function Nav() {
                 letterSpacing: '0.05em',
                 textTransform: 'uppercase',
                 whiteSpace: 'nowrap',
-                padding: '10px 2rem',
+                padding: '10px 8rem',
               }}
             >
               🚧 Build In Progress — Check Back Soon! 🚧
