@@ -1,26 +1,15 @@
 import TeamAvatar from "@/components/ui/TeamAvatar";
+import team from "@/data/team.json";
 
 export const metadata = {
   title: "About Us | Six Spur Ranch and Rescue",
   description: "Meet the team behind Six Spur Ranch and Rescue, a 501(c)(3) nonprofit animal sanctuary in Maud, Texas.",
 };
 
-const FOUNDER = {
-  name: "Richard McGuire",
-  title: "Founder & Ranch Manager",
-  bio: "Bio coming soon.",
-  image: "/images/team/richard-mcguire.jpg",
-};
+const FOUNDER = team.find((m) => m.id === "richard")!;
+const TEAM = team.filter((m) => m.id !== "richard");
 
-const TEAM = [
-  { name: "Krista Young",  title: "Animal Caretaker",         bio: "Bio coming soon.", image: "/images/team/krista-young.jpg" },
-  { name: "Lisa Brian",    title: "Ranch Caretaker",           bio: "Bio coming soon.", image: "/images/team/lisa-brian.jpg" },
-  { name: "Travis Young",  title: "Ranch Hand",                bio: "Bio coming soon.", image: "/images/team/travis-young.jpg" },
-  { name: "Jay Lefler",    title: "Digital Marketing Manager", bio: "Bio coming soon.", image: "/images/team/jay-lefler.jpg" },
-  { name: "Lillie Brian",  title: "Ranch Apprentice",          bio: "Bio coming soon.", image: "/images/team/lillie-brian.jpg" },
-];
-
-function TeamCard({ member }: { member: typeof TEAM[0] }) {
+function TeamCard({ member }: { member: (typeof team)[0] }) {
   return (
     <div className="flex flex-col">
       <TeamAvatar image={member.image} name={member.name} />
@@ -46,7 +35,6 @@ export default function AboutPage() {
           </p>
         </div>
       </section>
-
       <section className="py-16 px-6 border-b border-spur-tan-light">
         <div className="max-w-3xl mx-auto text-center">
           <div className="orange-divider mx-auto mb-6" />
@@ -57,7 +45,6 @@ export default function AboutPage() {
           </p>
         </div>
       </section>
-
       <section className="py-16 px-6">
         <div className="max-w-5xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center mb-20 pb-20 border-b border-spur-tan-light">
@@ -71,7 +58,6 @@ export default function AboutPage() {
               <p className="text-gray-600 leading-relaxed">{FOUNDER.bio}</p>
             </div>
           </div>
-
           <h3 className="text-xl font-bold text-spur-black mb-10">Our Team</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8">
             {TEAM.map((member) => (
