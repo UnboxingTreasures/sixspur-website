@@ -117,6 +117,43 @@ export default function Nav() {
         )}
       </nav>
 
+      {/* Build In Progress scrolling banner */}
+      <style>{`
+        @keyframes six-spur-marquee-scroll {
+          0%   { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .six-spur-marquee-track {
+          display: flex;
+          width: max-content;
+          animation: six-spur-marquee-scroll 22s linear infinite;
+          will-change: transform;
+        }
+        .six-spur-marquee-track:hover {
+          animation-play-state: paused;
+        }
+      `}</style>
+      <div style={{ background: '#E77A2D', overflow: 'hidden', position: 'relative', zIndex: 49 }}>
+        <div className="six-spur-marquee-track">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <span
+              key={i}
+              style={{
+                color: '#111111',
+                fontSize: '13px',
+                fontWeight: 700,
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase',
+                whiteSpace: 'nowrap',
+                padding: '10px 2rem',
+              }}
+            >
+              🚧 Build In Progress — Check Back Soon! 🚧
+            </span>
+          ))}
+        </div>
+      </div>
+
       {/* Mobile Menu */}
       {mobileOpen && (
         <div style={{ background: '#FFFFFF', borderTop: '1px solid #E8E2DC', padding: '1rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', position: 'relative', zIndex: 49 }}>
