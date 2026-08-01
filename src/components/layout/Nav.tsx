@@ -21,6 +21,12 @@ export default function Nav() {
 
   return (
     <>
+      <style>{`
+        @media (max-width: 900px) {
+          .nav-desktop-links { display: none !important; }
+          .nav-mobile-toggle { display: flex !important; align-items: center; }
+        }
+      `}</style>
       <nav style={{ background: '#FFFFFF', borderBottom: '1px solid #E8E2DC', position: 'relative', zIndex: 50 }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 1.5rem', height: '64px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
 
@@ -38,7 +44,7 @@ export default function Nav() {
           </Link>
 
           {/* Desktop Links */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+          <div className="nav-desktop-links" style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
             <Link href='/'            style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }}>Home</Link>
             <Link href='/ways-to-give'      style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }}>Donate</Link>
             <Link href='/adopt'       style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }}>Adopt</Link>
@@ -79,6 +85,7 @@ export default function Nav() {
 
           {/* Mobile toggle */}
           <button
+            className="nav-mobile-toggle"
             onClick={() => setMobileOpen(!mobileOpen)}
             style={{ background: 'none', border: 'none', color: '#555555', fontSize: '20px', cursor: 'pointer', display: 'none' }}
             aria-label='Toggle menu'
