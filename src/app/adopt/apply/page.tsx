@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
 const API_URL =
@@ -43,7 +43,7 @@ const hintClass = "text-xs text-gray-500 mb-2";
 const requiredStar = <span className="text-spur-orange">*</span>;
 const optionalTag = <span className="text-gray-400 font-normal text-xs ml-1">(optional)</span>;
 
-export default function AdoptApplyPage() {
+function AdoptApplyForm() {
   const searchParams = useSearchParams();
   const animalParam = searchParams.get("animal") || "";
 
@@ -625,5 +625,13 @@ export default function AdoptApplyPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function AdoptApplyPage() {
+  return (
+    <Suspense fallback={<main className="min-h-screen bg-white" />}>
+      <AdoptApplyForm />
+    </Suspense>
   );
 }
