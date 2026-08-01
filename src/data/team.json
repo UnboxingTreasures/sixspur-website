@@ -8,12 +8,12 @@
     "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/team/richard-mcguire.jpg"
   },
   {
-    "id": "jay",
-    "name": "Jay Lefler",
-    "title": "Digital Marketing Manager",
+    "id": "lillie",
+    "name": "Lillie Brian",
+    "title": "Ranch Apprentice",
     "bio": "Placeholder bio — awaiting from client.",
-    "duties": ["Social media management", "Website content", "Online outreach"],
-    "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/team/jay-lefler.jpg"
+    "duties": ["Animal care assistance", "Ranch operations support"],
+    "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/team/lillie-brian.jpg"
   },
   {
     "id": "lisa",
@@ -24,11 +24,11 @@
     "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/team/lisa-brian.jpg"
   },
   {
-    "id": "lillie",
-    "name": "Lillie Brian",
-    "title": "Ranch Apprentice",
+    "id": "jay",
+    "name": "Jay Lefler",
+    "title": "Digital Marketing Manager",
     "bio": "Placeholder bio — awaiting from client.",
-    "duties": ["Animal care assistance", "Ranch operations support"],
-    "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/team/lillie-brian.jpg"
+    "duties": ["Social media management", "Website content", "Online outreach"],
+    "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/team/jay-lefler.jpg"
   }
 ]
