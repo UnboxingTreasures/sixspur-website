@@ -1,6 +1,6 @@
 [
-  { "id": "hat-black-grey",  "name": "6S Trucker Hat — Black/Grey",  "price": 24.95, "category": "hats",        "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/shop/hat-black-grey.jpg" },
-  { "id": "hat-brown-tan",   "name": "6S Trucker Hat — Brown/Tan",   "price": 24.95, "category": "hats",        "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/shop/hat-brown-tan.jpg" },
-  { "id": "hat-orange-navy", "name": "6S Trucker Hat — Orange/Navy", "price": 24.95, "category": "hats",        "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/shop/hat-orange-navy.jpg" },
-  { "id": "tumbler-black",   "name": "6S Logo Tumbler — Black",      "price": 14.95, "category": "accessories", "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/shop/tumbler-black.jpg" }
+  { "id": "hat-black-grey",  "name": "6S Trucker Hat — Black/Grey",  "price": 24.95, "category": "hats",     "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/shop/hat-black-grey.jpg" },
+  { "id": "hat-brown-tan",   "name": "6S Trucker Hat — Brown/Tan",   "price": 24.95, "category": "hats",     "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/shop/hat-brown-tan.jpg" },
+  { "id": "hat-orange-navy", "name": "6S Trucker Hat — Orange/Navy", "price": 24.95, "category": "hats",     "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/shop/hat-orange-navy.jpg" },
+  { "id": "tumbler-black",   "name": "6S Logo Tumbler — Black",      "price": 14.95, "category": "tumblers", "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/shop/tumbler-black.jpg" }
 ]

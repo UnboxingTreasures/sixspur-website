@@ -1,9 +1,18 @@
 'use client';
 
 import Link from 'next/link';
+import shopItems from '@/data/shopItems.json';
 
 const linkClass = "text-spur-black text-xs hover:text-spur-orange transition-colors";
 const headingClass = "text-spur-black text-xs font-semibold uppercase tracking-widest mb-4";
+
+function capitalize(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// Derived from the actual product data, not hardcoded — once admin CRUD for
+// shop items/categories exists, this list updates itself automatically.
+const shopCategories = Array.from(new Set(shopItems.map((item) => item.category)));
 
 export default function Footer() {
   return (
@@ -50,14 +59,15 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Shop */}
+          {/* Shop — categories derived dynamically from shopItems.json */}
           <div>
             <h4 className={headingClass}>Shop</h4>
             <div className="flex flex-col gap-2">
-              <Link href="/shop#hats" className={linkClass}>Hats</Link>
-              <Link href="/shop#tees" className={linkClass}>Tees</Link>
-              <Link href="/shop#hoodies" className={linkClass}>Hoodies</Link>
-              <Link href="/shop#accessories" className={linkClass}>Accessories</Link>
+              {shopCategories.map((category) => (
+                <Link key={category} href={`/shop#${category}`} className={linkClass}>
+                  {capitalize(category)}
+                </Link>
+              ))}
             </div>
           </div>
 
