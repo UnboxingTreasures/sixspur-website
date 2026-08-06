@@ -28,9 +28,7 @@ async function sendConfirmationToSender({ fromName, fromEmail, subject }) {
             `Hi ${fromName},\n\n` +
             `Thanks for reaching out to Six Spur Ranch and Rescue. We received your message ` +
             `("${subject}") and someone from our team will get back to you soon.\n\n` +
-            `If your message is urgent, you can also reach us directly at ${ADMIN_ADDRESS}.\n\n` +
-            `— Six Spur Ranch and Rescue\n` +
-            `692 County Road 1103, Maud, TX 75567`,
+            `If your message is urgent, you can also reach us directly at ${ADMIN_ADDRESS}.`,
         },
       },
     },

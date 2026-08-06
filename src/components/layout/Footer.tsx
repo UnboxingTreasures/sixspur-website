@@ -92,6 +92,7 @@ export default function Footer() {
             <div className="flex gap-4 mt-2">
               <Link href="/privacy" className="text-spur-black text-xs hover:text-spur-orange transition-colors">Privacy Policy</Link>
               <Link href="/data-deletion" className="text-spur-black text-xs hover:text-spur-orange transition-colors">Data Deletion</Link>
+              <Link href="/terms" className="text-spur-black text-xs hover:text-spur-orange transition-colors">Terms of Service</Link>
             </div>
           </div>
 
