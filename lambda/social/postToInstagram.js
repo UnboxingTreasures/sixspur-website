@@ -1,5 +1,8 @@
-// postToInstagram.js — Posts to Instagram via Meta Graph API
-// Every IG post requires an image URL — text-only posts are not supported
+// postToInstagram.js — Posts to Instagram via the Facebook Graph API, using the
+// long-lived Facebook Page token (same one used for postToFacebook.js), NOT a
+// separate Instagram-issued token. This matches the proven-reliable architecture
+// used elsewhere, rather than the separate "Instagram Login" (IGAA token) system.
+// Every IG post requires an image URL — text-only posts are not supported.
 const { SecretsManagerClient, GetSecretValueCommand } = require("@aws-sdk/client-secrets-manager");
 const https = require('https');
 
@@ -58,22 +61,23 @@ exports.handler = async (event) => {
       };
     }
 
-    // Fetch credentials from Secrets Manager
+    // Fetch credentials from Secrets Manager — reuses the same facebook_page_token
+    // and instagram_business_account_id used elsewhere, no separate IG token needed.
     const secretResp = await secretsClient.send(new GetSecretValueCommand({
       SecretId: 'sixspur/meta-api',
     }));
     const creds = JSON.parse(secretResp.SecretString);
-    const { instagram_business_account_id, instagram_access_token } = creds;
+    const { instagram_business_account_id, facebook_page_token } = creds;
 
-    // Step 1: Create media container
+    // Step 1: Create media container (via graph.facebook.com, using the Facebook token)
     const containerParams = buildQueryString({
       image_url,
       caption,
-      access_token: instagram_access_token,
+      access_token: facebook_page_token,
     });
 
     const containerRes = await httpsRequest({
-      hostname: 'graph.instagram.com',
+      hostname: 'graph.facebook.com',
       path: `/v19.0/${instagram_business_account_id}/media?${containerParams}`,
       method: 'POST',
     });
@@ -91,16 +95,18 @@ exports.handler = async (event) => {
 
     const creationId = containerData.id;
 
-    // Wait for media to finish processing before publishing
+    // Wait for media to finish processing before publishing — Instagram needs time
+    // to actually download and process the image regardless of token type. Poll up
+    // to 10 times with 3 second intervals.
     let ready = false;
     for (let i = 0; i < 10; i++) {
       await new Promise(resolve => setTimeout(resolve, 3000));
       const statusParams = buildQueryString({
         fields: 'status_code',
-        access_token: instagram_access_token,
+        access_token: facebook_page_token,
       });
       const statusRes = await httpsRequest({
-        hostname: 'graph.instagram.com',
+        hostname: 'graph.facebook.com',
         path: `/v19.0/${creationId}?${statusParams}`,
         method: 'GET',
       });
@@ -129,11 +135,11 @@ exports.handler = async (event) => {
     // Step 2: Publish the container
     const publishParams = buildQueryString({
       creation_id: creationId,
-      access_token: instagram_access_token,
+      access_token: facebook_page_token,
     });
 
     const publishRes = await httpsRequest({
-      hostname: 'graph.instagram.com',
+      hostname: 'graph.facebook.com',
       path: `/v19.0/${instagram_business_account_id}/media_publish?${publishParams}`,
       method: 'POST',
     });

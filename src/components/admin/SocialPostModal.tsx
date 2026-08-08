@@ -153,6 +153,7 @@ export default function SocialPostModal({ onClose }: SocialPostModalProps) {
                   setImageMode(im => ({ ...im, [activeTab]: m }));
                   setImageUrl(u => ({ ...u, [activeTab]: "" }));
                   setUploadMsg(um => ({ ...um, [activeTab]: "" }));
+                  setResults(r => ({ ...r, [activeTab]: null }));
                 }}
                 style={{
                   padding: "3px 10px", border: "none", borderRadius: 6,
@@ -292,7 +293,10 @@ export default function SocialPostModal({ onClose }: SocialPostModalProps) {
           {PLATFORMS.map(p => (
             <button
               key={p.key}
-              onClick={() => setActiveTab(p.key)}
+              onClick={() => {
+                setActiveTab(p.key);
+                setResults({ instagram: null, facebook: null });
+              }}
               style={{
                 flex: 1, padding: "14px 8px",
                 border: "none", background: "none", cursor: "pointer",
