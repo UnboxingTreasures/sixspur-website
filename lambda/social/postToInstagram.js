@@ -35,6 +35,35 @@ function buildQueryString(params) {
     .join('&');
 }
 
+// Translates known Instagram Graph API error codes into clear, actionable
+// messages for the person posting, instead of a generic "failed" message.
+function friendlyErrorMessage(detail) {
+  const err = detail?.error;
+  if (!err) return null;
+
+  // Aspect ratio out of Instagram's supported range (4:5 portrait to 1.91:1 landscape)
+  if (err.error_subcode === 2207009 || err.code === 36003) {
+    return "This image's aspect ratio isn't supported by Instagram. Instagram only accepts ratios between 4:5 (portrait) and 1.91:1 (landscape) — try a different image or crop this one to fit, then try again.";
+  }
+
+  // File format/type not supported
+  if (err.error_subcode === 2207008) {
+    return "This image format isn't supported by Instagram. Try a standard JPEG or PNG file instead.";
+  }
+
+  // Image too large
+  if (err.error_subcode === 2207026) {
+    return "This image is too large for Instagram. Try a smaller file (under 8MB) and try again.";
+  }
+
+  // Fallback to Instagram's own user-facing message if it provided one
+  if (err.error_user_msg) {
+    return err.error_user_msg;
+  }
+
+  return null;
+}
+
 exports.handler = async (event) => {
   const headers = {
     'Content-Type': 'application/json',
@@ -86,10 +115,15 @@ exports.handler = async (event) => {
     console.log('Container response:', containerRes.status, JSON.stringify(containerData));
 
     if (!containerData.id) {
+      const friendly = friendlyErrorMessage(containerData);
       return {
         statusCode: 502,
         headers,
-        body: JSON.stringify({ success: false, message: 'Failed to create media container', detail: containerData }),
+        body: JSON.stringify({
+          success: false,
+          message: friendly || 'Failed to create media container',
+          detail: containerData,
+        }),
       };
     }
 
@@ -119,7 +153,7 @@ exports.handler = async (event) => {
         return {
           statusCode: 502,
           headers,
-          body: JSON.stringify({ success: false, message: 'Media processing failed', detail: statusData }),
+          body: JSON.stringify({ success: false, message: 'Media processing failed — try a different image.', detail: statusData }),
         };
       }
     }
@@ -128,7 +162,7 @@ exports.handler = async (event) => {
       return {
         statusCode: 502,
         headers,
-        body: JSON.stringify({ success: false, message: 'Media processing timed out' }),
+        body: JSON.stringify({ success: false, message: 'Media processing timed out — try a different image or try again in a moment.' }),
       };
     }
 
@@ -148,10 +182,15 @@ exports.handler = async (event) => {
     console.log('Publish response:', publishRes.status, JSON.stringify(publishData));
 
     if (!publishData.id) {
+      const friendly = friendlyErrorMessage(publishData);
       return {
         statusCode: 502,
         headers,
-        body: JSON.stringify({ success: false, message: 'Failed to publish media', detail: publishData }),
+        body: JSON.stringify({
+          success: false,
+          message: friendly || 'Failed to publish media',
+          detail: publishData,
+        }),
       };
     }
 
