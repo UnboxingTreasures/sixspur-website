@@ -21,6 +21,7 @@ interface Application {
   interestedIn: string;
   pdfKey: string;
   pdfDownloadUrl?: string;
+  fencePhotos?: { key: string; url: string }[];
 }
 
 const STATUS_COLORS: Record<Status, { bg: string; text: string }> = {
@@ -236,6 +237,38 @@ export default function AdminAdoptionsPage() {
                     >
                       📄 Download full application (PDF) →
                     </a>
+                  )}
+
+                  {detailCache[app.applicationId]?.fencePhotos && detailCache[app.applicationId].fencePhotos!.length > 0 && (
+                    <div style={{ marginTop: 20 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                        Fence / Enclosure Photos ({detailCache[app.applicationId].fencePhotos!.length})
+                      </div>
+                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                        {detailCache[app.applicationId].fencePhotos!.map((photo) => (
+                          <a
+                            key={photo.key}
+                            href={photo.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ display: "block" }}
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={photo.url}
+                              alt="Fence or enclosure photo"
+                              style={{
+                                width: 90, height: 90, objectFit: "cover",
+                                borderRadius: 8, border: "1.5px solid #E8E2DC",
+                              }}
+                            />
+                          </a>
+                        ))}
+                      </div>
+                      <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 6 }}>
+                        Links expire in 15 minutes — collapse and re-expand this card for new ones.
+                      </div>
+                    </div>
                   )}
 
                   <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid #F0EBE5" }}>

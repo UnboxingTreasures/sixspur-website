@@ -42,7 +42,7 @@ aws iam put-role-policy \
   --profile "$PROFILE"
 
 ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME}"
-ENV_VARS="Variables={ADOPTION_APPLICATIONS_TABLE=adoption_applications,ADOPTION_PDF_BUCKET=sixspurranch-adoption-pdfs,SES_NOREPLY_ADDRESS=noreply@sixspurranch.org}"
+ENV_VARS="Variables={ADOPTION_APPLICATIONS_TABLE=adoption_applications,ADOPTION_PDF_BUCKET=sixspurranch-adoption-pdfs,ADOPTION_UPLOADS_BUCKET=sixspurranch-adoption-uploads,SES_NOREPLY_ADDRESS=noreply@sixspurranch.org}"
 
 if aws lambda get-function --function-name "$FUNCTION_NAME" --profile "$PROFILE" --region "$REGION" >/dev/null 2>&1; then
   echo "Function exists, updating code..."

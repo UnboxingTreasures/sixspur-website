@@ -5,7 +5,7 @@
 //   PATCH /admin/adoptions/{id}   — change status; on success, emails the applicant
 
 const { listByStatus, listAll, getById, updateStatus } = require('./dynamo');
-const { getPresignedDownloadUrl } = require('./s3');
+const { getPresignedDownloadUrl, getPresignedFencePhotoUrls } = require('./s3');
 const { notifyApplicantOfStatusChange } = require('./notifyApplicant');
 
 const CORS_HEADERS = {
@@ -37,7 +37,9 @@ async function handleDetail(applicationId) {
     pdfDownloadUrl = await getPresignedDownloadUrl(application.pdfKey);
   }
 
-  return respond(200, { ...application, pdfDownloadUrl });
+  const fencePhotos = await getPresignedFencePhotoUrls(application.fencePhotoKeys);
+
+  return respond(200, { ...application, pdfDownloadUrl, fencePhotos });
 }
 
 async function handleUpdateStatus(applicationId, body) {
