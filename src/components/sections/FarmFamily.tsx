@@ -12,7 +12,7 @@ interface FarmAnimal {
 
 async function getFarmAnimals(): Promise<FarmAnimal[]> {
   try {
-    const res = await fetch(`${API_URL}/farm-animals`, { next: { revalidate: 60 } });
+    const res = await fetch(`${API_URL}/farm-animals`, { cache: "no-store" });
     if (!res.ok) return [];
     const data = await res.json();
     return data.animals || [];

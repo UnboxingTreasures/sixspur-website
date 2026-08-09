@@ -1,0 +1,10 @@
+{
+  "name": "sixspur-farm-animals",
+  "version": "1.0.0",
+  "description": "Public read access to farm animal types and their photo galleries",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0"
+  }
+}

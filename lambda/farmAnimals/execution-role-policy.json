@@ -1,0 +1,21 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "FarmAnimalsRead",
+      "Effect": "Allow",
+      "Action": ["dynamodb:Scan", "dynamodb:GetItem"],
+      "Resource": "arn:aws:dynamodb:us-east-1:658965339779:table/farm_animals"
+    },
+    {
+      "Sid": "Logging",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:us-east-1:658965339779:*"
+    }
+  ]
+}

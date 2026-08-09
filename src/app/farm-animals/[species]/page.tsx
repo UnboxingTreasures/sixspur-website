@@ -14,7 +14,7 @@ interface FarmAnimal {
 
 async function getFarmAnimal(species: string): Promise<FarmAnimal | null> {
   try {
-    const res = await fetch(`${API_URL}/farm-animals/${species}`, { next: { revalidate: 60 } });
+    const res = await fetch(`${API_URL}/farm-animals/${species}`, { cache: "no-store" });
     if (!res.ok) return null;
     return await res.json();
   } catch {
