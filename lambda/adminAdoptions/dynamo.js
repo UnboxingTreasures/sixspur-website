@@ -44,22 +44,43 @@ async function updateStatus(applicationId, newStatus) {
   if (!VALID_STATUSES.includes(newStatus)) {
     throw new Error(`Invalid status: ${newStatus}. Must be one of: ${VALID_STATUSES.join(', ')}`);
   }
+  if (newStatus === 'Open') {
+    throw new Error('Cannot move an application back to Open — Open is only the originating status, applications never return to it.');
+  }
 
   const statusUpdatedAt = new Date().toISOString();
-  const result = await ddb.send(new UpdateCommand({
-    TableName: TABLE_NAME,
-    Key: { applicationId },
-    ConditionExpression: 'attribute_exists(applicationId)',
-    UpdateExpression: 'SET #status = :status, statusUpdatedAt = :statusUpdatedAt',
-    ExpressionAttributeNames: { '#status': 'status' },
-    ExpressionAttributeValues: { ':status': newStatus, ':statusUpdatedAt': statusUpdatedAt },
-    ReturnValues: 'ALL_NEW',
-  })).catch((err) => {
-    if (err.name === 'ConditionalCheckFailedException') return null;
-    throw err;
-  });
 
-  return result ? result.Attributes : null;
+  try {
+    const result = await ddb.send(new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: { applicationId },
+      // Approved and Denied are terminal -- this condition atomically blocks
+      // the update if the record is already in either state, so there's no
+      // race window between checking status and writing it.
+      ConditionExpression: 'attribute_exists(applicationId) AND #status <> :approved AND #status <> :denied',
+      UpdateExpression: 'SET #status = :status, statusUpdatedAt = :statusUpdatedAt',
+      ExpressionAttributeNames: { '#status': 'status' },
+      ExpressionAttributeValues: {
+        ':status': newStatus,
+        ':statusUpdatedAt': statusUpdatedAt,
+        ':approved': 'Approved',
+        ':denied': 'Denied',
+      },
+      ReturnValues: 'ALL_NEW',
+    }));
+    return result.Attributes;
+  } catch (err) {
+    if (err.name !== 'ConditionalCheckFailedException') throw err;
+
+    // The condition failed for one of two reasons -- the record doesn't
+    // exist, or it's already terminal. Look it up once more so the caller
+    // gets an accurate message instead of a generic failure either way.
+    const existing = await getById(applicationId);
+    if (!existing) return null; // genuinely not found -- treated as 404 by the caller
+    throw new Error(
+      `This application is already "${existing.status}", which is a final status and can't be changed.`
+    );
+  }
 }
 
 module.exports = { listByStatus, listAll, getById, updateStatus, VALID_STATUSES };

@@ -271,27 +271,34 @@ export default function AdminAdoptionsPage() {
                     </div>
                   )}
 
-                  <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid #F0EBE5" }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                      Move to
+                  {app.status !== "Approved" && app.status !== "Denied" && (
+                    <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid #F0EBE5" }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                        Move to
+                      </div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {STATUSES.filter((s) => s !== app.status && s !== "Open").map((s) => (
+                          <button
+                            key={s}
+                            onClick={() => setPendingStatus({ id: app.applicationId, status: s })}
+                            style={{
+                              padding: "8px 14px", borderRadius: 8,
+                              border: `1.5px solid ${STATUS_COLORS[s].text}`,
+                              background: "#fff", color: STATUS_COLORS[s].text,
+                              fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                            }}
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      {STATUSES.filter((s) => s !== app.status).map((s) => (
-                        <button
-                          key={s}
-                          onClick={() => setPendingStatus({ id: app.applicationId, status: s })}
-                          style={{
-                            padding: "8px 14px", borderRadius: 8,
-                            border: `1.5px solid ${STATUS_COLORS[s].text}`,
-                            background: "#fff", color: STATUS_COLORS[s].text,
-                            fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-                          }}
-                        >
-                          {s}
-                        </button>
-                      ))}
+                  )}
+                  {(app.status === "Approved" || app.status === "Denied") && (
+                    <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid #F0EBE5", fontSize: 12, color: "#9CA3AF" }}>
+                      This is a final status and can&apos;t be changed.
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>
