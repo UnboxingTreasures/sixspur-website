@@ -1,0 +1,9 @@
+{
+  "name": "sixspur-refresh-facebook-tokens",
+  "version": "1.0.0",
+  "description": "Refreshes Six Spur's long-lived Facebook user token and re-derives the Page access token every 30 days.",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.600.0"
+  }
+}
