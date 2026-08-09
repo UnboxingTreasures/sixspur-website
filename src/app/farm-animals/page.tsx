@@ -1,25 +1,34 @@
 import Image from "next/image";
 import Link from "next/link";
-import farmAnimals from "@/data/farmAnimals.json";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export const metadata = {
   title: "The Farm Family | Six Spur Ranch and Rescue",
   description: "Meet the permanent animal residents of Six Spur Ranch and Rescue in Maud, Texas.",
 };
 
-const descriptions: Record<string, string> = {
-  cattle:      "Longhorns, mama cows, and calves — our cattle are the backbone of Six Spur. They roam the pasture and remind us every day why this land matters.",
-  goats:       "Curious, playful, and always getting into something. Our goats bring energy and laughter to the ranch every single day.",
-  ducks:       "Waddling around the property and keeping everyone entertained — our ducks are a daily delight from sunrise to sundown.",
-  geese:       "The self-appointed welcoming committee of Six Spur. Loud, proud, and impossible to ignore.",
-  chickens:    "The Breakfast Factory is open year round. Colorful, busy, and endlessly entertaining — our chickens have big personalities for their size.",
-  donkeys:     "Equal parts stubborn and sweet. Our donkeys will follow you around the pasture all day if you let them.",
-  minidonkeys: "Small in size, huge in personality. Our mini donkeys are fan favorites with every visitor to the ranch.",
-  horses:      "Our paint horses are a beautiful sight on the ranch — graceful, strong, and always curious about what you've got in your pocket.",
-  dogs:        "Not every dog at Six Spur is up for adoption. Some are permanent members of the ranch family, keeping watch and keeping things lively.",
-};
+interface FarmAnimal {
+  animalId: string;
+  name: string;
+  description: string;
+  thumbnailUrl: string;
+}
 
-export default function FarmAnimalsPage() {
+async function getFarmAnimals(): Promise<FarmAnimal[]> {
+  try {
+    const res = await fetch(`${API_URL}/farm-animals`, { next: { revalidate: 60 } });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.animals || [];
+  } catch {
+    return [];
+  }
+}
+
+export default async function FarmAnimalsPage() {
+  const animals = await getFarmAnimals();
+
   return (
     <main className="min-h-screen bg-white">
 
@@ -40,11 +49,11 @@ export default function FarmAnimalsPage() {
       <section className="py-16 px-6">
         <div className="max-w-5xl mx-auto">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
-            {farmAnimals.map((animal) => (
-              <Link key={animal.id} href={`/farm-animals/${animal.id}`} className="flex flex-col group">
+            {animals.map((animal) => (
+              <Link key={animal.animalId} href={`/farm-animals/${animal.animalId}`} className="flex flex-col group">
                 <div className="relative w-full aspect-[4/3] bg-spur-tan-light rounded overflow-hidden mb-5">
                   <Image
-                    src={animal.image}
+                    src={animal.thumbnailUrl}
                     alt={animal.name}
                     fill
                     className="object-cover transition-transform duration-300 group-hover:scale-105"
@@ -54,7 +63,7 @@ export default function FarmAnimalsPage() {
                   <h2 className="text-xl font-bold text-spur-black mb-1 group-hover:text-spur-orange transition-colors">{animal.name}</h2>
                   <div className="orange-divider mb-3" />
                   <p className="text-gray-600 text-sm leading-relaxed">
-                    {descriptions[animal.id] ?? "More information coming soon."}
+                    {animal.description || "More information coming soon."}
                   </p>
                 </div>
               </Link>

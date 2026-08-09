@@ -1,31 +1,37 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import farmAnimals from "@/data/farmAnimals.json";
-import galleries from "@/data/farmAnimalGalleries.json";
 
-const descriptions: Record<string, string> = {
-  cattle:      "Longhorns, mama cows, and calves — our cattle are the backbone of Six Spur. They roam the pasture and remind us every day why this land matters.",
-  goats:       "Curious, playful, and always getting into something. Our goats bring energy and laughter to the ranch every single day.",
-  ducks:       "Waddling around the property and keeping everyone entertained — our ducks are a daily delight from sunrise to sundown.",
-  geese:       "The self-appointed welcoming committee of Six Spur. Loud, proud, and impossible to ignore.",
-  chickens:    "The Breakfast Factory is open year round. Colorful, busy, and endlessly entertaining — our chickens have big personalities for their size.",
-  donkeys:     "Equal parts stubborn and sweet. Our donkeys will follow you around the pasture all day if you let them.",
-  minidonkeys: "Small in size, huge in personality. Our mini donkeys are fan favorites with every visitor to the ranch.",
-  horses:      "Our paint horses are a beautiful sight on the ranch — graceful, strong, and always curious about what you've got in your pocket.",
-  "ranch-dogs": "Not every dog at Six Spur is up for adoption. Some are permanent members of the ranch family, keeping watch and keeping things lively.",
-};
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-export async function generateStaticParams() {
-  return farmAnimals.map((a) => ({ species: a.id }));
+interface FarmAnimal {
+  animalId: string;
+  name: string;
+  description: string;
+  thumbnailUrl: string;
+  photos: string[];
 }
+
+async function getFarmAnimal(species: string): Promise<FarmAnimal | null> {
+  try {
+    const res = await fetch(`${API_URL}/farm-animals/${species}`, { next: { revalidate: 60 } });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+// No generateStaticParams here on purpose: animal types are now managed live
+// through the admin panel (add/rename/delete), so this page needs to reflect
+// a brand-new type immediately, not only after the next site rebuild.
 
 export default async function FarmSpeciesGalleryPage({ params }: { params: Promise<{ species: string }> }) {
   const { species } = await params;
-  const animal = farmAnimals.find((a) => a.id === species);
+  const animal = await getFarmAnimal(species);
   if (!animal) notFound();
 
-  const photos: string[] = (galleries as Record<string, string[]>)[species] || [];
+  const photos = animal.photos || [];
 
   return (
     <main className="min-h-screen bg-white">
@@ -38,7 +44,7 @@ export default async function FarmSpeciesGalleryPage({ params }: { params: Promi
           <p className="eyebrow mb-3">The Farm Family</p>
           <h1 className="text-4xl md:text-5xl font-bold mb-4">{animal.name}</h1>
           <p className="text-white/60 max-w-xl leading-relaxed">
-            {descriptions[animal.id] ?? "More information coming soon."}
+            {animal.description || "More information coming soon."}
           </p>
         </div>
       </section>
