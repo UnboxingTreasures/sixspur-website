@@ -1,43 +1,38 @@
 // dynamo.js
-// Saves the adoption application into the same contact_messages table used
-// by the general contact form, so it shows up in the existing admin inbox
-// rather than needing a separate admin UI.
+// Saves the adoption application into its own dedicated table
+// (adoption_applications) rather than contact_messages, so it can carry a
+// real status (Open / Under Review / Approved / Denied) and show up in the
+// admin Adoptions page instead of the general Mail inbox.
 
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');
-const { randomUUID } = require('crypto');
 
 const client = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1' });
 const ddb = DynamoDBDocumentClient.from(client);
 
-const TABLE_NAME = process.env.CONTACT_MESSAGES_TABLE || 'contact_messages';
+const TABLE_NAME = process.env.ADOPTION_APPLICATIONS_TABLE || 'adoption_applications';
 
-async function saveApplicationMessage({ applicationId, firstName, lastName, primaryEmail, primaryPhone, interestedIn, pdfKey, fencePhotoKeys }) {
-  const messageId = randomUUID();
-  const threadId = randomUUID(); // adoption applications always start a new thread
-  const receivedAt = new Date().toISOString();
+async function saveApplication({ applicationId, firstName, lastName, primaryEmail, primaryPhone, secondaryEmail, secondaryPhone, interestedIn, pdfKey, fencePhotoKeys }) {
+  const submittedAt = new Date().toISOString();
 
   const item = {
-    messageId,
-    threadId,
-    fromEmail: primaryEmail.trim().toLowerCase(),
-    fromName: `${firstName} ${lastName}`.trim(),
-    fromPhone: primaryPhone || null,
-    subject: `Adoption Application: ${interestedIn}`,
-    bodyText:
-      `New adoption application submitted for: ${interestedIn}.\n\n` +
-      `Full application details are in the attached PDF. Download it from this message in the admin inbox.`,
-    isRead: false,
-    isReplied: false,
-    receivedAt,
-    repliedAt: null,
     applicationId,
+    status: 'Open', // every new application starts here; admin moves it through the workflow
+    submittedAt,
+    statusUpdatedAt: submittedAt,
+    firstName,
+    lastName,
+    primaryEmail: primaryEmail.trim().toLowerCase(),
+    primaryPhone: primaryPhone || null,
+    secondaryEmail: secondaryEmail ? secondaryEmail.trim().toLowerCase() : null,
+    secondaryPhone: secondaryPhone || null,
+    interestedIn,
     pdfKey,
     fencePhotoKeys: fencePhotoKeys && fencePhotoKeys.length > 0 ? fencePhotoKeys : null,
   };
 
   await ddb.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
-  return { messageId, threadId };
+  return { applicationId };
 }
 
-module.exports = { saveApplicationMessage };
+module.exports = { saveApplication };

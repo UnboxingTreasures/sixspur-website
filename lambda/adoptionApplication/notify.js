@@ -14,7 +14,7 @@ const NOREPLY_ADDRESS = process.env.SES_NOREPLY_ADDRESS || 'noreply@sixspurranch
 const ADMIN_ADDRESS = process.env.SES_ADMIN_ADDRESS || 'richard@sixspurranch.org';
 const RICHARD_PHONE = process.env.RICHARD_PHONE_NUMBER || '+18137866333';
 
-async function notifyAdminByEmail({ firstName, lastName, interestedIn, messageId }) {
+async function notifyAdminByEmail({ firstName, lastName, interestedIn, applicationId }) {
   const params = {
     Source: NOREPLY_ADDRESS,
     Destination: { ToAddresses: [ADMIN_ADDRESS] },
@@ -24,8 +24,8 @@ async function notifyAdminByEmail({ firstName, lastName, interestedIn, messageId
         Text: {
           Data:
             `${firstName} ${lastName} submitted an adoption application for: ${interestedIn}.\n\n` +
-            `View the full application and download the PDF in the admin inbox:\n` +
-            `https://sixspurranch.org/admin/inbox/${messageId}`,
+            `Review it in the admin panel:\n` +
+            `https://sixspurranch.org/admin/adoptions/${applicationId}`,
         },
       },
     },
@@ -35,7 +35,7 @@ async function notifyAdminByEmail({ firstName, lastName, interestedIn, messageId
 }
 
 async function notifyAdminBySms({ firstName, lastName, interestedIn }) {
-  const message = `New adoption application from ${firstName} ${lastName} for: ${interestedIn}. Check the admin inbox for the full PDF.`;
+  const message = `New adoption application from ${firstName} ${lastName} for: ${interestedIn}. Check the admin Adoptions page for the full PDF.`;
   await sns.send(new PublishCommand({ Message: message, PhoneNumber: RICHARD_PHONE }));
 }
 

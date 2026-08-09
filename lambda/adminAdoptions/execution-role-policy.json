@@ -2,33 +2,24 @@
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "AdoptionApplicationsWrite",
+      "Sid": "AdoptionApplicationsReadWrite",
       "Effect": "Allow",
-      "Action": ["dynamodb:PutItem"],
-      "Resource": "arn:aws:dynamodb:us-east-1:658965339779:table/adoption_applications"
+      "Action": ["dynamodb:GetItem", "dynamodb:UpdateItem", "dynamodb:Scan", "dynamodb:Query"],
+      "Resource": [
+        "arn:aws:dynamodb:us-east-1:658965339779:table/adoption_applications",
+        "arn:aws:dynamodb:us-east-1:658965339779:table/adoption_applications/index/status-index"
+      ]
     },
     {
-      "Sid": "PdfBucketWrite",
+      "Sid": "PdfBucketRead",
       "Effect": "Allow",
-      "Action": ["s3:PutObject"],
+      "Action": ["s3:GetObject"],
       "Resource": "arn:aws:s3:::sixspurranch-adoption-pdfs/*"
-    },
-    {
-      "Sid": "UploadsBucketReadWrite",
-      "Effect": "Allow",
-      "Action": ["s3:PutObject", "s3:GetObject"],
-      "Resource": "arn:aws:s3:::sixspurranch-adoption-uploads/*"
     },
     {
       "Sid": "SESSend",
       "Effect": "Allow",
       "Action": ["ses:SendEmail", "ses:SendRawEmail"],
-      "Resource": "*"
-    },
-    {
-      "Sid": "SNSPublish",
-      "Effect": "Allow",
-      "Action": ["sns:Publish"],
       "Resource": "*"
     },
     {

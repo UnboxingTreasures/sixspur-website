@@ -5,8 +5,8 @@
 //                                  the application itself is submitted
 //   POST /adopt/apply           — generates the PDF (embedding any fence
 //                                  photos already uploaded via the presign
-//                                  step above), saves to contact_messages,
-//                                  notifies admin
+//                                  step above), saves to adoption_applications
+//                                  with status "Open", notifies admin
 //
 // Ordering matters here: photos must exist in S3 before /adopt/apply runs,
 // or there's nothing for the PDF generator to fetch and embed.
@@ -14,7 +14,7 @@
 const { randomUUID } = require('crypto');
 const { generateApplicationPdf } = require('./pdf');
 const { uploadPdf, createPresignedUploadUrls, getFencePhotoBytes } = require('./s3');
-const { saveApplicationMessage } = require('./dynamo');
+const { saveApplication } = require('./dynamo');
 const { notifyAdmin } = require('./notify');
 
 const CORS_HEADERS = {
@@ -78,12 +78,14 @@ async function handleApply(body) {
   const pdfBuffer = await generateApplicationPdf(body, fencePhotos);
   const pdfKey = await uploadPdf(applicationId, pdfBuffer);
 
-  const { messageId } = await saveApplicationMessage({
+  await saveApplication({
     applicationId,
     firstName: body.firstName,
     lastName: body.lastName,
     primaryEmail: body.primaryEmail,
     primaryPhone: body.primaryPhone,
+    secondaryEmail: body.secondaryEmail,
+    secondaryPhone: body.secondaryPhone,
     interestedIn: body.interestedIn,
     pdfKey,
     fencePhotoKeys,
@@ -93,7 +95,7 @@ async function handleApply(body) {
     firstName: body.firstName,
     lastName: body.lastName,
     interestedIn: body.interestedIn,
-    messageId,
+    applicationId,
   });
 
   return respond(200, { success: true, applicationId });

@@ -1,0 +1,13 @@
+{
+  "name": "sixspur-admin-adoptions",
+  "version": "1.0.0",
+  "description": "Admin Adoptions page backend: list/detail/status-update for adoption applications, with applicant email notifications on status change",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0",
+    "@aws-sdk/client-s3": "^3.600.0",
+    "@aws-sdk/s3-request-presigner": "^3.600.0",
+    "@aws-sdk/client-ses": "^3.600.0"
+  }
+}
