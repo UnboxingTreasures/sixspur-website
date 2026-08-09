@@ -53,10 +53,10 @@ const farmResidents = [
     image: `${CDN}/images/horses/horse-paint-grazing-field.jpg`,
   },
   {
-    id: 'dogs',
+    id: 'ranch-dogs',
     name: 'Ranch Dogs',
     description: 'Not every dog at Six Spur is up for adoption — some are permanent members of the ranch family, keeping watch and keeping things lively.',
-    image: `${CDN}/images/dogs/ranch-dogs-snow.jpg`,
+    image: `${CDN}/images/ranch-dogs/ranch-dogs-snow.jpg`,
   },
 ];
 function FarmCard({ resident }: { resident: typeof farmResidents[0] }) {

@@ -13,7 +13,7 @@ const descriptions: Record<string, string> = {
   donkeys:     "Equal parts stubborn and sweet. Our donkeys will follow you around the pasture all day if you let them.",
   minidonkeys: "Small in size, huge in personality. Our mini donkeys are fan favorites with every visitor to the ranch.",
   horses:      "Our paint horses are a beautiful sight on the ranch — graceful, strong, and always curious about what you've got in your pocket.",
-  dogs:        "Not every dog at Six Spur is up for adoption. Some are permanent members of the ranch family, keeping watch and keeping things lively.",
+  "ranch-dogs": "Not every dog at Six Spur is up for adoption. Some are permanent members of the ranch family, keeping watch and keeping things lively.",
 };
 
 export async function generateStaticParams() {

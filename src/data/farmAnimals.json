@@ -7,5 +7,5 @@
   { "id": "donkeys",     "name": "Donkeys",      "icon": "donkey",  "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/donkeys/donkey-mama-foal-ranch.jpg" },
   { "id": "minidonkeys", "name": "Mini Donkeys", "icon": "donkey",  "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/mini_donkeys/minidonkey-grazing-dry-field.jpg" },
   { "id": "horses",      "name": "Horses",       "icon": "horse",   "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/horses/horse-paint-grazing-field.jpg" },
-  { "id": "dogs",        "name": "Ranch Dogs",   "icon": "dog",     "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/dogs/ranch-dogs-snow.jpg" }
+  { "id": "ranch-dogs",  "name": "Ranch Dogs",   "icon": "dog",     "image": "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch-dogs/ranch-dogs-snow.jpg" }
 ]

@@ -68,8 +68,30 @@
     "https://d1s8s7aw8vf5zu.cloudfront.net/images/horses/horse-paint-grazing-field.jpg",
     "https://d1s8s7aw8vf5zu.cloudfront.net/images/horses/horse-paint-minidonkey-fence.jpg"
   ],
-  "dogs": [
-    "https://d1s8s7aw8vf5zu.cloudfront.net/images/dogs/ranch-dogs-snow.jpg",
-    "https://d1s8s7aw8vf5zu.cloudfront.net/images/dogs/ranch-dogs-trailer.jpg"
+  "ranch-dogs": [
+    "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch-dogs/dog-beagle-jacket.jpg",
+    "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch-dogs/dog-black-standing-alert.jpg",
+    "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch-dogs/dog-brindle-asleep-toys.jpg",
+    "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch-dogs/dog-brindle-hand-interaction.jpg",
+    "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch-dogs/dog-brindle-puppy-lying.jpg",
+    "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch-dogs/dog-doberman-bone-couch.jpg",
+    "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch-dogs/dog-doberman-couch-1.jpg",
+    "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch-dogs/dog-doberman-couch-2.jpg",
+    "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch-dogs/dog-doberman-puppy-toys.jpg",
+    "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch-dogs/dog-hound-chair-cropped.jpg",
+    "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch-dogs/dog-pair-bed-beagle.jpg",
+    "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch-dogs/dog-pair-foodbowl.jpg",
+    "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch-dogs/dog-pair-playing-floor.jpg",
+    "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch-dogs/dog-pair-playing-snow.jpg",
+    "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch-dogs/dog-puppy-porch-shy.jpg",
+    "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch-dogs/dog-shepherd-couch-closeup.jpg",
+    "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch-dogs/dog-shepherd-mix-ranch.jpg",
+    "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch-dogs/dog-spotted-bed-calm.jpg",
+    "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch-dogs/dog-spotted-car.jpg",
+    "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch-dogs/dog-tan-car-soulful.jpg",
+    "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch-dogs/dog-tan-white-bluecollar.jpg",
+    "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch-dogs/dog-trio-playing.jpg",
+    "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch-dogs/ranch-dogs-snow.jpg",
+    "https://d1s8s7aw8vf5zu.cloudfront.net/images/ranch-dogs/ranch-dogs-trailer.jpg"
   ]
 }
