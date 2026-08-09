@@ -38,6 +38,32 @@ export default function AdminAdoptionsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [pendingStatus, setPendingStatus] = useState<{ id: string; status: Status } | null>(null);
   const [updating, setUpdating] = useState(false);
+  const [detailCache, setDetailCache] = useState<Record<string, Application>>({});
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  const toggleExpand = async (applicationId: string) => {
+    if (expandedId === applicationId) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(applicationId);
+    // Only the detail endpoint generates the presigned PDF URL -- the list
+    // endpoint doesn't include it. Fetch it now if we haven't already.
+    if (!detailCache[applicationId]) {
+      setDetailLoading(true);
+      try {
+        const res = await fetch(`${API_URL}/admin/adoptions/${applicationId}`);
+        const data = await res.json();
+        if (res.ok) {
+          setDetailCache((prev) => ({ ...prev, [applicationId]: data }));
+        }
+      } catch {
+        // Non-fatal -- the card still shows without a download link
+      } finally {
+        setDetailLoading(false);
+      }
+    }
+  };
 
   const fetchApplications = useCallback(async (status: Status) => {
     setLoading(true);
@@ -147,7 +173,7 @@ export default function AdminAdoptionsPage() {
             >
               {/* Row header -- click to expand */}
               <div
-                onClick={() => setExpandedId(isExpanded ? null : app.applicationId)}
+                onClick={() => toggleExpand(app.applicationId)}
                 style={{
                   padding: "16px 20px", cursor: "pointer",
                   display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12,
@@ -195,9 +221,12 @@ export default function AdminAdoptionsPage() {
                     )}
                   </div>
 
-                  {app.pdfDownloadUrl && (
+                  {detailLoading && !detailCache[app.applicationId] && (
+                    <p style={{ marginTop: 16, fontSize: 13, color: "#9CA3AF" }}>Loading PDF link…</p>
+                  )}
+                  {detailCache[app.applicationId]?.pdfDownloadUrl && (
                     <a
-                      href={app.pdfDownloadUrl}
+                      href={detailCache[app.applicationId].pdfDownloadUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{
