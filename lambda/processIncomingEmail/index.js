@@ -70,6 +70,50 @@ const IGNORED_SENDER_ADDRESSES = new Set(
 /**
  * Reads and parses the raw email object from S3.
  */
+/**
+ * Strips the quoted-previous-message block that email clients automatically
+ * append when someone replies -- e.g. Apple Mail / Outlook's plain-text
+ * "From: / Date: / To: / Subject:" header block, Gmail's "On <date>, <name>
+ * wrote:" line, or classic Outlook's "-----Original Message-----" marker.
+ * Now that the Conversation Thread view already reconstructs the full
+ * back-and-forth from separately-stored messages, this quoted text is pure
+ * redundancy -- it only ever duplicated what's already shown below it.
+ *
+ * Deliberately conservative: if none of the known patterns match, or if
+ * stripping would leave nothing behind (e.g. someone forwarded a whole
+ * email with no new text of their own), the original text is returned
+ * unchanged rather than risk hiding real content.
+ */
+function stripQuotedReply(bodyText) {
+  if (!bodyText) return bodyText;
+
+  const patterns = [
+    // Apple Mail / Outlook desktop plain-text quote header block
+    /\n\s*From:\s*.+\n\s*Date:\s*.+\n\s*To:\s*.+\n\s*Subject:\s*.+/i,
+    // Gmail-style: "On Mon, Aug 10, 2026 at 12:35 PM Richard <...> wrote:"
+    /\n\s*On\s.+\swrote:\s*\n/i,
+    // Classic Outlook
+    /\n\s*-{2,}\s*Original Message\s*-{2,}/i,
+    // Some clients insert a long underscore divider before quoted content
+    /\n\s*_{10,}\s*\n/,
+  ];
+
+  let earliestIndex = -1;
+  for (const pattern of patterns) {
+    const match = bodyText.match(pattern);
+    if (match && match.index !== undefined) {
+      if (earliestIndex === -1 || match.index < earliestIndex) {
+        earliestIndex = match.index;
+      }
+    }
+  }
+
+  if (earliestIndex === -1) return bodyText; // no known quote pattern found
+
+  const stripped = bodyText.slice(0, earliestIndex).trim();
+  return stripped.length > 0 ? stripped : bodyText; // never return an empty body
+}
+
 async function fetchAndParseEmail(objectKey) {
   const { Body } = await s3.send(
     new GetObjectCommand({ Bucket: INCOMING_BUCKET, Key: objectKey })
@@ -171,6 +215,7 @@ async function saveInboundMessage({ fromName, fromEmail, subject, bodyText, emai
   const messageId = randomUUID();
   const threadId = existingThreadId || randomUUID();
   const receivedAt = new Date().toISOString();
+  const cleanBodyText = stripQuotedReply(bodyText);
 
   const item = {
     messageId,
@@ -180,7 +225,8 @@ async function saveInboundMessage({ fromName, fromEmail, subject, bodyText, emai
     subject,
     emailMessageId,
     inReplyTo,
-    bodyText,
+    bodyText: cleanBodyText,
+    rawBodyText: bodyText, // original, unstripped -- kept for reference, never displayed by default
     isRead: false,
     isReplied: false,
     receivedAt,
