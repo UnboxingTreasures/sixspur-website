@@ -166,7 +166,7 @@ export default function AdminInboxDetailPage() {
       const data = await res.json();
 
       if (data.success && message) {
-        setMessage({ ...message, isDeleted: false });
+        setMessage({ ...message, isDeleted: false, isRead: false });
       } else {
         alert(data.message || "Failed to restore message");
       }
@@ -282,13 +282,15 @@ export default function AdminInboxDetailPage() {
           </Link>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => markAsRead(!message.isRead)}
-              disabled={markingRead}
-              className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-700 disabled:opacity-50"
-            >
-              {markingRead ? "..." : message.isRead ? "Mark as Unread" : "Mark as Read"}
-            </button>
+            {!message.isDeleted && (
+              <button
+                onClick={() => markAsRead(!message.isRead)}
+                disabled={markingRead}
+                className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-700 disabled:opacity-50"
+              >
+                {markingRead ? "..." : message.isRead ? "Mark as Unread" : "Mark as Read"}
+              </button>
+            )}
             {message.isDeleted ? (
               <button
                 onClick={restoreMessage}

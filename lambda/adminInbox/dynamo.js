@@ -158,21 +158,31 @@ async function batchSetReadStatus(messageIds, isRead) {
 }
 
 /**
- * Soft-deletes a message: sets isDeleted + deletedAt, but never removes the
- * DynamoDB item itself. Restoring later is just clearing this flag --
- * no data is actually destroyed by this operation.
+ * Soft-deletes or restores a message. Sets isDeleted + deletedAt either way.
+ * On restore specifically (isDeleted: false), also resets isRead to false --
+ * a message coming back from deleted should show up as unread/"New" again
+ * so it doesn't get silently missed, regardless of what its read state was
+ * before it was deleted.
  */
 async function setDeletedStatus(messageId, isDeleted) {
+  const expressionValues = {
+    ':d': isDeleted,
+    ':t': isDeleted ? new Date().toISOString() : null,
+  };
+  let updateExpression = 'SET isDeleted = :d, deletedAt = :t';
+
+  if (!isDeleted) {
+    updateExpression += ', isRead = :r';
+    expressionValues[':r'] = false;
+  }
+
   await ddb.send(
     new UpdateCommand({
       TableName: TABLE_NAME,
       Key: { messageId },
       ConditionExpression: 'attribute_exists(messageId)',
-      UpdateExpression: 'SET isDeleted = :d, deletedAt = :t',
-      ExpressionAttributeValues: {
-        ':d': isDeleted,
-        ':t': isDeleted ? new Date().toISOString() : null,
-      },
+      UpdateExpression: updateExpression,
+      ExpressionAttributeValues: expressionValues,
     })
   ).catch((err) => {
     if (err.name === 'ConditionalCheckFailedException') return null;
