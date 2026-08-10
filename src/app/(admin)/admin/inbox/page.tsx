@@ -9,6 +9,8 @@ const API_URL =
 
 interface InboxMessage {
   messageId: string;
+  allMessageIds?: string[];
+  messageCount?: number;
   fromEmail: string;
   fromName: string | null;
   subject: string | null;
@@ -386,6 +388,11 @@ function AdminInboxPageInner() {
                       >
                         <div className={`text-sm ${!message.isRead ? "font-semibold text-gray-900" : "text-gray-700"}`}>
                           {message.subject || "(No Subject)"}
+                          {message.messageCount && message.messageCount > 1 && (
+                            <span className="ml-1.5 px-1.5 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-600">
+                              {message.messageCount}
+                            </span>
+                          )}
                           {message.pdfKey && (
                             <svg className="inline-block w-3.5 h-3.5 ml-1.5 -mt-0.5 text-spur-orange" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />

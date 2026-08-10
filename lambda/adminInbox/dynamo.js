@@ -11,6 +11,7 @@ const {
   GetCommand,
   QueryCommand,
   UpdateCommand,
+  PutCommand,
 } = require('@aws-sdk/lib-dynamodb');
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
@@ -72,13 +73,30 @@ async function attachDownloadUrls(message) {
  * this is purely a display filter, nothing is ever actually removed from
  * the table by this function.
  */
+/**
+ * Lists CONVERSATIONS, not individual messages -- one row per threadId,
+ * not one row per message. Previously each reply in a back-and-forth
+ * showed up as its own separate inbox row ("General Inquiries", then
+ * "Re: General Inquiries", then "Re: Re: General Inquiries" all as
+ * distinct entries), even though clicking into any of them already
+ * correctly showed the full Conversation Thread -- the LIST just never
+ * collapsed them the way the detail view already did.
+ *
+ * Each returned row represents a thread:
+ *   - messageId: the most recent VISITOR message's id (used for viewing)
+ *   - allMessageIds: every message id in the thread (visitor + outbound),
+ *     used so delete/restore can act on the whole conversation at once
+ *   - subject: the ORIGINAL (first) message's subject, so the list doesn't
+ *     show an ever-growing "Re: Re: Re:" chain -- just the base subject,
+ *     same as how a normal email client's thread list behaves
+ *   - isRead: false if ANY message in the thread is unread
+ *   - isReplied: true if ANY message in the thread has been replied to
+ *   - receivedAt: the most recent message's timestamp, used for sorting
+ */
 async function listMessages({ filter, search, page = 1, limit = 20, includeDeleted = false }) {
   const result = await ddb.send(new ScanCommand({ TableName: TABLE_NAME }));
-  let items = includeDeleted ? (result.Items || []) : (result.Items || []).filter((m) => !m.isDeleted);
-
-  if (filter === 'unread') {
-    items = items.filter((m) => !m.isRead);
-  }
+  const baseItems = (result.Items || []).filter((m) => !m.isOutbound);
+  let items = includeDeleted ? baseItems : baseItems.filter((m) => !m.isDeleted);
 
   if (search) {
     const term = search.toLowerCase();
@@ -91,14 +109,57 @@ async function listMessages({ filter, search, page = 1, limit = 20, includeDelet
     );
   }
 
-  items.sort((a, b) => new Date(b.receivedAt) - new Date(a.receivedAt));
+  // Group the (already filtered) visitor messages by thread.
+  const threadGroups = new Map();
+  for (const item of items) {
+    if (!threadGroups.has(item.threadId)) threadGroups.set(item.threadId, []);
+    threadGroups.get(item.threadId).push(item);
+  }
 
-  const nonDeleted = (result.Items || []).filter((m) => !m.isDeleted);
-  const unreadCount = nonDeleted.filter((m) => !m.isRead).length;
-  const total = items.length;
+  let threadRows = [];
+  for (const [threadId, msgs] of threadGroups) {
+    const sorted = [...msgs].sort((a, b) => new Date(a.receivedAt) - new Date(b.receivedAt));
+    const original = sorted[0];
+    const latest = sorted[sorted.length - 1];
+
+    threadRows.push({
+      messageId: latest.messageId,
+      allMessageIds: msgs.map((m) => m.messageId),
+      threadId,
+      fromEmail: latest.fromEmail,
+      fromName: latest.fromName,
+      subject: original.subject,
+      bodyText: latest.bodyText,
+      isRead: !msgs.some((m) => !m.isRead),
+      isReplied: msgs.some((m) => m.isReplied),
+      isDeleted: msgs.every((m) => m.isDeleted), // consistent since delete/restore act on the whole thread
+      receivedAt: latest.receivedAt,
+      messageCount: msgs.length,
+    });
+  }
+
+  if (filter === 'unread') {
+    threadRows = threadRows.filter((t) => !t.isRead);
+  }
+
+  threadRows.sort((a, b) => new Date(b.receivedAt) - new Date(a.receivedAt));
+
+  // Unread count is threads-with-an-unread-message, not raw message count --
+  // matches what the "Unread" tab button is actually filtering on above.
+  const allThreadsMap = new Map();
+  for (const item of baseItems.filter((m) => !m.isDeleted)) {
+    if (!allThreadsMap.has(item.threadId)) allThreadsMap.set(item.threadId, []);
+    allThreadsMap.get(item.threadId).push(item);
+  }
+  let unreadCount = 0;
+  for (const msgs of allThreadsMap.values()) {
+    if (msgs.some((m) => !m.isRead)) unreadCount += 1;
+  }
+
+  const total = threadRows.length;
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const start = (page - 1) * limit;
-  const pageItems = items.slice(start, start + limit);
+  const pageItems = threadRows.slice(start, start + limit);
 
   return {
     messages: pageItems,
@@ -164,12 +225,43 @@ async function saveOutboundReply({ threadId, subject, bodyText }) {
     bodyText,
     isRead: true, // it's our own outbound message, nothing to "read"
     isReplied: false,
+    isOutbound: true, // marks this as Richard's own reply, not a real inbound
+                       // inquiry -- listMessages excludes these from the main
+                       // list, but getMessageWithThread's threadId query does
+                       // NOT filter on this, so it still shows correctly
+                       // inside the Conversation Thread view.
     receivedAt: now,
     repliedAt: null,
   };
 
   await ddb.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
   return { messageId };
+}
+
+/**
+ * Deletes or restores an ENTIRE thread (every message in it, including
+ * Richard's outbound replies), not just the one message passed in. Now
+ * that the list shows one row per conversation, a "partial" delete --
+ * some messages in a thread deleted, others not -- would be a confusing
+ * state with no clear meaning in the UI, so this always acts on the whole
+ * thread together.
+ */
+async function setThreadDeletedStatus(messageId, isDeleted) {
+  const threadId = await getThreadId(messageId);
+  if (!threadId) return null;
+
+  const threadResult = await ddb.send(
+    new QueryCommand({
+      TableName: TABLE_NAME,
+      IndexName: 'threadId-index',
+      KeyConditionExpression: 'threadId = :t',
+      ExpressionAttributeValues: { ':t': threadId },
+    })
+  );
+
+  const allMessageIds = (threadResult.Items || []).map((m) => m.messageId);
+  await Promise.all(allMessageIds.map((id) => setDeletedStatus(id, isDeleted)));
+  return { threadId, messageIds: allMessageIds };
 }
 
 async function setReadStatus(messageId, isRead) {
@@ -181,6 +273,31 @@ async function setReadStatus(messageId, isRead) {
       ExpressionAttributeValues: { ':r': isRead },
     })
   );
+}
+
+/**
+ * Sets read status across an ENTIRE thread. Now that the list shows one
+ * row per conversation (not per message), marking "read" from the list
+ * needs to clear every message in the thread -- otherwise an older unread
+ * message could still be sitting in there, and the thread would
+ * incorrectly keep showing as unread after being marked read.
+ */
+async function setThreadReadStatus(messageId, isRead) {
+  const threadId = await getThreadId(messageId);
+  if (!threadId) return null;
+
+  const threadResult = await ddb.send(
+    new QueryCommand({
+      TableName: TABLE_NAME,
+      IndexName: 'threadId-index',
+      KeyConditionExpression: 'threadId = :t',
+      ExpressionAttributeValues: { ':t': threadId },
+    })
+  );
+
+  const allMessageIds = (threadResult.Items || []).map((m) => m.messageId);
+  await Promise.all(allMessageIds.map((id) => setReadStatus(id, isRead)));
+  return { threadId, messageIds: allMessageIds };
 }
 
 async function markReplied(messageId) {
@@ -245,4 +362,6 @@ module.exports = {
   batchSetReadStatus,
   setDeletedStatus,
   batchSetDeletedStatus,
+  setThreadDeletedStatus,
+  setThreadReadStatus,
 };

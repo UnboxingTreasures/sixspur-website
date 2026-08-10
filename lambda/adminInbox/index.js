@@ -22,6 +22,8 @@ const {
   batchSetReadStatus,
   setDeletedStatus,
   batchSetDeletedStatus,
+  setThreadDeletedStatus,
+  setThreadReadStatus,
 } = require('./dynamo');
 const { sendReply } = require('./ses');
 
@@ -68,8 +70,9 @@ exports.handler = async (event) => {
         const filter = qs.is_read === 'false' ? 'unread' : 'all';
         const search = qs.search || '';
         const page = parseInt(qs.page || '1', 10);
+        const includeDeleted = qs.include_deleted === 'true';
 
-        const result = await listMessages({ filter, search, page });
+        const result = await listMessages({ filter, search, page, includeDeleted });
         return ok(result);
       }
 
@@ -80,7 +83,7 @@ exports.handler = async (event) => {
       }
 
       case 'PATCH /admin/inbox/{id}/read': {
-        await setReadStatus(messageId, Boolean(body.is_read));
+        await setThreadReadStatus(messageId, Boolean(body.is_read));
         return ok({ messageId, isRead: Boolean(body.is_read) });
       }
 
@@ -90,7 +93,7 @@ exports.handler = async (event) => {
       }
 
       case 'DELETE /admin/inbox/{id}': {
-        await setDeletedStatus(messageId, true);
+        await setThreadDeletedStatus(messageId, true);
         return ok({ messageId, isDeleted: true });
       }
 
@@ -98,7 +101,7 @@ exports.handler = async (event) => {
       // ready to go whenever that gets built, without needing another
       // round of Lambda/API Gateway changes first.
       case 'PATCH /admin/inbox/{id}/restore': {
-        await setDeletedStatus(messageId, false);
+        await setThreadDeletedStatus(messageId, false);
         return ok({ messageId, isDeleted: false });
       }
 
@@ -109,11 +112,19 @@ exports.handler = async (event) => {
         }
         await sendReply({ toEmail, subject, replyText });
 
-        // Also save this as a real message in the same thread, so the
-        // Conversation Thread view can show Richard's side too.
-        const threadId = await getThreadId(messageId);
-        if (threadId) {
-          await saveOutboundReply({ threadId, subject, bodyText: replyText });
+        // The email has now actually been sent. Saving it as a thread
+        // message is a nice-to-have for the Conversation Thread view, not
+        // something the person waiting on a response should ever see as a
+        // failure -- so a problem here is logged, not thrown. Otherwise a
+        // successfully-sent reply would incorrectly show as an error,
+        // risking Richard re-sending a reply that already went out fine.
+        try {
+          const threadId = await getThreadId(messageId);
+          if (threadId) {
+            await saveOutboundReply({ threadId, subject, bodyText: replyText });
+          }
+        } catch (err) {
+          console.error('Reply email sent successfully, but failed to save it to the thread:', err);
         }
 
         return ok({ sent: true });
@@ -125,11 +136,11 @@ exports.handler = async (event) => {
           return fail(400, 'message_ids must be a non-empty array');
         }
         if (action === 'mark_read') {
-          await batchSetReadStatus(messageIds, true);
+          await Promise.all(messageIds.map((id) => setThreadReadStatus(id, true)));
         } else if (action === 'mark_unread') {
-          await batchSetReadStatus(messageIds, false);
+          await Promise.all(messageIds.map((id) => setThreadReadStatus(id, false)));
         } else if (action === 'delete') {
-          await batchSetDeletedStatus(messageIds, true);
+          await Promise.all(messageIds.map((id) => setThreadDeletedStatus(id, true)));
         } else {
           return fail(400, `Unknown action: ${action}`);
         }
