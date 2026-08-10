@@ -8,7 +8,8 @@
         "dynamodb:Scan",
         "dynamodb:GetItem",
         "dynamodb:Query",
-        "dynamodb:UpdateItem"
+        "dynamodb:UpdateItem",
+        "dynamodb:PutItem"
       ],
       "Resource": [
         "arn:aws:dynamodb:us-east-1:658965339779:table/contact_messages",
