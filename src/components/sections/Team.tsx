@@ -24,6 +24,16 @@ async function getStaff(): Promise<StaffMember[]> {
 export default async function Team() {
   const staff = await getStaff();
 
+  // Founder goes first, everyone else keeps whatever order the API
+  // returned (alphabetical by name). Same staffId === "richard" matching
+  // used on /about -- known fragile spot (string match, not an explicit
+  // field) but left as-is per Jay's call.
+  const sortedStaff = [...staff].sort((a, b) => {
+    if (a.staffId === 'richard') return -1;
+    if (b.staffId === 'richard') return 1;
+    return 0;
+  });
+
   return (
     <section style={{ background: '#FFFFFF', padding: '6rem 1.5rem' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
@@ -42,7 +52,7 @@ export default async function Team() {
           </p>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '2rem' }}>
-          {staff.map((member) => (
+          {sortedStaff.map((member) => (
             <TeamMemberCard
               key={member.staffId}
               name={member.name}
