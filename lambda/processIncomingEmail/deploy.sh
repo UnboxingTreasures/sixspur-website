@@ -28,18 +28,21 @@ if ! aws iam get-role --role-name "$ROLE_NAME" --profile "$PROFILE" >/dev/null 2
     }' \
     --profile "$PROFILE"
 
-  echo "Attaching policy..."
-  aws iam put-role-policy \
-    --role-name "$ROLE_NAME" \
-    --policy-name ProcessIncomingEmailPermissions \
-    --policy-document file://execution-role-policy.json \
-    --profile "$PROFILE"
-
   echo "Waiting for role propagation..."
   sleep 10
 else
   echo "Role $ROLE_NAME already exists, skipping creation."
 fi
+
+# Runs on EVERY deploy, not just first-time role creation -- otherwise a
+# policy file update (e.g. adding a new permission) silently never takes
+# effect on an already-existing role, which is exactly what happened here.
+echo "Applying current execution role policy (safe to re-run)..."
+aws iam put-role-policy \
+  --role-name "$ROLE_NAME" \
+  --policy-name ProcessIncomingEmailPermissions \
+  --policy-document file://execution-role-policy.json \
+  --profile "$PROFILE"
 
 ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME}"
 
@@ -58,7 +61,7 @@ if aws lambda get-function --function-name "$FUNCTION_NAME" --profile "$PROFILE"
   echo "Updating environment variables..."
   aws lambda update-function-configuration \
     --function-name "$FUNCTION_NAME" \
-    --environment file://processIncomingEmail-env.json \
+    --environment "Variables={CONTACT_MESSAGES_TABLE=contact_messages,INCOMING_MAIL_BUCKET=sixspurranch-incoming-mail,SYSTEM_SENDER_ADDRESSES=noreply@sixspurranch.org,IGNORED_SENDER_ADDRESSES=postmaster@amazonses.com\,noreply-dmarc-support@google.com}" \
     --profile "$PROFILE" --region "$REGION"
 else
   echo "Creating function..."
@@ -70,7 +73,7 @@ else
     --zip-file fileb://processIncomingEmail.zip \
     --timeout 30 \
     --memory-size 256 \
-    --environment file://processIncomingEmail-env.json \
+    --environment "Variables={CONTACT_MESSAGES_TABLE=contact_messages,INCOMING_MAIL_BUCKET=sixspurranch-incoming-mail,SYSTEM_SENDER_ADDRESSES=noreply@sixspurranch.org,IGNORED_SENDER_ADDRESSES=postmaster@amazonses.com\,noreply-dmarc-support@google.com}" \
     --profile "$PROFILE" --region "$REGION"
 fi
 
