@@ -16,10 +16,17 @@ const { randomUUID } = require('crypto');
 /**
  * Strips reply/forward prefixes and normalizes whitespace/case so
  * "Re: Adoption Inquiry" and "adoption inquiry" compare as the same subject.
+ *
+ * Uses a repeating group (+) rather than a single match, since email
+ * clients commonly stack these ("Re: Re: Subject", "Fwd: Re: Subject") on
+ * a reply-to-a-reply. Stripping only one prefix left "re: subject" instead
+ * of "subject" for double-Re: chains, which failed to match the thread's
+ * already-normalized subject and incorrectly started a new thread instead
+ * of continuing the existing conversation.
  */
 function normalizeSubject(subject) {
   return (subject || '')
-    .replace(/^(re|fwd?):\s*/i, '')
+    .replace(/^(?:(?:re|fwd?):\s*)+/i, '')
     .trim()
     .toLowerCase();
 }
@@ -45,6 +52,21 @@ const SYSTEM_ADDRESSES = new Set(
     .filter(Boolean)
 );
 
+// Third-party automated senders that legitimately email richard@ but aren't
+// real inquiries -- DMARC aggregate report generators being the first case
+// (added Aug 10, 2026). Kept as a separate set from SYSTEM_ADDRESSES above,
+// since the reason for ignoring these is different (external automated
+// reporting, not our own outbound mail looping back) even though the
+// handling is the same. Add more addresses here, comma-separated, via the
+// IGNORED_SENDER_ADDRESSES env var if other automated senders show up later
+// (e.g. other mailbox providers' DMARC reporters) rather than editing code.
+const IGNORED_SENDER_ADDRESSES = new Set(
+  (process.env.IGNORED_SENDER_ADDRESSES || 'postmaster@amazonses.com,noreply-dmarc-support@google.com')
+    .split(',')
+    .map((addr) => addr.trim().toLowerCase())
+    .filter(Boolean)
+);
+
 /**
  * Reads and parses the raw email object from S3.
  */
@@ -61,7 +83,47 @@ async function fetchAndParseEmail(objectKey) {
   const subject = parsed.subject || '(no subject)';
   const bodyText = parsed.text || parsed.html || '(empty message)';
 
-  return { fromAddress, fromName, subject, bodyText };
+  // Real email threading identifiers -- mailparser already extracts these
+  // from the raw headers. inReplyTo is the direct parent; references is
+  // the full chain back to the start of the conversation (some clients
+  // only set one or the other, so we check both when matching threads).
+  const emailMessageId = parsed.messageId || null;
+  const inReplyTo = parsed.inReplyTo || null;
+  const references = Array.isArray(parsed.references)
+    ? parsed.references
+    : (parsed.references ? [parsed.references] : []);
+
+  return { fromAddress, fromName, subject, bodyText, emailMessageId, inReplyTo, references };
+}
+
+/**
+ * Finds an existing thread, preferring real email threading headers
+ * (In-Reply-To / References) over subject text, since those are globally
+ * unique and unambiguous -- unlike subject strings, which can collide
+ * ("General Inquiries" from two different people, or two genuinely
+ * separate conversations from the same person that happen to share a
+ * subject). Subject+sender matching is kept ONLY as a fallback for emails
+ * that arrive without proper threading headers.
+ */
+async function findExistingThreadByEmailHeaders(inReplyTo, references) {
+  const candidateIds = [inReplyTo, ...references].filter(Boolean);
+  if (candidateIds.length === 0) return null;
+
+  for (const id of candidateIds) {
+    const result = await ddb.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        IndexName: 'emailMessageId-index',
+        KeyConditionExpression: 'emailMessageId = :id',
+        ExpressionAttributeValues: { ':id': id },
+        Limit: 1,
+      })
+    );
+    if (result.Items && result.Items.length > 0) {
+      return result.Items[0].threadId;
+    }
+  }
+  return null;
 }
 
 /**
@@ -71,6 +133,9 @@ async function fetchAndParseEmail(objectKey) {
  * one thread — e.g. a donation question and a separate adoption question
  * from the same email address would get lumped together. Requiring the
  * subject to line up too keeps genuinely separate conversations apart.
+ *
+ * FALLBACK ONLY -- used when the email has no In-Reply-To/References we
+ * can match, or when neither points at anything we have stored.
  */
 async function findExistingThread(fromEmail, subject) {
   const result = await ddb.send(
@@ -93,10 +158,15 @@ async function findExistingThread(fromEmail, subject) {
 
 /**
  * Writes the inbound message into contact_messages, attached to an existing
- * thread if one was found, or starting a new one otherwise.
+ * thread if one was found, or starting a new one otherwise. Tries real
+ * email threading headers first; falls back to subject+sender matching
+ * only if those don't resolve to anything.
  */
-async function saveInboundMessage({ fromName, fromEmail, subject, bodyText }) {
-  const existingThreadId = await findExistingThread(fromEmail, subject);
+async function saveInboundMessage({ fromName, fromEmail, subject, bodyText, emailMessageId, inReplyTo, references }) {
+  let existingThreadId = await findExistingThreadByEmailHeaders(inReplyTo, references);
+  if (!existingThreadId) {
+    existingThreadId = await findExistingThread(fromEmail, subject);
+  }
 
   const messageId = randomUUID();
   const threadId = existingThreadId || randomUUID();
@@ -108,6 +178,8 @@ async function saveInboundMessage({ fromName, fromEmail, subject, bodyText }) {
     fromEmail: fromEmail.toLowerCase(),
     fromName,
     subject,
+    emailMessageId,
+    inReplyTo,
     bodyText,
     isRead: false,
     isReplied: false,
@@ -133,17 +205,27 @@ exports.handler = async (event) => {
     }
 
     try {
-      const { fromAddress, fromName, subject, bodyText } = await fetchAndParseEmail(sesMessageId);
+      const { fromAddress, fromName, subject, bodyText, emailMessageId, inReplyTo, references } = await fetchAndParseEmail(sesMessageId);
 
       if (!fromAddress) {
         console.error(`Could not parse sender address for SES message ${sesMessageId}, skipping.`);
         continue;
       }
 
-      if (SYSTEM_ADDRESSES.has(fromAddress.toLowerCase())) {
+      const fromLower = fromAddress.toLowerCase();
+
+      if (SYSTEM_ADDRESSES.has(fromLower)) {
         console.log(
           `Skipping SES message ${sesMessageId} — from system address ${fromAddress} ` +
             `(this is our own outbound notification, not a real inquiry).`
+        );
+        continue;
+      }
+
+      if (IGNORED_SENDER_ADDRESSES.has(fromLower)) {
+        console.log(
+          `Skipping SES message ${sesMessageId} — from ${fromAddress} ` +
+            `(known automated sender, e.g. a DMARC aggregate report, not a real inquiry).`
         );
         continue;
       }
@@ -153,6 +235,9 @@ exports.handler = async (event) => {
         fromEmail: fromAddress,
         subject,
         bodyText,
+        emailMessageId,
+        inReplyTo,
+        references,
       });
 
       console.log(

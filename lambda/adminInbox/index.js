@@ -16,6 +16,7 @@ const {
   listMessages,
   getMessageWithThread,
   getThreadId,
+  getThreadAndEmailMessageId,
   saveOutboundReply,
   setReadStatus,
   markReplied,
@@ -110,7 +111,16 @@ exports.handler = async (event) => {
         if (!toEmail || !replyText) {
           return fail(400, 'to_email and reply_text are required');
         }
-        await sendReply({ toEmail, subject, replyText });
+
+        const threadInfo = await getThreadAndEmailMessageId(messageId);
+        const inReplyToEmailMessageId = threadInfo?.emailMessageId || null;
+
+        const { emailMessageId: newEmailMessageId, subject: sentSubject } = await sendReply({
+          toEmail,
+          subject,
+          replyText,
+          inReplyToEmailMessageId,
+        });
 
         // The email has now actually been sent. Saving it as a thread
         // message is a nice-to-have for the Conversation Thread view, not
@@ -119,9 +129,14 @@ exports.handler = async (event) => {
         // successfully-sent reply would incorrectly show as an error,
         // risking Richard re-sending a reply that already went out fine.
         try {
-          const threadId = await getThreadId(messageId);
-          if (threadId) {
-            await saveOutboundReply({ threadId, subject, bodyText: replyText });
+          if (threadInfo?.threadId) {
+            await saveOutboundReply({
+              threadId: threadInfo.threadId,
+              subject: sentSubject,
+              bodyText: replyText,
+              emailMessageId: newEmailMessageId,
+              inReplyTo: inReplyToEmailMessageId,
+            });
           }
         } catch (err) {
           console.error('Reply email sent successfully, but failed to save it to the thread:', err);

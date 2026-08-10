@@ -95,8 +95,19 @@ async function attachDownloadUrls(message) {
  */
 async function listMessages({ filter, search, page = 1, limit = 20, includeDeleted = false }) {
   const result = await ddb.send(new ScanCommand({ TableName: TABLE_NAME }));
-  const baseItems = (result.Items || []).filter((m) => !m.isOutbound);
+  const allItems = result.Items || [];
+  const baseItems = allItems.filter((m) => !m.isOutbound);
   let items = includeDeleted ? baseItems : baseItems.filter((m) => !m.isDeleted);
+
+  // True per-thread message count, including Richard's outbound replies --
+  // the row-building loop below only iterates VISITOR messages (baseItems),
+  // so counting msgs.length there was silently undercounting by however
+  // many replies Richard had sent in that thread.
+  const trueCountByThread = new Map();
+  const countPool = includeDeleted ? allItems : allItems.filter((m) => !m.isDeleted);
+  for (const item of countPool) {
+    trueCountByThread.set(item.threadId, (trueCountByThread.get(item.threadId) || 0) + 1);
+  }
 
   if (search) {
     const term = search.toLowerCase();
@@ -134,7 +145,7 @@ async function listMessages({ filter, search, page = 1, limit = 20, includeDelet
       isReplied: msgs.some((m) => m.isReplied),
       isDeleted: msgs.every((m) => m.isDeleted), // consistent since delete/restore act on the whole thread
       receivedAt: latest.receivedAt,
-      messageCount: msgs.length,
+      messageCount: trueCountByThread.get(threadId) || msgs.length,
     });
   }
 
@@ -205,6 +216,17 @@ async function getThreadId(messageId) {
 }
 
 /**
+ * Same idea as getThreadId, but also returns the message's own
+ * emailMessageId -- needed when composing a reply, so the outgoing email
+ * can declare In-Reply-To pointing at the actual message being answered.
+ */
+async function getThreadAndEmailMessageId(messageId) {
+  const { Item } = await ddb.send(new GetCommand({ TableName: TABLE_NAME, Key: { messageId } }));
+  if (!Item) return null;
+  return { threadId: Item.threadId, emailMessageId: Item.emailMessageId || null };
+}
+
+/**
  * Saves Richard's own reply as a real message in the same thread, so the
  * Conversation Thread view shows both sides of the conversation instead of
  * only the visitor's messages. Previously his replies only ever existed as
@@ -212,7 +234,7 @@ async function getThreadId(messageId) {
  * reply looked cluttered: their email client had nothing to quote from our
  * side except its own guess, so it pasted the whole prior email back in.
  */
-async function saveOutboundReply({ threadId, subject, bodyText }) {
+async function saveOutboundReply({ threadId, subject, bodyText, emailMessageId, inReplyTo }) {
   const messageId = randomUUID();
   const now = new Date().toISOString();
 
@@ -223,6 +245,9 @@ async function saveOutboundReply({ threadId, subject, bodyText }) {
     fromName: 'Richard',
     subject,
     bodyText,
+    emailMessageId, // this reply's own real email Message-ID (from ses.js), so
+                     // the NEXT inbound reply can chain off it via In-Reply-To
+    inReplyTo,       // the email Message-ID this reply was sent in response to
     isRead: true, // it's our own outbound message, nothing to "read"
     isReplied: false,
     isOutbound: true, // marks this as Richard's own reply, not a real inbound
@@ -356,6 +381,7 @@ module.exports = {
   listMessages,
   getMessageWithThread,
   getThreadId,
+  getThreadAndEmailMessageId,
   saveOutboundReply,
   setReadStatus,
   markReplied,
