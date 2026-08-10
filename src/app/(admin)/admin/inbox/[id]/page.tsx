@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -259,9 +258,9 @@ export default function AdminInboxDetailPage() {
       <div className="min-h-screen bg-spur-tan-light p-8">
         <div className="max-w-4xl mx-auto">
           <div className="mb-6">
-            <Link href="/admin/inbox" className="text-spur-orange hover:text-spur-orange-dark flex items-center gap-2">
+            <button onClick={() => router.back()} className="text-spur-orange hover:text-spur-orange-dark flex items-center gap-2">
               ← Back to Inbox
-            </Link>
+            </button>
           </div>
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">{error}</div>
         </div>
@@ -277,9 +276,9 @@ export default function AdminInboxDetailPage() {
     <div className="min-h-screen bg-spur-tan-light p-8">
       <div className="max-w-4xl mx-auto">
         <div className="mb-6 flex items-center justify-between">
-          <Link href="/admin/inbox" className="text-spur-orange hover:text-spur-orange-dark flex items-center gap-2 font-medium">
+          <button onClick={() => router.back()} className="text-spur-orange hover:text-spur-orange-dark flex items-center gap-2 font-medium">
             ← Back to Inbox
-          </Link>
+          </button>
 
           <div className="flex items-center gap-2">
             {!message.isDeleted && (
