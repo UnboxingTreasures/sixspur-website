@@ -66,8 +66,9 @@ exports.handler = async (event) => {
         const filter = qs.is_read === 'false' ? 'unread' : 'all';
         const search = qs.search || '';
         const page = parseInt(qs.page || '1', 10);
+        const includeDeleted = qs.include_deleted === 'true';
 
-        const result = await listMessages({ filter, search, page });
+        const result = await listMessages({ filter, search, page, includeDeleted });
         return ok(result);
       }
 

@@ -65,14 +65,14 @@ async function attachDownloadUrls(message) {
  * One row per message (not collapsed by thread) — matches the original
  * Unboxing Treasures inbox list behavior.
  *
- * Soft-deleted messages (isDeleted: true) are ALWAYS excluded here, same as
- * every other admin-facing list -- there's no "show deleted" mode wired up
- * yet (restore is a future addition), so a deleted message simply
- * disappears from view rather than needing its own filter option.
+ * Soft-deleted messages (isDeleted: true) are excluded by default. Pass
+ * includeDeleted: true to show them too (the "Show Deleted" toggle) --
+ * this is purely a display filter, nothing is ever actually removed from
+ * the table by this function.
  */
-async function listMessages({ filter, search, page = 1, limit = 20 }) {
+async function listMessages({ filter, search, page = 1, limit = 20, includeDeleted = false }) {
   const result = await ddb.send(new ScanCommand({ TableName: TABLE_NAME }));
-  let items = (result.Items || []).filter((m) => !m.isDeleted);
+  let items = includeDeleted ? (result.Items || []) : (result.Items || []).filter((m) => !m.isDeleted);
 
   if (filter === 'unread') {
     items = items.filter((m) => !m.isRead);

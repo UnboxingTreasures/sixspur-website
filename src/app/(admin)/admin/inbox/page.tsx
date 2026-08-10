@@ -14,6 +14,7 @@ interface InboxMessage {
   subject: string | null;
   isRead: boolean;
   isReplied: boolean;
+  isDeleted?: boolean;
   threadId: string;
   receivedAt: string;
   repliedAt: string | null;
@@ -38,11 +39,13 @@ export default function AdminInboxPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [performingBatch, setPerformingBatch] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchMessages();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, searchTerm, pagination.page]);
+  }, [filter, searchTerm, pagination.page, showDeleted]);
 
   const fetchMessages = async () => {
     try {
@@ -56,6 +59,10 @@ export default function AdminInboxPage() {
 
       if (searchTerm) {
         params.set("search", searchTerm);
+      }
+
+      if (showDeleted) {
+        params.set("include_deleted", "true");
       }
 
       const res = await fetch(`${API_URL}/admin/inbox?${params.toString()}`);
@@ -137,6 +144,27 @@ export default function AdminInboxPage() {
     }
   };
 
+  const restoreMessage = async (messageId: string) => {
+    try {
+      setRestoringId(messageId);
+      const res = await fetch(`${API_URL}/admin/inbox/${messageId}/restore`, {
+        method: "PATCH",
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        fetchMessages();
+      } else {
+        alert(data.message || "Failed to restore message");
+      }
+    } catch (err) {
+      console.error("Error restoring message:", err);
+      alert("Failed to restore message");
+    } finally {
+      setRestoringId(null);
+    }
+  };
+
   return (
     <>
       <div className="bg-spur-orange px-7 py-4 flex items-center justify-between shadow-md">
@@ -178,6 +206,16 @@ export default function AdminInboxPage() {
                   }`}
                 >
                   Unread {unreadCount > 0 ? `(${unreadCount})` : ""}
+                </button>
+                <button
+                  onClick={() => setShowDeleted((prev) => !prev)}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    showDeleted
+                      ? "bg-red-600 text-white"
+                      : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+                  }`}
+                >
+                  {showDeleted ? "Hide Deleted" : "Show Deleted"}
                 </button>
               </div>
 
@@ -278,13 +316,24 @@ export default function AdminInboxPage() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
                     </th>
+                    {showDeleted && (
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {messages.map((message) => (
                     <tr
                       key={message.messageId}
-                      className={`hover:bg-gray-50 transition-colors ${!message.isRead ? "bg-spur-orange-light/40" : ""}`}
+                      className={`hover:bg-gray-50 transition-colors ${
+                        message.isDeleted
+                          ? "bg-red-50/60"
+                          : !message.isRead
+                          ? "bg-spur-orange-light/40"
+                          : ""
+                      }`}
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <input
@@ -338,7 +387,11 @@ export default function AdminInboxPage() {
                         className="px-6 py-4 whitespace-nowrap cursor-pointer"
                         onClick={() => router.push(`/admin/inbox/${message.messageId}`)}
                       >
-                        {message.isReplied ? (
+                        {message.isDeleted ? (
+                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-700">
+                            Deleted
+                          </span>
+                        ) : message.isReplied ? (
                           <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
                             Replied
                           </span>
@@ -352,6 +405,22 @@ export default function AdminInboxPage() {
                           </span>
                         )}
                       </td>
+                      {showDeleted && (
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {message.isDeleted && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                restoreMessage(message.messageId);
+                              }}
+                              disabled={restoringId === message.messageId}
+                              className="px-3 py-1 bg-white border border-green-300 text-green-700 rounded-lg hover:bg-green-50 text-xs font-medium disabled:opacity-50"
+                            >
+                              {restoringId === message.messageId ? "..." : "Restore"}
+                            </button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
