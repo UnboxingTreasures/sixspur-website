@@ -1,18 +1,35 @@
 import TeamAvatar from "@/components/ui/TeamAvatar";
-import team from "@/data/team.json";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export const metadata = {
   title: "About Us | Six Spur Ranch and Rescue",
   description: "Meet the team behind Six Spur Ranch and Rescue, a 501(c)(3) nonprofit animal sanctuary in Maud, Texas.",
 };
 
-const FOUNDER = team.find((m) => m.id === "richard")!;
-const TEAM = team.filter((m) => m.id !== "richard");
+interface StaffMember {
+  staffId: string;
+  name: string;
+  title: string;
+  bio: string;
+  imageUrl: string;
+}
 
-function TeamCard({ member }: { member: (typeof team)[0] }) {
+async function getStaff(): Promise<StaffMember[]> {
+  try {
+    const res = await fetch(`${API_URL}/staff`, { cache: "no-store" });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.staff || [];
+  } catch {
+    return [];
+  }
+}
+
+function TeamCard({ member }: { member: StaffMember }) {
   return (
     <div className="flex flex-col">
-      <TeamAvatar image={member.image} name={member.name} />
+      <TeamAvatar image={member.imageUrl} name={member.name} />
       <div className="pt-4">
         <p className="font-bold text-spur-black text-lg">{member.name}</p>
         <p className="text-spur-orange text-xs font-semibold uppercase tracking-wide mb-2">{member.title}</p>
@@ -22,7 +39,18 @@ function TeamCard({ member }: { member: (typeof team)[0] }) {
   );
 }
 
-export default function AboutPage() {
+export default async function AboutPage() {
+  const staff = await getStaff();
+
+  // Richard gets a larger "founder" hero treatment; everyone else goes in
+  // the grid below. Matched by staffId, same as the original team.json
+  // version -- this is a known fragile spot (string matching rather than
+  // an explicit admin-settable "is founder" field) but kept as-is to avoid
+  // a bigger schema change this session. Worth revisiting if the founder
+  // ever changes or this needs to be admin-configurable.
+  const FOUNDER = staff.find((m) => m.staffId === "richard");
+  const TEAM = staff.filter((m) => m.staffId !== "richard");
+
   return (
     <main className="min-h-screen bg-white">
       <section className="bg-spur-black text-white py-16 px-6">
@@ -47,21 +75,23 @@ export default function AboutPage() {
       </section>
       <section className="py-16 px-6">
         <div className="max-w-5xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center mb-20 pb-20 border-b border-spur-tan-light">
-            <div className="max-w-sm mx-auto md:mx-0 w-full">
-              <TeamAvatar image={FOUNDER.image} name={FOUNDER.name} />
+          {FOUNDER && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center mb-20 pb-20 border-b border-spur-tan-light">
+              <div className="max-w-sm mx-auto md:mx-0 w-full">
+                <TeamAvatar image={FOUNDER.imageUrl} name={FOUNDER.name} />
+              </div>
+              <div>
+                <p className="eyebrow mb-2">{FOUNDER.title}</p>
+                <h2 className="text-3xl font-bold text-spur-black mb-4">{FOUNDER.name}</h2>
+                <div className="orange-divider mb-4" />
+                <p className="text-gray-600 leading-relaxed">{FOUNDER.bio}</p>
+              </div>
             </div>
-            <div>
-              <p className="eyebrow mb-2">{FOUNDER.title}</p>
-              <h2 className="text-3xl font-bold text-spur-black mb-4">{FOUNDER.name}</h2>
-              <div className="orange-divider mb-4" />
-              <p className="text-gray-600 leading-relaxed">{FOUNDER.bio}</p>
-            </div>
-          </div>
+          )}
           <h3 className="text-xl font-bold text-spur-black mb-10">Our Team</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8">
             {TEAM.map((member) => (
-              <TeamCard key={member.name} member={member} />
+              <TeamCard key={member.staffId} member={member} />
             ))}
           </div>
         </div>
