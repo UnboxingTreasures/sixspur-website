@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -28,8 +28,9 @@ interface Pagination {
   limit?: number;
 }
 
-export default function AdminInboxPage() {
+function AdminInboxPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [messages, setMessages] = useState<InboxMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -39,8 +40,23 @@ export default function AdminInboxPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [performingBatch, setPerformingBatch] = useState(false);
-  const [showDeleted, setShowDeleted] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(searchParams.get("show_deleted") === "true");
   const [restoringId, setRestoringId] = useState<string | null>(null);
+
+  const toggleShowDeleted = () => {
+    const next = !showDeleted;
+    setShowDeleted(next);
+    // Reflect in the URL (replace, not push, so this doesn't clutter back-button
+    // history) so the toggle survives navigating away to a message and back --
+    // local state alone resets every time this page remounts.
+    const params = new URLSearchParams(searchParams.toString());
+    if (next) {
+      params.set("show_deleted", "true");
+    } else {
+      params.delete("show_deleted");
+    }
+    router.replace(`/admin/inbox?${params.toString()}`);
+  };
 
   useEffect(() => {
     fetchMessages();
@@ -208,7 +224,7 @@ export default function AdminInboxPage() {
                   Unread {unreadCount > 0 ? `(${unreadCount})` : ""}
                 </button>
                 <button
-                  onClick={() => setShowDeleted((prev) => !prev)}
+                  onClick={toggleShowDeleted}
                   className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                     showDeleted
                       ? "bg-red-600 text-white"
@@ -477,5 +493,13 @@ export default function AdminInboxPage() {
         </div>
       </div>
     </>
+  );
+}
+
+export default function AdminInboxPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-spur-tan-light p-8" />}>
+      <AdminInboxPageInner />
+    </Suspense>
   );
 }
