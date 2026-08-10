@@ -14,12 +14,14 @@ const {
 } = require('@aws-sdk/lib-dynamodb');
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const { randomUUID } = require('crypto');
 
 const client = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1' });
 const ddb = DynamoDBDocumentClient.from(client);
 const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
 
 const TABLE_NAME = process.env.CONTACT_MESSAGES_TABLE || 'contact_messages';
+const ADMIN_ADDRESS = process.env.SES_ADMIN_ADDRESS || 'richard@sixspurranch.org';
 const PDF_BUCKET = process.env.ADOPTION_PDF_BUCKET || 'sixspurranch-adoption-pdfs';
 const UPLOADS_BUCKET = process.env.ADOPTION_UPLOADS_BUCKET || 'sixspurranch-adoption-uploads';
 
@@ -131,6 +133,45 @@ async function getMessageWithThread(messageId) {
   return { message: messageWithDownloads, threadMessages: threadResult.Items || [] };
 }
 
+/**
+ * Cheap lookup for just a message's threadId, used when saving Richard's
+ * reply -- avoids the extra thread Query that getMessageWithThread does,
+ * since all that's needed here is the one field.
+ */
+async function getThreadId(messageId) {
+  const { Item } = await ddb.send(new GetCommand({ TableName: TABLE_NAME, Key: { messageId } }));
+  return Item?.threadId || null;
+}
+
+/**
+ * Saves Richard's own reply as a real message in the same thread, so the
+ * Conversation Thread view shows both sides of the conversation instead of
+ * only the visitor's messages. Previously his replies only ever existed as
+ * a sent email, never stored here -- which is also why a visitor's next
+ * reply looked cluttered: their email client had nothing to quote from our
+ * side except its own guess, so it pasted the whole prior email back in.
+ */
+async function saveOutboundReply({ threadId, subject, bodyText }) {
+  const messageId = randomUUID();
+  const now = new Date().toISOString();
+
+  const item = {
+    messageId,
+    threadId,
+    fromEmail: ADMIN_ADDRESS,
+    fromName: 'Richard',
+    subject,
+    bodyText,
+    isRead: true, // it's our own outbound message, nothing to "read"
+    isReplied: false,
+    receivedAt: now,
+    repliedAt: null,
+  };
+
+  await ddb.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
+  return { messageId };
+}
+
 async function setReadStatus(messageId, isRead) {
   await ddb.send(
     new UpdateCommand({
@@ -197,6 +238,8 @@ async function batchSetDeletedStatus(messageIds, isDeleted) {
 module.exports = {
   listMessages,
   getMessageWithThread,
+  getThreadId,
+  saveOutboundReply,
   setReadStatus,
   markReplied,
   batchSetReadStatus,

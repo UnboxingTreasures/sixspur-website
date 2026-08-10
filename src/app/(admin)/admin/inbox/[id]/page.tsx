@@ -404,20 +404,25 @@ export default function AdminInboxDetailPage() {
             <div className="border-t border-spur-tan bg-spur-tan-light px-6 py-4">
               <h3 className="font-semibold text-spur-black mb-3">Conversation Thread</h3>
               <div className="space-y-3">
-                {threadMessages.map((msg) => (
-                  <div
-                    key={msg.messageId}
-                    className={`bg-white rounded-lg p-4 border ${
-                      msg.messageId === message.messageId ? "border-spur-orange/40 bg-spur-orange-light/30" : "border-gray-200"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium text-sm text-gray-900">{msg.fromName || msg.fromEmail}</span>
-                      <span className="text-xs text-gray-500">{formatDate(msg.receivedAt)}</span>
+                {threadMessages.map((msg) => {
+                  const isFromRichard = msg.fromEmail?.toLowerCase() === ADMIN_TO_ADDRESS.toLowerCase();
+                  return (
+                    <div
+                      key={msg.messageId}
+                      className={`bg-white rounded-lg p-4 border ${
+                        msg.messageId === message.messageId ? "border-spur-orange/40 bg-spur-orange-light/30" : "border-gray-200"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`font-medium text-sm ${isFromRichard ? "text-red-700" : "text-gray-900"}`}>
+                          {isFromRichard ? "Richard" : msg.fromName || msg.fromEmail}
+                        </span>
+                        <span className="text-xs text-gray-500">{formatDate(msg.receivedAt)}</span>
+                      </div>
+                      <p className="text-sm text-gray-700 line-clamp-2">{msg.bodyText}</p>
                     </div>
-                    <p className="text-sm text-gray-700 line-clamp-2">{msg.bodyText}</p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

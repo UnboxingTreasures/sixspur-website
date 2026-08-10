@@ -15,6 +15,8 @@
 const {
   listMessages,
   getMessageWithThread,
+  getThreadId,
+  saveOutboundReply,
   setReadStatus,
   markReplied,
   batchSetReadStatus,
@@ -66,9 +68,8 @@ exports.handler = async (event) => {
         const filter = qs.is_read === 'false' ? 'unread' : 'all';
         const search = qs.search || '';
         const page = parseInt(qs.page || '1', 10);
-        const includeDeleted = qs.include_deleted === 'true';
 
-        const result = await listMessages({ filter, search, page, includeDeleted });
+        const result = await listMessages({ filter, search, page });
         return ok(result);
       }
 
@@ -107,6 +108,14 @@ exports.handler = async (event) => {
           return fail(400, 'to_email and reply_text are required');
         }
         await sendReply({ toEmail, subject, replyText });
+
+        // Also save this as a real message in the same thread, so the
+        // Conversation Thread view can show Richard's side too.
+        const threadId = await getThreadId(messageId);
+        if (threadId) {
+          await saveOutboundReply({ threadId, subject, bodyText: replyText });
+        }
+
         return ok({ sent: true });
       }
 
