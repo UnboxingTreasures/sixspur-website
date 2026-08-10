@@ -1,0 +1,8 @@
+{
+  "Variables": {
+    "CONTACT_MESSAGES_TABLE": "contact_messages",
+    "INCOMING_MAIL_BUCKET": "sixspurranch-incoming-mail",
+    "SYSTEM_SENDER_ADDRESSES": "noreply@sixspurranch.org",
+    "IGNORED_SENDER_ADDRESSES": "postmaster@amazonses.com,noreply-dmarc-support@google.com"
+  }
+}

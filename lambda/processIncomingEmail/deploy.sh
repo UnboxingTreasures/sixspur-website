@@ -58,7 +58,7 @@ if aws lambda get-function --function-name "$FUNCTION_NAME" --profile "$PROFILE"
   echo "Updating environment variables..."
   aws lambda update-function-configuration \
     --function-name "$FUNCTION_NAME" \
-    --environment "Variables={CONTACT_MESSAGES_TABLE=contact_messages,INCOMING_MAIL_BUCKET=sixspurranch-incoming-mail,SYSTEM_SENDER_ADDRESSES=noreply@sixspurranch.org}" \
+    --environment file://processIncomingEmail-env.json \
     --profile "$PROFILE" --region "$REGION"
 else
   echo "Creating function..."
@@ -70,7 +70,7 @@ else
     --zip-file fileb://processIncomingEmail.zip \
     --timeout 30 \
     --memory-size 256 \
-    --environment "Variables={CONTACT_MESSAGES_TABLE=contact_messages,INCOMING_MAIL_BUCKET=sixspurranch-incoming-mail,SYSTEM_SENDER_ADDRESSES=noreply@sixspurranch.org}" \
+    --environment file://processIncomingEmail-env.json \
     --profile "$PROFILE" --region "$REGION"
 fi
 

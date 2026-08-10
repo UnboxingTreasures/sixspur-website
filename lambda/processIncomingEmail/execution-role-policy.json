@@ -10,7 +10,7 @@
     {
       "Sid": "ContactMessagesReadWrite",
       "Effect": "Allow",
-      "Action": ["dynamodb:PutItem", "dynamodb:Query"],
+      "Action": ["dynamodb:PutItem", "dynamodb:Query", "dynamodb:UpdateItem"],
       "Resource": [
         "arn:aws:dynamodb:us-east-1:658965339779:table/contact_messages",
         "arn:aws:dynamodb:us-east-1:658965339779:table/contact_messages/index/*"

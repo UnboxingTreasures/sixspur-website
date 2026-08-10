@@ -9,7 +9,7 @@
 
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, PutCommand, QueryCommand } = require('@aws-sdk/lib-dynamodb');
+const { DynamoDBDocumentClient, PutCommand, QueryCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
 const { simpleParser } = require('mailparser');
 const { randomUUID } = require('crypto');
 
@@ -201,6 +201,43 @@ async function findExistingThread(fromEmail, subject) {
 }
 
 /**
+ * If a new reply lands on a thread that was previously (soft-)deleted in
+ * the admin panel, un-deletes the WHOLE thread automatically -- a live
+ * response from the visitor means it needs attention again, so it
+ * shouldn't stay silently hidden. Does nothing if the thread wasn't
+ * deleted (the common case), so this is cheap for normal traffic.
+ */
+async function restoreThreadIfDeleted(threadId) {
+  const threadResult = await ddb.send(
+    new QueryCommand({
+      TableName: TABLE_NAME,
+      IndexName: 'threadId-index',
+      KeyConditionExpression: 'threadId = :t',
+      ExpressionAttributeValues: { ':t': threadId },
+    })
+  );
+
+  const items = threadResult.Items || [];
+  const anyDeleted = items.some((m) => m.isDeleted);
+  if (!anyDeleted) return;
+
+  console.log(`Thread ${threadId} was deleted -- auto-restoring since a new reply just arrived.`);
+
+  await Promise.all(
+    items.map((item) =>
+      ddb.send(
+        new UpdateCommand({
+          TableName: TABLE_NAME,
+          Key: { messageId: item.messageId },
+          UpdateExpression: 'SET isDeleted = :d, deletedAt = :t',
+          ExpressionAttributeValues: { ':d': false, ':t': null },
+        })
+      )
+    )
+  );
+}
+
+/**
  * Writes the inbound message into contact_messages, attached to an existing
  * thread if one was found, or starting a new one otherwise. Tries real
  * email threading headers first; falls back to subject+sender matching
@@ -210,6 +247,10 @@ async function saveInboundMessage({ fromName, fromEmail, subject, bodyText, emai
   let existingThreadId = await findExistingThreadByEmailHeaders(inReplyTo, references);
   if (!existingThreadId) {
     existingThreadId = await findExistingThread(fromEmail, subject);
+  }
+
+  if (existingThreadId) {
+    await restoreThreadIfDeleted(existingThreadId);
   }
 
   const messageId = randomUUID();
