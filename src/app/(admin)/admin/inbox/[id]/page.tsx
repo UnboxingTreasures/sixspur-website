@@ -18,6 +18,7 @@ interface Message {
   bodyText: string | null;
   isRead: boolean;
   isReplied: boolean;
+  isDeleted?: boolean;
   receivedAt: string;
   repliedAt: string | null;
   pdfDownloadUrl?: string;
@@ -45,6 +46,7 @@ export default function AdminInboxDetailPage() {
   const [error, setError] = useState("");
   const [markingRead, setMarkingRead] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const [showReplyForm, setShowReplyForm] = useState(false);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
@@ -152,6 +154,27 @@ export default function AdminInboxDetailPage() {
       alert("Failed to delete message");
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const restoreMessage = async () => {
+    try {
+      setRestoring(true);
+      const res = await fetch(`${API_URL}/admin/inbox/${messageId}/restore`, {
+        method: "PATCH",
+      });
+      const data = await res.json();
+
+      if (data.success && message) {
+        setMessage({ ...message, isDeleted: false });
+      } else {
+        alert(data.message || "Failed to restore message");
+      }
+    } catch (err) {
+      console.error("Error restoring message:", err);
+      alert("Failed to restore message");
+    } finally {
+      setRestoring(false);
     }
   };
 
@@ -266,13 +289,23 @@ export default function AdminInboxDetailPage() {
             >
               {markingRead ? "..." : message.isRead ? "Mark as Unread" : "Mark as Read"}
             </button>
-            <button
-              onClick={deleteMessage}
-              disabled={deleting}
-              className="px-4 py-2 bg-white border border-red-300 text-red-700 rounded-lg hover:bg-red-50 text-sm font-medium disabled:opacity-50"
-            >
-              {deleting ? "..." : "Delete"}
-            </button>
+            {message.isDeleted ? (
+              <button
+                onClick={restoreMessage}
+                disabled={restoring}
+                className="px-4 py-2 bg-white border border-green-300 text-green-700 rounded-lg hover:bg-green-50 text-sm font-medium disabled:opacity-50"
+              >
+                {restoring ? "..." : "Restore"}
+              </button>
+            ) : (
+              <button
+                onClick={deleteMessage}
+                disabled={deleting}
+                className="px-4 py-2 bg-white border border-red-300 text-red-700 rounded-lg hover:bg-red-50 text-sm font-medium disabled:opacity-50"
+              >
+                {deleting ? "..." : "Delete"}
+              </button>
+            )}
           </div>
         </div>
 
@@ -305,6 +338,9 @@ export default function AdminInboxDetailPage() {
               </div>
 
               <div className="flex items-center gap-2 pt-2">
+                {message.isDeleted ? (
+                  <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-700">Deleted</span>
+                ) : null}
                 {!message.isRead ? (
                   <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">New</span>
                 ) : null}
