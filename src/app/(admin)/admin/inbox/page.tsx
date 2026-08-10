@@ -221,6 +221,17 @@ export default function AdminInboxPage() {
                   Mark as Unread
                 </button>
                 <button
+                  onClick={() => {
+                    if (window.confirm(`Delete ${selectedIds.length} message${selectedIds.length !== 1 ? "s" : ""}? This can be restored later if needed, but won't show up in the inbox anymore.`)) {
+                      performBatchAction("delete");
+                    }
+                  }}
+                  disabled={performingBatch}
+                  className="px-3 py-1 bg-white border border-red-300 text-red-700 rounded-lg hover:bg-red-50 text-sm font-medium disabled:opacity-50"
+                >
+                  Delete
+                </button>
+                <button
                   onClick={() => setSelectedIds([])}
                   disabled={performingBatch}
                   className="px-3 py-1 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium disabled:opacity-50"

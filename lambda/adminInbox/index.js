@@ -4,6 +4,8 @@
 //   GET    /admin/inbox/{id}
 //   PATCH  /admin/inbox/{id}/read
 //   PATCH  /admin/inbox/{id}/replied
+//   PATCH  /admin/inbox/{id}/restore
+//   DELETE /admin/inbox/{id}
 //   POST   /admin/inbox/{id}/reply
 //   POST   /admin/inbox/batch
 //
@@ -16,13 +18,15 @@ const {
   setReadStatus,
   markReplied,
   batchSetReadStatus,
+  setDeletedStatus,
+  batchSetDeletedStatus,
 } = require('./dynamo');
 const { sendReply } = require('./ses');
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Allow-Methods': 'GET,POST,PATCH,OPTIONS',
+  'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
 };
 
 function respond(statusCode, body) {
@@ -83,6 +87,19 @@ exports.handler = async (event) => {
         return ok({ messageId, isReplied: true });
       }
 
+      case 'DELETE /admin/inbox/{id}': {
+        await setDeletedStatus(messageId, true);
+        return ok({ messageId, isDeleted: true });
+      }
+
+      // Not yet wired into any UI -- the backend half of "restore" so it's
+      // ready to go whenever that gets built, without needing another
+      // round of Lambda/API Gateway changes first.
+      case 'PATCH /admin/inbox/{id}/restore': {
+        await setDeletedStatus(messageId, false);
+        return ok({ messageId, isDeleted: false });
+      }
+
       case 'POST /admin/inbox/{id}/reply': {
         const { to_email: toEmail, subject, reply_text: replyText } = body;
         if (!toEmail || !replyText) {
@@ -101,6 +118,8 @@ exports.handler = async (event) => {
           await batchSetReadStatus(messageIds, true);
         } else if (action === 'mark_unread') {
           await batchSetReadStatus(messageIds, false);
+        } else if (action === 'delete') {
+          await batchSetDeletedStatus(messageIds, true);
         } else {
           return fail(400, `Unknown action: ${action}`);
         }

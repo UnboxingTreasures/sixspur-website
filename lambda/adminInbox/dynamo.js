@@ -64,10 +64,15 @@ async function attachDownloadUrls(message) {
  * Lists messages with optional unread filter, search term, and pagination.
  * One row per message (not collapsed by thread) — matches the original
  * Unboxing Treasures inbox list behavior.
+ *
+ * Soft-deleted messages (isDeleted: true) are ALWAYS excluded here, same as
+ * every other admin-facing list -- there's no "show deleted" mode wired up
+ * yet (restore is a future addition), so a deleted message simply
+ * disappears from view rather than needing its own filter option.
  */
 async function listMessages({ filter, search, page = 1, limit = 20 }) {
   const result = await ddb.send(new ScanCommand({ TableName: TABLE_NAME }));
-  let items = result.Items || [];
+  let items = (result.Items || []).filter((m) => !m.isDeleted);
 
   if (filter === 'unread') {
     items = items.filter((m) => !m.isRead);
@@ -86,7 +91,8 @@ async function listMessages({ filter, search, page = 1, limit = 20 }) {
 
   items.sort((a, b) => new Date(b.receivedAt) - new Date(a.receivedAt));
 
-  const unreadCount = (result.Items || []).filter((m) => !m.isRead).length;
+  const nonDeleted = (result.Items || []).filter((m) => !m.isDeleted);
+  const unreadCount = nonDeleted.filter((m) => !m.isRead).length;
   const total = items.length;
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const start = (page - 1) * limit;
@@ -151,10 +157,39 @@ async function batchSetReadStatus(messageIds, isRead) {
   await Promise.all(messageIds.map((id) => setReadStatus(id, isRead)));
 }
 
+/**
+ * Soft-deletes a message: sets isDeleted + deletedAt, but never removes the
+ * DynamoDB item itself. Restoring later is just clearing this flag --
+ * no data is actually destroyed by this operation.
+ */
+async function setDeletedStatus(messageId, isDeleted) {
+  await ddb.send(
+    new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: { messageId },
+      ConditionExpression: 'attribute_exists(messageId)',
+      UpdateExpression: 'SET isDeleted = :d, deletedAt = :t',
+      ExpressionAttributeValues: {
+        ':d': isDeleted,
+        ':t': isDeleted ? new Date().toISOString() : null,
+      },
+    })
+  ).catch((err) => {
+    if (err.name === 'ConditionalCheckFailedException') return null;
+    throw err;
+  });
+}
+
+async function batchSetDeletedStatus(messageIds, isDeleted) {
+  await Promise.all(messageIds.map((id) => setDeletedStatus(id, isDeleted)));
+}
+
 module.exports = {
   listMessages,
   getMessageWithThread,
   setReadStatus,
   markReplied,
   batchSetReadStatus,
+  setDeletedStatus,
+  batchSetDeletedStatus,
 };

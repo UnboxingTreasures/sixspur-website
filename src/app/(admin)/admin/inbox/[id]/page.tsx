@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
 const API_URL =
@@ -36,6 +36,7 @@ interface ThreadMessage {
 
 export default function AdminInboxDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const messageId = params.id as string;
 
   const [message, setMessage] = useState<Message | null>(null);
@@ -43,6 +44,7 @@ export default function AdminInboxDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [markingRead, setMarkingRead] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [showReplyForm, setShowReplyForm] = useState(false);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
@@ -127,6 +129,29 @@ export default function AdminInboxDetailPage() {
       console.error("Error marking message:", err);
     } finally {
       setMarkingRead(false);
+    }
+  };
+
+  const deleteMessage = async () => {
+    if (!window.confirm("Delete this message? It can be restored later if needed, but won't show up in the inbox anymore.")) {
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      const res = await fetch(`${API_URL}/admin/inbox/${messageId}`, { method: "DELETE" });
+      const data = await res.json();
+
+      if (data.success) {
+        router.push("/admin/inbox");
+      } else {
+        alert(data.message || "Failed to delete message");
+      }
+    } catch (err) {
+      console.error("Error deleting message:", err);
+      alert("Failed to delete message");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -233,13 +258,22 @@ export default function AdminInboxDetailPage() {
             ← Back to Inbox
           </Link>
 
-          <button
-            onClick={() => markAsRead(!message.isRead)}
-            disabled={markingRead}
-            className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-700 disabled:opacity-50"
-          >
-            {markingRead ? "..." : message.isRead ? "Mark as Unread" : "Mark as Read"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => markAsRead(!message.isRead)}
+              disabled={markingRead}
+              className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-700 disabled:opacity-50"
+            >
+              {markingRead ? "..." : message.isRead ? "Mark as Unread" : "Mark as Read"}
+            </button>
+            <button
+              onClick={deleteMessage}
+              disabled={deleting}
+              className="px-4 py-2 bg-white border border-red-300 text-red-700 rounded-lg hover:bg-red-50 text-sm font-medium disabled:opacity-50"
+            >
+              {deleting ? "..." : "Delete"}
+            </button>
+          </div>
         </div>
 
         <div className="bg-white rounded-lg shadow overflow-hidden">
