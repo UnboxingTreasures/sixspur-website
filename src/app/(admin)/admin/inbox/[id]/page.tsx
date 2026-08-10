@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -34,10 +35,23 @@ interface ThreadMessage {
   receivedAt: string;
 }
 
-export default function AdminInboxDetailPage() {
+function AdminInboxDetailPageInner() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const messageId = params.id as string;
+
+  // Built once from whatever filter state the list page carried forward
+  // when navigating here -- this is a real, explicit URL, not a guess
+  // based on browser history, so "Back to Inbox" is correct every time
+  // regardless of how someone arrived at this page.
+  const backToInboxHref = (() => {
+    const qp = new URLSearchParams();
+    if (searchParams.get("filter") === "unread") qp.set("filter", "unread");
+    if (searchParams.get("show_deleted") === "true") qp.set("show_deleted", "true");
+    const qs = qp.toString();
+    return `/admin/inbox${qs ? `?${qs}` : ""}`;
+  })();
 
   const [message, setMessage] = useState<Message | null>(null);
   const [threadMessages, setThreadMessages] = useState<ThreadMessage[]>([]);
@@ -144,7 +158,7 @@ export default function AdminInboxDetailPage() {
       const data = await res.json();
 
       if (data.success) {
-        router.push("/admin/inbox");
+        router.push(backToInboxHref);
       } else {
         alert(data.message || "Failed to delete message");
       }
@@ -258,9 +272,9 @@ export default function AdminInboxDetailPage() {
       <div className="min-h-screen bg-spur-tan-light p-8">
         <div className="max-w-4xl mx-auto">
           <div className="mb-6">
-            <button onClick={() => router.back()} className="text-spur-orange hover:text-spur-orange-dark flex items-center gap-2">
+            <Link href={backToInboxHref} className="text-spur-orange hover:text-spur-orange-dark flex items-center gap-2">
               ← Back to Inbox
-            </button>
+            </Link>
           </div>
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">{error}</div>
         </div>
@@ -276,9 +290,9 @@ export default function AdminInboxDetailPage() {
     <div className="min-h-screen bg-spur-tan-light p-8">
       <div className="max-w-4xl mx-auto">
         <div className="mb-6 flex items-center justify-between">
-          <button onClick={() => router.back()} className="text-spur-orange hover:text-spur-orange-dark flex items-center gap-2 font-medium">
+          <Link href={backToInboxHref} className="text-spur-orange hover:text-spur-orange-dark flex items-center gap-2 font-medium">
             ← Back to Inbox
-          </button>
+          </Link>
 
           <div className="flex items-center gap-2">
             {!message.isDeleted && (
@@ -493,5 +507,13 @@ export default function AdminInboxDetailPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AdminInboxDetailPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-spur-tan-light p-8" />}>
+      <AdminInboxDetailPageInner />
+    </Suspense>
   );
 }
