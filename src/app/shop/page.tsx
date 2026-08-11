@@ -36,7 +36,7 @@ export default async function ShopPage() {
   // Grouped dynamically from the actual product data -- no hardcoded
   // category list, matches the original design. New categories added via
   // /admin/shop show up here automatically.
-  const categories = Array.from(new Set(shopItems.map((item) => item.category)));
+  const categories = Array.from(new Set(shopItems.map((item) => item.category))).sort((a, b) => a.localeCompare(b));
 
   return (
     <main className="min-h-screen bg-white">
