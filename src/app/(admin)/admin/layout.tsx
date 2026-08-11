@@ -10,6 +10,7 @@ import SixSpurLogo from '@/components/admin/SixSpurLogo';
 // layout wraps everything under /admin/*.
 const CATEGORIES: { name: string; href: string }[] = [
   { name: 'Home', href: '/admin' },
+  { name: 'Adoptable Animals', href: '/admin/adoptable-animals' },
   { name: 'Adoptions', href: '/admin/adoptions' },
   { name: 'Animals', href: '/admin/animals' },
   { name: 'Blog/News', href: '/admin/news' },
