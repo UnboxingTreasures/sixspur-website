@@ -21,7 +21,6 @@ export default function SocialPostComposer() {
   const [activeTab, setActiveTab]   = useState("instagram");
   const [text, setText]             = useState<Record<string, string>>({ instagram: "", facebook: "" });
   const [imageUrl, setImageUrl]     = useState<Record<string, string>>({ instagram: "", facebook: "" });
-  const [imageMode, setImageMode]   = useState<Record<string, "url" | "upload">>({ instagram: "url", facebook: "url" });
   const [uploading, setUploading]   = useState<Record<string, boolean>>({ instagram: false, facebook: false });
   const [uploadMsg, setUploadMsg]   = useState<Record<string, string>>({ instagram: "", facebook: "" });
   const [posting, setPosting]       = useState<Record<string, boolean>>({ instagram: false, facebook: false });
@@ -44,7 +43,6 @@ export default function SocialPostComposer() {
   const resetTab = (tab: string) => {
     setText(t => ({ ...t, [tab]: "" }));
     setImageUrl(u => ({ ...u, [tab]: "" }));
-    setImageMode(im => ({ ...im, [tab]: "url" }));
     setUploadMsg(um => ({ ...um, [tab]: "" }));
     setResults(r => ({ ...r, [tab]: null }));
     setPosted(p => ({ ...p, [tab]: null }));
@@ -124,10 +122,9 @@ export default function SocialPostComposer() {
 
   const postUrl = results[activeTab]?.post_url;
 
-  // ── Image section (URL or Upload toggle) ─────────────────────────────────
+  // ── Image section (upload only - client isn't tech-savvy, no URL option) ────
   const renderImageSection = () => {
     const isRequired = activeTab === "instagram";
-    const mode       = imageMode[activeTab];
     const isUp       = uploading[activeTab];
     const msg        = uploadMsg[activeTab];
     const uploadOk   = msg.startsWith("✓");
@@ -135,108 +132,53 @@ export default function SocialPostComposer() {
 
     return (
       <div style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+        <div style={{ marginBottom: 6 }}>
           <label style={{ fontSize: 12, fontWeight: 700, color: "#E77A2D" }}>
             Image{isRequired && <span style={{ color: "#DC2626" }}> *</span>}
             {!isRequired && <span style={{ color: "#9CA3AF", fontWeight: 400 }}> (optional)</span>}
           </label>
-          <div style={{ display: "flex", background: "#F7F4F0", borderRadius: 8, padding: 3, gap: 2 }}>
-            {(["url", "upload"] as const).map(m => (
-              <button
-                key={m}
-                onClick={() => {
-                  setImageMode(im => ({ ...im, [activeTab]: m }));
-                  setImageUrl(u => ({ ...u, [activeTab]: "" }));
-                  setUploadMsg(um => ({ ...um, [activeTab]: "" }));
-                  setResults(r => ({ ...r, [activeTab]: null }));
-                }}
-                style={{
-                  padding: "3px 10px", border: "none", borderRadius: 6,
-                  fontSize: 11, fontWeight: 700, cursor: "pointer",
-                  background: mode === m ? "#fff" : "transparent",
-                  color: mode === m ? "#E77A2D" : "#9CA3AF",
-                  boxShadow: mode === m ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
-                  transition: "all 0.15s",
-                }}
-              >
-                {m === "url" ? "🔗 URL" : "📤 Upload"}
-              </button>
-            ))}
-          </div>
         </div>
 
-        {mode === "url" ? (
-          <>
-            <input
-              type="url"
-              placeholder="https://d1s8s7aw8vf5zu.cloudfront.net/..."
-              value={currentImageUrl}
-              onChange={e => {
-                setImageUrl(u => ({ ...u, [activeTab]: e.target.value }));
-                setResults(r => ({ ...r, [activeTab]: null }));
-              }}
-              style={{
-                width: "100%", boxSizing: "border-box",
-                border: "1.5px solid #E8E2DC", borderRadius: 10,
-                padding: "10px 14px", fontFamily: "inherit",
-                fontSize: 13, color: "#111111", background: "#fff", outline: "none",
-              }}
-              onFocus={e => { e.target.style.borderColor = "#E77A2D"; }}
-              onBlur={e  => { e.target.style.borderColor = "#E8E2DC"; }}
-            />
-            <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 4 }}>
-              Must be a publicly accessible URL — CloudFront links from sixspurranch-assets work.
-            </div>
-          </>
-        ) : (
-          <>
-            <label style={{
-              display: "flex", flexDirection: "column", alignItems: "center",
-              justifyContent: "center", gap: 8,
-              border: `2px dashed ${uploadOk ? "#E77A2D" : uploadErr ? "#DC2626" : "#E8D5C4"}`,
-              borderRadius: 10, padding: "20px 16px",
-              background: uploadOk ? "#FEF3EB" : "#FAFAF8",
-              cursor: isUp ? "default" : "pointer",
-              transition: "all 0.15s",
-            }}>
-              <input
-                type="file"
-                accept={ACCEPTED}
-                style={{ display: "none" }}
-                disabled={isUp}
-                onChange={e => {
-                  const file = e.target.files?.[0];
-                  if (file) handleImageUpload(file, activeTab);
-                  e.target.value = "";
-                }}
-              />
-              {isUp ? (
-                <span style={{ fontSize: 13, color: "#9CA3AF" }}>⏳ Uploading…</span>
-              ) : uploadOk ? (
-                <>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "#E77A2D" }}>✓ Photo ready</span>
-                  <span style={{ fontSize: 11, color: "#9CA3AF" }}>Click to replace</span>
-                </>
-              ) : uploadErr ? (
-                <>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "#DC2626" }}>{msg}</span>
-                  <span style={{ fontSize: 11, color: "#9CA3AF" }}>Click to try again</span>
-                </>
-              ) : (
-                <>
-                  <span style={{ fontSize: 28 }}>🖼️</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "#E77A2D" }}>Click to choose a photo</span>
-                  <span style={{ fontSize: 11, color: "#9CA3AF" }}>JPG, PNG, WebP or GIF</span>
-                </>
-              )}
-            </label>
-            {uploadOk && currentImageUrl && (
-              <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 4, wordBreak: "break-all" }}>
-                {currentImageUrl}
-              </div>
-            )}
-          </>
-        )}
+        <label style={{
+          display: "flex", flexDirection: "column", alignItems: "center",
+          justifyContent: "center", gap: 8,
+          border: `2px dashed ${uploadOk ? "#E77A2D" : uploadErr ? "#DC2626" : "#E8D5C4"}`,
+          borderRadius: 10, padding: "20px 16px",
+          background: uploadOk ? "#FEF3EB" : "#FAFAF8",
+          cursor: isUp ? "default" : "pointer",
+          transition: "all 0.15s",
+        }}>
+          <input
+            type="file"
+            accept={ACCEPTED}
+            style={{ display: "none" }}
+            disabled={isUp}
+            onChange={e => {
+              const file = e.target.files?.[0];
+              if (file) handleImageUpload(file, activeTab);
+              e.target.value = "";
+            }}
+          />
+          {isUp ? (
+            <span style={{ fontSize: 13, color: "#9CA3AF" }}>⏳ Uploading…</span>
+          ) : uploadOk ? (
+            <>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#E77A2D" }}>✓ Photo ready</span>
+              <span style={{ fontSize: 11, color: "#9CA3AF" }}>Click to replace</span>
+            </>
+          ) : uploadErr ? (
+            <>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#DC2626" }}>{msg}</span>
+              <span style={{ fontSize: 11, color: "#9CA3AF" }}>Click to try again</span>
+            </>
+          ) : (
+            <>
+              <span style={{ fontSize: 28 }}>🖼️</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#E77A2D" }}>Click to choose a photo</span>
+              <span style={{ fontSize: 11, color: "#9CA3AF" }}>JPG, PNG, WebP or GIF</span>
+            </>
+          )}
+        </label>
       </div>
     );
   };
