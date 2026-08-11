@@ -1,10 +1,42 @@
-'use client';
-
 import Link from 'next/link';
-import dogs from '@/data/dogs.json';
+import AdoptableAnimalCard from './AdoptableAnimalCard';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-export default function AdoptableAnimals() {
+interface AgeValue {
+  value: number;
+  unit: string;
+}
+
+interface AdoptableAnimalSummary {
+  animalId: string;
+  name: string;
+  type: string;
+  age: AgeValue | null;
+  sex: string;
+  description: string;
+  thumbnailUrl: string;
+}
+
+async function getAdoptableAnimals(): Promise<AdoptableAnimalSummary[]> {
+  try {
+    const res = await fetch(`${API_URL}/adoptable-animals`, { cache: 'no-store' });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.animals || [];
+  } catch {
+    return [];
+  }
+}
+
+function formatAge(age: AgeValue | null): string {
+  if (!age) return '';
+  return `${age.value} ${age.unit}`;
+}
+
+export default async function AdoptableAnimals() {
+  const animals = await getAdoptableAnimals();
+
   return (
     <section style={{ background: '#F7F4F0', padding: '6rem 1.5rem' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
@@ -28,40 +60,28 @@ export default function AdoptableAnimals() {
           </div>
         </div>
 
-        {/* Dogs */}
-        <p style={{ color: '#111111', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '1rem', borderBottom: '1px solid #E0D8D0', paddingBottom: '0.5rem' }}>
-          Dogs
-        </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1.25rem', marginBottom: '2.5rem' }}>
-          {dogs.map((dog) => (
-            <Link key={dog.id} href={`/adopt/${dog.id}`} style={{ textDecoration: 'none', display: 'block' }}>
-              <div
-                style={{ background: '#FFFFFF', borderRadius: '2px', overflow: 'hidden', border: '1px solid #E8E2DC' }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-4px)';
-                  (e.currentTarget as HTMLDivElement).style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)';
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
-                  (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
-                }}
-              >
-                <div style={{ position: 'relative' }}>
-                  <img src={dog.image} alt={dog.name} style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', display: 'block' }} />
-                  <div style={{ position: 'absolute', top: '0.75rem', left: '0.75rem', background: '#E77A2D', color: '#FFFFFF', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: '2px' }}>
-                    Available
-                  </div>
-                </div>
-                <div style={{ padding: '1.25rem' }}>
-                  <h3 style={{ color: '#111111', fontSize: '1.1rem', fontWeight: 700, margin: '0 0 0.25rem' }}>{dog.name}</h3>
-                  <p style={{ color: '#E77A2D', fontSize: '0.75rem', fontWeight: 600, margin: '0 0 0.75rem' }}>{dog.breed} · {dog.age} · {dog.gender}</p>
-                  <p style={{ color: '#555555', fontSize: '0.875rem', lineHeight: 1.6, margin: '0 0 1rem' }}>{dog.description}</p>
-                  <span style={{ color: '#E77A2D', fontSize: '0.8rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Meet {dog.name} →</span>
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
+        {/* Animals -- flat grid, not grouped by type, since the new system
+            covers any species (not just dogs) and a hardcoded "Dogs" label
+            would be actively wrong once a horse or goat shows up here. */}
+        {animals.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '3rem 1rem', marginBottom: '2.5rem', background: '#FFFFFF', borderRadius: '2px', border: '1px solid #E8E2DC' }}>
+            <p style={{ color: '#888888', fontSize: '0.95rem', margin: 0 }}>No adoptable animals at the moment. Check back soon!</p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1.25rem', marginBottom: '2.5rem' }}>
+            {animals.map((animal) => (
+              <AdoptableAnimalCard
+                key={animal.animalId}
+                animalId={animal.animalId}
+                name={animal.name}
+                ageText={formatAge(animal.age)}
+                sex={animal.sex}
+                description={animal.description}
+                thumbnailUrl={animal.thumbnailUrl}
+              />
+            ))}
+          </div>
+        )}
 
         {/* Bottom CTA */}
         <div style={{ background: '#111111', padding: '2.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1.5rem', borderRadius: '2px' }}>

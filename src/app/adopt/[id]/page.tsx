@@ -1,15 +1,65 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import dogs from "@/data/dogs.json";
+import ProductGallery from "@/components/sections/ProductGallery";
 
-export async function generateStaticParams() {
-  return dogs.map((a) => ({ id: a.id }));
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+interface AgeValue {
+  value: number;
+  unit: string;
+}
+
+interface Descriptor {
+  label: string;
+  value: string;
+}
+
+interface AdoptableAnimalDetail {
+  animalId: string;
+  name: string;
+  type: string;
+  age: AgeValue | null;
+  sex: string;
+  description: string;
+  customDescriptors: Descriptor[];
+  photos: string[];
+  thumbnailUrl: string;
+}
+
+async function getAnimal(animalId: string): Promise<AdoptableAnimalDetail | null> {
+  try {
+    const res = await fetch(`${API_URL}/adoptable-animals/${animalId}`, { cache: "no-store" });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const animal = await getAnimal(id);
+  if (!animal) return { title: "Animal Not Found | Six Spur Ranch and Rescue" };
+  return {
+    title: `${animal.name} | Adopt | Six Spur Ranch and Rescue`,
+    description: animal.description || `Meet ${animal.name}, available for adoption at Six Spur Ranch and Rescue.`,
+  };
 }
 
 export default async function AdoptAnimalPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const animal = dogs.find((a) => a.id === id);
+  const animal = await getAnimal(id);
   if (!animal) notFound();
+
+  const photos = animal.photos && animal.photos.length > 0 ? animal.photos : [animal.thumbnailUrl];
+
+  const fixedDetails = [
+    { label: "Sex", value: animal.sex },
+    ...(animal.age ? [{ label: "Age", value: `${animal.age.value} ${animal.age.unit}` }] : []),
+    { label: "Type", value: animal.type },
+  ];
+  const customDetails = (animal.customDescriptors || []).map((d) => ({ label: d.label, value: d.value }));
+  const allDetails = [...fixedDetails, ...customDetails];
 
   return (
     <main className="min-h-screen bg-white">
@@ -19,24 +69,19 @@ export default async function AdoptAnimalPage({ params }: { params: Promise<{ id
           <Link href="/adopt" className="text-spur-orange text-sm font-semibold hover:underline mb-6 inline-block">
             ← Back to Adoptable Animals
           </Link>
-          <p className="eyebrow mb-2">{animal.breed}</p>
+          <p className="eyebrow mb-2">{animal.type}</p>
           <h1 className="text-4xl md:text-5xl font-bold">{animal.name}</h1>
         </div>
       </section>
       <section className="py-16 px-6">
         <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-start">
-          {/* Photo */}
-          <div className="relative aspect-[4/3] bg-spur-tan-light rounded overflow-hidden">
-            <img src={animal.image} alt={animal.name} className="w-full h-full object-cover" />
-          </div>
+          {/* Photo gallery */}
+          <ProductGallery photos={photos} name={animal.name} />
+
           {/* Details */}
           <div>
             <div className="flex flex-wrap gap-4 mb-6">
-              {[
-                { label: "Gender", value: animal.gender },
-                { label: "Age",    value: animal.age },
-                { label: "Breed",  value: animal.breed },
-              ].map((detail) => (
+              {allDetails.map((detail) => (
                 <div key={detail.label} className="bg-spur-tan-light rounded px-4 py-3 min-w-[100px]">
                   <p className="text-xs font-semibold text-spur-orange uppercase tracking-wide mb-1">{detail.label}</p>
                   <p className="text-sm font-semibold text-spur-black">{detail.value}</p>
