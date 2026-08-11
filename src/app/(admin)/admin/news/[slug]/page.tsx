@@ -9,6 +9,25 @@ const API_URL =
 
 const CATEGORIES = ["Ranch Updates", "Rescue Stories", "Donations"];
 
+async function uploadPhoto(slugHint: string, file: File): Promise<string> {
+  const presignRes = await fetch(`${API_URL}/admin/news/photo/presign`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ slugHint, fileName: file.name }),
+  });
+  const presignData = await presignRes.json();
+  if (!presignRes.ok) throw new Error(presignData.error || "Failed to get upload URL");
+
+  const uploadRes = await fetch(presignData.uploadUrl, {
+    method: "PUT",
+    body: file,
+    headers: { "Content-Type": file.type },
+  });
+  if (!uploadRes.ok) throw new Error("Upload to S3 failed");
+
+  return presignData.cdnUrl;
+}
+
 export default function AdminNewsEditExistingPage() {
   const router = useRouter();
   const params = useParams();
@@ -22,6 +41,8 @@ export default function AdminNewsEditExistingPage() {
     image: "",
     author: "",
   });
+  const [imageFileName, setImageFileName] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [isPublished, setIsPublished] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -58,6 +79,21 @@ export default function AdminNewsEditExistingPage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handlePhotoSelect = async (file: File) => {
+    setImageFileName(file.name);
+    setError("");
+    try {
+      setUploadingPhoto(true);
+      const cdnUrl = await uploadPhoto(slug, file);
+      setForm((prev) => ({ ...prev, image: cdnUrl }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Photo upload failed. Please try again.");
+      setImageFileName(null);
+    } finally {
+      setUploadingPhoto(false);
+    }
   };
 
   const handleSave = async (published: boolean) => {
@@ -107,14 +143,14 @@ export default function AdminNewsEditExistingPage() {
           </button>
           <button
             onClick={() => handleSave(false)}
-            disabled={saving}
+            disabled={saving || uploadingPhoto}
             className="bg-white/10 text-white text-sm font-semibold px-4 py-2 rounded hover:bg-white/20 transition-colors disabled:opacity-50"
           >
             Save as Draft
           </button>
           <button
             onClick={() => handleSave(true)}
-            disabled={saving}
+            disabled={saving || uploadingPhoto}
             className="bg-spur-orange text-white text-sm font-semibold px-4 py-2 rounded hover:bg-spur-orange-dark transition-colors disabled:opacity-50"
           >
             {saving ? "Saving..." : "Save & Publish"}
@@ -137,7 +173,7 @@ export default function AdminNewsEditExistingPage() {
                 onChange={handleChange}
                 className="w-full px-4 py-3 border border-gray-200 rounded focus:outline-none focus:border-spur-orange transition-colors text-spur-black"
               />
-              <p className="text-xs text-gray-400 mt-1">URL: /news/{slug} (slug can't be changed after creation)</p>
+              <p className="text-xs text-gray-400 mt-1">URL: /news/{slug} (slug can&apos;t be changed after creation)</p>
             </div>
 
             <div>
@@ -155,14 +191,36 @@ export default function AdminNewsEditExistingPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Image Path</label>
-              <input
-                name="image"
-                value={form.image}
-                onChange={handleChange}
-                placeholder="/images/ranch/example.jpg"
-                className="w-full px-4 py-3 border border-gray-200 rounded focus:outline-none focus:border-spur-orange transition-colors text-spur-black font-mono text-sm"
-              />
+              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Photo</label>
+              <label
+                className={`flex items-center justify-center gap-2 border-2 border-dashed rounded px-4 py-6 cursor-pointer transition-colors ${
+                  form.image ? "border-spur-orange bg-orange-50" : "border-gray-300 hover:border-spur-orange"
+                }`}
+              >
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
+                  disabled={uploadingPhoto}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handlePhotoSelect(file);
+                  }}
+                />
+                <span className="text-sm font-semibold text-spur-orange">
+                  {uploadingPhoto
+                    ? "Uploading..."
+                    : imageFileName
+                    ? `✓ ${imageFileName}`
+                    : form.image
+                    ? "Click to replace photo"
+                    : "Click to upload a photo"}
+                </span>
+              </label>
+              {form.image && !uploadingPhoto && (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={form.image} alt="Preview" className="mt-3 max-h-48 rounded border border-gray-200 object-cover" />
+              )}
             </div>
 
             <div>
