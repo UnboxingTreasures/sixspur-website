@@ -126,6 +126,7 @@ function AnimalFields({ draft, setDraft, types }: { draft: Draft; setDraft: (d: 
             <option key={t} value={t}>{t}</option>
           ))}
         </select>
+        <p style={{ fontSize: 11, color: "#B0AAA3", marginTop: 4 }}>Don&apos;t see the type you need? Add it under Animals.</p>
       </div>
 
       <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
@@ -231,6 +232,7 @@ export default function AdminAdoptableAnimalsPage() {
 
   const [editDrafts, setEditDrafts] = useState<Record<string, Draft>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [savedId, setSavedId] = useState<string | null>(null);
   const [uploadingPhotoFor, setUploadingPhotoFor] = useState<string | null>(null);
   const [removingPhoto, setRemovingPhoto] = useState<string | null>(null);
   const [settingThumbnail, setSettingThumbnail] = useState<string | null>(null);
@@ -318,6 +320,8 @@ export default function AdminAdoptableAnimalsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Save failed");
       setAnimals((prev) => prev.map((a) => (a.animalId === animalId ? data : a)).sort((a, b) => a.name.localeCompare(b.name)));
+      setSavedId(animalId);
+      setTimeout(() => setSavedId((current) => (current === animalId ? null : current)), 2000);
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -452,16 +456,6 @@ export default function AdminAdoptableAnimalsPage() {
                 <div style={{ padding: "0 20px 20px", borderTop: "1px solid #F0EBE5" }}>
                   <div style={{ marginTop: 16 }}>
                     <AnimalFields draft={draft} setDraft={(d) => setEditDrafts((prev) => ({ ...prev, [animal.animalId]: d }))} types={types} />
-                    <button
-                      onClick={() => saveEdit(animal.animalId)}
-                      disabled={savingId === animal.animalId}
-                      style={{
-                        padding: "8px 16px", borderRadius: 8, border: "none", background: "#111111", color: "#fff",
-                        fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: savingId === animal.animalId ? 0.6 : 1,
-                      }}
-                    >
-                      {savingId === animal.animalId ? "Saving…" : "Save"}
-                    </button>
                   </div>
 
                   <div style={{ marginTop: 24 }}>
@@ -525,6 +519,21 @@ export default function AdminAdoptableAnimalsPage() {
                       />
                       {uploadingPhotoFor === animal.animalId ? "Uploading…" : "Add Photo"}
                     </label>
+                  </div>
+
+                  <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid #F0EBE5" }}>
+                    <button
+                      onClick={() => saveEdit(animal.animalId)}
+                      disabled={savingId === animal.animalId}
+                      style={{
+                        padding: "8px 16px", borderRadius: 8, border: "none",
+                        background: savedId === animal.animalId ? "#1E8A4C" : "#111111", color: "#fff",
+                        fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                        opacity: savingId === animal.animalId ? 0.6 : 1, transition: "background 0.2s ease",
+                      }}
+                    >
+                      {savingId === animal.animalId ? "Saving…" : savedId === animal.animalId ? "✓ Saved" : "Save"}
+                    </button>
                   </div>
 
                   <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid #F0EBE5" }}>
