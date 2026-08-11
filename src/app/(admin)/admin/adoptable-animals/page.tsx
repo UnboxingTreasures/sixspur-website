@@ -264,7 +264,7 @@ export default function AdminAdoptableAnimalsPage() {
       // "Dog" is a fixed extra option, distinct from "Ranch Dogs" (the
       // permanent-resident farm type) -- adoptable dogs are a different
       // population entirely.
-      setTypes([...farmTypeNames, "Dog"]);
+      setTypes([...farmTypeNames, "Dog"].sort((a, b) => a.localeCompare(b)));
     } catch (err) {
       console.error("Failed to load farm animal types:", err);
     }
