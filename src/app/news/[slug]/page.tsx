@@ -14,7 +14,6 @@ interface Post {
   excerpt: string;
   content: string;
   publishedAt: string;
-  category: string;
   image: string;
   author: string;
 }
@@ -76,9 +75,6 @@ export default function NewsPostPage() {
           <Link href="/news" className="text-spur-orange text-sm font-semibold hover:underline mb-6 inline-block">
             ← Back to News
           </Link>
-          <div className="flex flex-wrap gap-2 mb-4">
-            <span className="eyebrow">{post.category}</span>
-          </div>
           <h1 className="text-3xl md:text-4xl font-bold mb-4 leading-tight">{post.title}</h1>
           <div className="flex items-center gap-3 text-white/50 text-sm">
             <span>{post.author}</span>
