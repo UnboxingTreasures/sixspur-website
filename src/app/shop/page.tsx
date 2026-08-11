@@ -26,8 +26,16 @@ async function getShopItems(): Promise<ShopItem[]> {
   }
 }
 
-function capitalize(s: string) {
-  return s.charAt(0).toUpperCase() + s.slice(1);
+function titleCase(s: string) {
+  // Normalizes ANY input casing (e.g. "TsHiRtS" -> "Tshirts", "beach gear"
+  // -> "Beach Gear", "t-shirts" -> "T-Shirts") -- finds every run of
+  // letters and capitalizes each one independently, leaving whatever
+  // separator sits between them (space, hyphen, etc.) untouched. This
+  // handles hyphenated categories correctly, unlike splitting on spaces
+  // alone, which would only capitalize the very first letter of
+  // "t-shirts" and leave the rest as "T-shirts". The stored category
+  // value itself is untouched; this only affects display.
+  return s.replace(/[a-zA-Z]+/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
 }
 
 export default async function ShopPage() {
@@ -56,7 +64,7 @@ export default async function ShopPage() {
             const items = shopItems.filter((item) => item.category === category);
             return (
               <div key={category} id={category} className="mb-16 scroll-mt-24">
-                <h2 className="text-2xl font-bold text-spur-black mb-6">{capitalize(category)}</h2>
+                <h2 className="text-2xl font-bold text-spur-black mb-6">{titleCase(category)}</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
                   {items.map((item) => (
                     <a key={item.itemId} href={`/shop/${item.itemId}`} className="flex flex-col rounded overflow-hidden border border-spur-tan-light hover:shadow-md transition-shadow">
