@@ -18,7 +18,6 @@ const YEARS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR - i);
 interface Post {
   slug: string;
   title: string;
-  category: string;
   excerpt: string;
   image: string;
   publishedAt: string;
@@ -34,7 +33,6 @@ export default function NewsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState("");
   const [selectedYear, setSelectedYear] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
 
   useEffect(() => {
     fetch(`${API_URL}/news`)
@@ -44,13 +42,10 @@ export default function NewsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const allCategories = Array.from(new Set(posts.map((p) => p.category))).sort();
-
   const filtered = posts.filter((post) => {
     const d = new Date(post.publishedAt);
     if (selectedMonth && d.getMonth() !== parseInt(selectedMonth)) return false;
     if (selectedYear && d.getFullYear() !== parseInt(selectedYear)) return false;
-    if (selectedCategory && post.category !== selectedCategory) return false;
     return true;
   });
 
@@ -85,16 +80,9 @@ export default function NewsPage() {
               ))}
             </select>
 
-            <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className={selectClass}>
-              <option value="">All Categories</option>
-              {allCategories.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-
-            {(selectedMonth || selectedYear || selectedCategory) && (
+            {(selectedMonth || selectedYear) && (
               <button
-                onClick={() => { setSelectedMonth(""); setSelectedYear(""); setSelectedCategory(""); }}
+                onClick={() => { setSelectedMonth(""); setSelectedYear(""); }}
                 className="px-3 py-2 text-sm text-spur-orange hover:underline"
               >
                 Clear filters
@@ -116,9 +104,6 @@ export default function NewsPage() {
                       alt={post.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
-                  </div>
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    <span className="text-xs font-semibold text-spur-orange uppercase tracking-wide">{post.category}</span>
                   </div>
                   <h2 className="font-bold text-spur-black text-lg leading-snug mb-2 group-hover:text-spur-orange transition-colors">
                     {post.title}

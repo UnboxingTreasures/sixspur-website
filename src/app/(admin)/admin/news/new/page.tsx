@@ -7,8 +7,6 @@ const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   "https://vvabeaemg5.execute-api.us-east-1.amazonaws.com";
 
-const CATEGORIES = ["Ranch Updates", "Rescue Stories", "Donations"];
-
 async function uploadPhoto(slugHint: string, file: File): Promise<string> {
   const presignRes = await fetch(`${API_URL}/admin/news/photo/presign`, {
     method: "POST",
@@ -33,7 +31,6 @@ export default function AdminNewsEditPage() {
   const [form, setForm] = useState({
     title: "",
     slug: "",
-    category: CATEGORIES[0],
     excerpt: "",
     content: "",
     image: "",
@@ -150,20 +147,6 @@ export default function AdminNewsEditPage() {
                 className="w-full px-4 py-3 border border-gray-200 rounded focus:outline-none focus:border-spur-orange transition-colors text-spur-black font-mono text-sm"
               />
               <p className="text-xs text-gray-400 mt-1">URL: /news/{form.slug || "post-slug"}</p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Category</label>
-              <select
-                name="category"
-                value={form.category}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-200 rounded focus:outline-none focus:border-spur-orange transition-colors text-spur-black bg-white"
-              >
-                {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
             </div>
 
             <div>
