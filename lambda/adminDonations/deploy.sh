@@ -12,7 +12,7 @@ npm install
 
 echo "Zipping function..."
 rm -f adminDonations.zip
-zip -r adminDonations.zip index.js dynamo.js receipt.js node_modules package.json
+zip -r adminDonations.zip index.js dynamo.js node_modules package.json
 
 if ! aws iam get-role --role-name "$ROLE_NAME" --profile "$PROFILE" >/dev/null 2>&1; then
   echo "Creating IAM role $ROLE_NAME..."
@@ -42,7 +42,7 @@ aws iam put-role-policy \
   --profile "$PROFILE"
 
 ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME}"
-ENV_VARS="Variables={DONATIONS_TABLE=donations,DONORS_TABLE=donors,ASSETS_BUCKET=sixspurranch-assets,CDN_BASE=https://d1s8s7aw8vf5zu.cloudfront.net,SES_FROM_ADDRESS=noreply@sixspurranch.org}"
+ENV_VARS="Variables={DONATIONS_TABLE=donations}"
 
 if aws lambda get-function --function-name "$FUNCTION_NAME" --profile "$PROFILE" --region "$REGION" >/dev/null 2>&1; then
   echo "Function exists, updating code..."

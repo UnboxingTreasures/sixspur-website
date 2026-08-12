@@ -4,29 +4,8 @@
     {
       "Sid": "DonationsReadWrite",
       "Effect": "Allow",
-      "Action": ["dynamodb:Scan", "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"],
+      "Action": ["dynamodb:Scan", "dynamodb:GetItem", "dynamodb:UpdateItem"],
       "Resource": "arn:aws:dynamodb:us-east-1:658965339779:table/donations"
-    },
-    {
-      "Sid": "DonorsLookup",
-      "Effect": "Allow",
-      "Action": ["dynamodb:GetItem", "dynamodb:Query"],
-      "Resource": [
-        "arn:aws:dynamodb:us-east-1:658965339779:table/donors",
-        "arn:aws:dynamodb:us-east-1:658965339779:table/donors/index/*"
-      ]
-    },
-    {
-      "Sid": "ReceiptPdfWrite",
-      "Effect": "Allow",
-      "Action": ["s3:PutObject"],
-      "Resource": "arn:aws:s3:::sixspurranch-assets/documents/receipts/*"
-    },
-    {
-      "Sid": "SendReceiptEmail",
-      "Effect": "Allow",
-      "Action": ["ses:SendEmail", "ses:SendRawEmail"],
-      "Resource": "*"
     },
     {
       "Sid": "Logging",

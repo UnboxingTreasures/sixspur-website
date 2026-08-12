@@ -12,7 +12,7 @@ interface Donation {
   currency: string;
   type: "one-time" | "recurring";
   status: "completed" | "refunded" | "failed";
-  paymentMethod: "paypal" | "manual";
+  paymentMethod: "paypal";
   paypalTransactionId?: string;
   receiptUrl?: string;
   notes?: string;
@@ -35,14 +35,6 @@ export default function AdminDonationsPage() {
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [addEmail, setAddEmail] = useState("");
-  const [addAmount, setAddAmount] = useState("");
-  const [addType, setAddType] = useState<"one-time" | "recurring">("one-time");
-  const [addNotes, setAddNotes] = useState("");
-  const [addSubmitting, setAddSubmitting] = useState(false);
-  const [addError, setAddError] = useState("");
-
   const [notesDraft, setNotesDraft] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
 
@@ -64,35 +56,6 @@ export default function AdminDonationsPage() {
   useEffect(() => {
     fetchDonations();
   }, []);
-
-  const submitAdd = async () => {
-    if (!addEmail.trim()) return setAddError("Donor email is required");
-    const amount = parseFloat(addAmount);
-    if (!Number.isFinite(amount) || amount <= 0) return setAddError("Enter a valid amount");
-
-    setAddSubmitting(true);
-    setAddError("");
-    try {
-      const res = await fetch(`${API_URL}/admin/donations`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ donorEmail: addEmail.trim(), amount, type: addType, notes: addNotes }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to add donation");
-
-      setDonations((prev) => [data, ...prev]);
-      setShowAddModal(false);
-      setAddEmail("");
-      setAddAmount("");
-      setAddType("one-time");
-      setAddNotes("");
-    } catch (err: unknown) {
-      setAddError(err instanceof Error ? err.message : "Failed to add donation");
-    } finally {
-      setAddSubmitting(false);
-    }
-  };
 
   const saveNotes = async (donationId: string) => {
     const notes = notesDraft[donationId];
@@ -143,15 +106,7 @@ export default function AdminDonationsPage() {
 
   return (
     <main style={{ padding: "2rem", maxWidth: "900px", margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-        <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#111111" }}>Donations</h1>
-        <button
-          onClick={() => setShowAddModal(true)}
-          style={{ padding: "10px 18px", borderRadius: 8, border: "none", background: "#E77A2D", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
-        >
-          + Record Donation
-        </button>
-      </div>
+      <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#111111", marginBottom: "0.5rem" }}>Donations</h1>
       <p style={{ fontSize: 13, color: "#6B7280", marginBottom: "1.5rem" }}>
         This month: <strong style={{ color: "#111111" }}>${totalThisMonth.toFixed(2)}</strong>
       </p>
@@ -182,7 +137,7 @@ export default function AdminDonationsPage() {
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 15, color: "#111111" }}>${d.amount.toFixed(2)} {d.currency}</div>
                   <div style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>
-                    {d.donorEmail} · {formatDate(d.createdAt)} · {d.type === "recurring" ? "Monthly" : "One-time"} · {d.paymentMethod === "manual" ? "Manual entry" : "PayPal"}
+                    {d.donorEmail} · {formatDate(d.createdAt)} · {d.type === "recurring" ? "Monthly" : "One-time"} · PayPal
                   </div>
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20, background: colors.bg, color: colors.text, whiteSpace: "nowrap" }}>
@@ -237,81 +192,6 @@ export default function AdminDonationsPage() {
           );
         })}
       </div>
-
-      {showAddModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(17,17,17,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, zIndex: 50 }}>
-          <div style={{ background: "#fff", borderRadius: 12, padding: 24, maxWidth: 420, width: "100%" }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#111111", marginBottom: 4 }}>Record a Donation</div>
-            <p style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>For checks, cash, or anything that didn&apos;t come through PayPal checkout.</p>
-
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", display: "block", marginBottom: 4 }}>Donor Email</label>
-              <input
-                type="email"
-                value={addEmail}
-                onChange={(e) => setAddEmail(e.target.value)}
-                placeholder="donor@example.com"
-                style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 8, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit" }}
-              />
-              <p style={{ fontSize: 11, color: "#9CA3AF", marginTop: 4 }}>They need an existing donor account -- this looks them up, it doesn&apos;t create one.</p>
-            </div>
-
-            <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", display: "block", marginBottom: 4 }}>Amount ($)</label>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={addAmount}
-                  onChange={(e) => setAddAmount(e.target.value)}
-                  style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 8, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit" }}
-                />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", display: "block", marginBottom: 4 }}>Type</label>
-                <select
-                  value={addType}
-                  onChange={(e) => setAddType(e.target.value as "one-time" | "recurring")}
-                  style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 8, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit", background: "#fff" }}
-                >
-                  <option value="one-time">One-time</option>
-                  <option value="recurring">Recurring (this cycle)</option>
-                </select>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", display: "block", marginBottom: 4 }}>Notes</label>
-              <input
-                value={addNotes}
-                onChange={(e) => setAddNotes(e.target.value)}
-                placeholder="e.g. Check #1234"
-                style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 8, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit" }}
-              />
-            </div>
-
-            {addError && <div style={{ fontSize: 12, color: "#DC2626", marginBottom: 12 }}>{addError}</div>}
-
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button
-                onClick={() => { setShowAddModal(false); setAddError(""); }}
-                disabled={addSubmitting}
-                style={{ padding: "10px 18px", borderRadius: 8, border: "1.5px solid #E8E2DC", background: "#fff", color: "#6B7280", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={submitAdd}
-                disabled={addSubmitting}
-                style={{ padding: "10px 18px", borderRadius: 8, border: "none", background: "#E77A2D", color: "#fff", fontSize: 13, fontWeight: 700, cursor: addSubmitting ? "default" : "pointer", fontFamily: "inherit", opacity: addSubmitting ? 0.6 : 1 }}
-              >
-                {addSubmitting ? "Recording…" : "Record"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   );
 }
