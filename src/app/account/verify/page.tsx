@@ -1,8 +1,10 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { confirmSignUp, resendConfirmationCode } from "@/lib/cognito";
+
+const RESEND_COOLDOWN_SECONDS = 30;
 
 function VerifyForm() {
   const router = useRouter();
@@ -13,6 +15,13 @@ function VerifyForm() {
   const [error, setError] = useState("");
   const [resent, setResent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [cooldown, setCooldown] = useState(RESEND_COOLDOWN_SECONDS);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldown]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,6 +42,7 @@ function VerifyForm() {
     try {
       await resendConfirmationCode(email);
       setResent(true);
+      setCooldown(RESEND_COOLDOWN_SECONDS);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to resend code.");
     }
@@ -41,7 +51,7 @@ function VerifyForm() {
   return (
     <>
       <p className="text-white/60 mt-3 text-sm text-center mb-8">
-        We sent a 6-digit code to {email || "your email"}.
+        Check your email for a verification code sent to {email || "your email"}.
       </p>
       <form onSubmit={handleSubmit} className="bg-white border border-spur-tan-light rounded p-8 space-y-5">
         {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">{error}</div>}
@@ -71,9 +81,10 @@ function VerifyForm() {
         <button
           type="button"
           onClick={handleResend}
-          className="w-full text-spur-orange text-sm font-semibold hover:underline"
+          disabled={cooldown > 0}
+          className="w-full text-spur-orange text-sm font-semibold hover:underline disabled:text-gray-400 disabled:hover:no-underline disabled:cursor-not-allowed"
         >
-          Resend code
+          {cooldown > 0 ? `You may request another code in ${cooldown}s` : "Resend code"}
         </button>
       </form>
     </>
