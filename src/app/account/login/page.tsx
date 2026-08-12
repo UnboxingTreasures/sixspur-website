@@ -10,6 +10,7 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const justVerified = searchParams.get("verified") === "true";
   const justReset = searchParams.get("reset") === "true";
+  const returnTo = searchParams.get("returnTo") || "/account";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -22,7 +23,7 @@ function LoginForm() {
     setSubmitting(true);
     try {
       await signIn(email, password);
-      router.push("/account");
+      router.push(returnTo);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Invalid email or password.");
     } finally {
@@ -78,7 +79,7 @@ function LoginForm() {
         <Link href="/account/forgot-password" className="text-spur-orange font-semibold hover:underline">
           Forgot password?
         </Link>
-        <Link href="/account/signup" className="text-spur-orange font-semibold hover:underline">
+        <Link href={`/account/signup${returnTo !== "/account" ? `?returnTo=${encodeURIComponent(returnTo)}` : ""}`} className="text-spur-orange font-semibold hover:underline">
           Create an account
         </Link>
       </div>

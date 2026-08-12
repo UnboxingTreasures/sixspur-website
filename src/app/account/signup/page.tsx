@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signUp } from "@/lib/cognito";
 
-export default function SignUpPage() {
+function SignUpForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnTo = searchParams.get("returnTo");
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -29,7 +32,8 @@ export default function SignUpPage() {
     setSubmitting(true);
     try {
       await signUp(email, password);
-      router.push(`/account/verify?email=${encodeURIComponent(email)}`);
+      const verifyUrl = `/account/verify?email=${encodeURIComponent(email)}${returnTo ? `&returnTo=${encodeURIComponent(returnTo)}` : ""}`;
+      router.push(verifyUrl);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     } finally {
@@ -37,6 +41,64 @@ export default function SignUpPage() {
     }
   };
 
+  return (
+    <form onSubmit={handleSubmit} className="bg-white border border-spur-tan-light rounded p-8 space-y-5">
+      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">{error}</div>}
+
+      <div>
+        <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Email</label>
+        <input
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="w-full px-4 py-3 border border-gray-200 rounded focus:outline-none focus:border-spur-orange transition-colors text-spur-black"
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Password</label>
+        <input
+          type="password"
+          required
+          minLength={8}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="w-full px-4 py-3 border border-gray-200 rounded focus:outline-none focus:border-spur-orange transition-colors text-spur-black"
+        />
+        <p className="text-xs text-gray-400 mt-1">At least 8 characters, with uppercase, lowercase, and a number.</p>
+      </div>
+
+      <div>
+        <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Confirm Password</label>
+        <input
+          type="password"
+          required
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          className="w-full px-4 py-3 border border-gray-200 rounded focus:outline-none focus:border-spur-orange transition-colors text-spur-black"
+        />
+      </div>
+
+      <button
+        type="submit"
+        disabled={submitting}
+        className="w-full bg-spur-orange text-white font-semibold py-3 rounded hover:bg-spur-orange-dark transition-colors disabled:opacity-50"
+      >
+        {submitting ? "Creating account..." : "Create Account"}
+      </button>
+
+      <p className="text-center text-sm text-gray-500">
+        Already have an account?{" "}
+        <Link href={`/account/login${returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ""}`} className="text-spur-orange font-semibold hover:underline">
+          Log in
+        </Link>
+      </p>
+    </form>
+  );
+}
+
+export default function SignUpPage() {
   return (
     <main className="min-h-screen bg-white">
       <section className="bg-spur-black text-white py-16 px-6">
@@ -51,59 +113,9 @@ export default function SignUpPage() {
 
       <section className="py-16 px-6">
         <div className="max-w-md mx-auto">
-          <form onSubmit={handleSubmit} className="bg-white border border-spur-tan-light rounded p-8 space-y-5">
-            {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">{error}</div>}
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Email</label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-200 rounded focus:outline-none focus:border-spur-orange transition-colors text-spur-black"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Password</label>
-              <input
-                type="password"
-                required
-                minLength={8}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-200 rounded focus:outline-none focus:border-spur-orange transition-colors text-spur-black"
-              />
-              <p className="text-xs text-gray-400 mt-1">At least 8 characters, with uppercase, lowercase, and a number.</p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Confirm Password</label>
-              <input
-                type="password"
-                required
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-200 rounded focus:outline-none focus:border-spur-orange transition-colors text-spur-black"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full bg-spur-orange text-white font-semibold py-3 rounded hover:bg-spur-orange-dark transition-colors disabled:opacity-50"
-            >
-              {submitting ? "Creating account..." : "Create Account"}
-            </button>
-
-            <p className="text-center text-sm text-gray-500">
-              Already have an account?{" "}
-              <Link href="/account/login" className="text-spur-orange font-semibold hover:underline">
-                Log in
-              </Link>
-            </p>
-          </form>
+          <Suspense fallback={<p className="text-center text-gray-500 text-sm">Loading...</p>}>
+            <SignUpForm />
+          </Suspense>
         </div>
       </section>
     </main>

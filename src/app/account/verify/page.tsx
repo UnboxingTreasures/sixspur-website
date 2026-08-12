@@ -10,6 +10,7 @@ function VerifyForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const email = searchParams.get("email") || "";
+  const returnTo = searchParams.get("returnTo");
 
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
@@ -29,7 +30,8 @@ function VerifyForm() {
     setSubmitting(true);
     try {
       await confirmSignUp(email, code);
-      router.push("/account/login?verified=true");
+      const loginUrl = `/account/login?verified=true${returnTo ? `&returnTo=${encodeURIComponent(returnTo)}` : ""}`;
+      router.push(loginUrl);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Invalid code. Please try again.");
     } finally {
