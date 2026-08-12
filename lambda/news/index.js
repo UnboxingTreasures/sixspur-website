@@ -1,12 +1,13 @@
 // index.js
 // Single Lambda behind API Gateway handling all news routes:
-//   GET    /news                  (public: published only, ?category=)
-//   GET    /news/{slug}           (public: published only, 404 on draft)
-//   GET    /admin/news            (admin: all posts, any status)
-//   GET    /admin/news/{slug}     (admin: single post, any status)
-//   POST   /admin/news            (admin: create)
-//   PATCH  /admin/news/{slug}     (admin: update, incl. publish/unpublish)
-//   DELETE /admin/news/{slug}     (admin: delete)
+//   GET    /news                        (public: published only, ?category=)
+//   GET    /news/{slug}                 (public: published only, 404 on draft)
+//   GET    /admin/news                  (admin: all posts, any status)
+//   GET    /admin/news/{slug}           (admin: single post, any status)
+//   POST   /admin/news                  (admin: create)
+//   PATCH  /admin/news/{slug}           (admin: update, incl. publish/unpublish)
+//   DELETE /admin/news/{slug}           (admin: delete)
+//   POST   /admin/news/photo/presign    (admin: presigned upload URL for the post image) -- NEW Aug 11
 
 const {
   listPublishedPosts,
@@ -17,6 +18,7 @@ const {
   updatePost,
   deletePost,
 } = require('./dynamo');
+const { createPresignedUploadUrl, deletePhotoSafely } = require('./s3');
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -83,12 +85,30 @@ exports.handler = async (event) => {
         const existing = await getPostForAdmin(slug);
         if (!existing) return respond(404, { error: 'Post not found' });
         const post = await updatePost(slug, body);
+
+        // If the image was replaced, clean up the old one -- never blocks
+        // the actual save, just runs after and logs on failure.
+        if (body.image && body.image !== existing.image) {
+          await deletePhotoSafely(existing.image);
+        }
+
         return respond(200, post);
       }
 
       case 'DELETE /admin/news/{slug}': {
+        const existing = await getPostForAdmin(slug);
         await deletePost(slug);
+        if (existing?.image) {
+          await deletePhotoSafely(existing.image);
+        }
         return respond(200, { success: true });
+      }
+
+      case 'POST /admin/news/photo/presign': {
+        const fileName = body.fileName;
+        if (!fileName) return respond(400, { error: 'fileName is required' });
+        const { uploadUrl, cdnUrl } = await createPresignedUploadUrl(body.slugHint, fileName);
+        return respond(200, { uploadUrl, cdnUrl });
       }
 
       default:

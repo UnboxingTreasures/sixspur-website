@@ -1,0 +1,13 @@
+{
+  "name": "sixspur-admin-donations",
+  "version": "1.0.0",
+  "description": "Admin view/manage donation records, including manual entry + receipt generation",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0",
+    "@aws-sdk/client-s3": "^3.600.0",
+    "@aws-sdk/client-ses": "^3.600.0",
+    "pdfkit": "^0.15.0"
+  }
+}

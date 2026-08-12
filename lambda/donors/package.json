@@ -1,0 +1,10 @@
+{
+  "name": "sixspur-donors",
+  "version": "1.0.0",
+  "description": "Donor-facing profile and donation history, protected by Cognito JWT authorizer",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0"
+  }
+}
