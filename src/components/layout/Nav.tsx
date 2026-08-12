@@ -1,14 +1,20 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { getIdToken } from '@/lib/cognito'
 
 export default function Nav() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
 
   const cartCount = 0 // TODO Session 5: wire to cart state
+
+  useEffect(() => {
+    getIdToken().then((token) => setIsLoggedIn(Boolean(token)))
+  }, [])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -67,6 +73,14 @@ export default function Nav() {
                 <line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
             </button>
+
+            {/* Account */}
+            <Link href={isLoggedIn ? '/account' : '/account/login'} aria-label={isLoggedIn ? 'My Account' : 'Log In'} style={{ color: '#111111', display: 'flex', alignItems: 'center' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+            </Link>
 
             {/* Cart */}
             <Link href='/cart' aria-label='Cart' style={{ position: 'relative', color: '#111111', display: 'flex', alignItems: 'center' }}>
@@ -172,6 +186,13 @@ export default function Nav() {
           <Link href='/about'       style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }} onClick={() => setMobileOpen(false)}>About</Link>
           <Link href='/contact'     style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }} onClick={() => setMobileOpen(false)}>Contact</Link>
           <div style={{ display: 'flex', gap: '16px', paddingTop: '4px' }}>
+            <Link href={isLoggedIn ? '/account' : '/account/login'} style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => setMobileOpen(false)}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+              {isLoggedIn ? 'My Account' : 'Log In'}
+            </Link>
             <Link href='/cart' style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => setMobileOpen(false)}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
