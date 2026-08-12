@@ -1,6 +1,7 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import SixSpurLogo from '@/components/admin/SixSpurLogo';
 
@@ -34,64 +35,159 @@ function getActiveHref(pathname: string): string {
   return matches.reduce((longest, c) => (c.href.length > longest.href.length ? c : longest)).href;
 }
 
+const MOBILE_TOPBAR_HEIGHT = 60;
+
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname() || '/admin';
   const router = useRouter();
   const activeHref = getActiveHref(pathname);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const activeCategoryName = CATEGORIES.find((c) => c.href === activeHref)?.name || 'Admin';
+
+  const handleNavigate = (href: string) => {
+    router.push(href);
+    setMobileMenuOpen(false);
+  };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
-      {/* Sidebar */}
-      <div style={{ display: 'flex', flexDirection: 'column', width: '200px', borderRight: '1px solid #E8E2DC', flexShrink: 0 }}>
-        <div style={{ padding: '20px 16px', textAlign: 'center', borderBottom: '1px solid #E8E2DC', background: '#FFFFFF' }}>
-          <div style={{ marginBottom: '8px' }}>
-            <SixSpurLogo size={36} color="#111111" />
+    <>
+      {/* Below 900px (same breakpoint the public Nav uses): the fixed-width
+          sidebar hides entirely and a compact top bar takes over instead --
+          a 200px-wide vertical column stacking 13 categories ate too much
+          screen width and forced a lot of scrolling on a phone. */}
+      <style>{`
+        @media (max-width: 900px) {
+          .admin-sidebar-desktop { display: none !important; }
+          .admin-mobile-topbar { display: flex !important; }
+          .admin-content-area { padding-top: ${MOBILE_TOPBAR_HEIGHT}px !important; }
+        }
+      `}</style>
+
+      <div style={{ display: 'flex', minHeight: '100vh' }}>
+        {/* Desktop sidebar -- unchanged from before, just gained a className hook */}
+        <div className="admin-sidebar-desktop" style={{ display: 'flex', flexDirection: 'column', width: '200px', borderRight: '1px solid #E8E2DC', flexShrink: 0 }}>
+          <div style={{ padding: '20px 16px', textAlign: 'center', borderBottom: '1px solid #E8E2DC', background: '#FFFFFF' }}>
+            <div style={{ marginBottom: '8px' }}>
+              <SixSpurLogo size={36} color="#111111" />
+            </div>
+            <div style={{ fontSize: '13px', fontWeight: 500, color: '#111111', lineHeight: 1.3 }}>
+              Six Spur Ranch<br />Admin Panel
+            </div>
           </div>
-          <div style={{ fontSize: '13px', fontWeight: 500, color: '#111111', lineHeight: 1.3 }}>
-            Six Spur Ranch<br />Admin Panel
-          </div>
+
+          {CATEGORIES.map(({ name, href }) => {
+            const isActive = href === activeHref;
+            return (
+              <div
+                key={name}
+                onClick={() => router.push(href)}
+                style={{
+                  padding: '14px 16px',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  textAlign: 'center',
+                  color: isActive ? '#FFA860' : '#111111',
+                  background: isActive ? '#111111' : '#FFFFFF',
+                  borderBottom: '1px solid #E8E2DC',
+                  cursor: 'pointer',
+                  transition: 'background 0.12s ease, color 0.12s ease',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    (e.currentTarget as HTMLDivElement).style.background = '#FEF3EB';
+                    (e.currentTarget as HTMLDivElement).style.color = '#E77A2D';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    (e.currentTarget as HTMLDivElement).style.background = '#FFFFFF';
+                    (e.currentTarget as HTMLDivElement).style.color = '#111111';
+                  }
+                }}
+              >
+                {name}
+              </div>
+            );
+          })}
         </div>
 
-        {CATEGORIES.map(({ name, href }) => {
-          const isActive = href === activeHref;
-          return (
-            <div
-              key={name}
-              onClick={() => router.push(href)}
-              style={{
-                padding: '14px 16px',
-                fontSize: '14px',
-                fontWeight: 500,
-                textAlign: 'center',
-                color: isActive ? '#FFA860' : '#111111',
-                background: isActive ? '#111111' : '#FFFFFF',
-                borderBottom: '1px solid #E8E2DC',
-                cursor: 'pointer',
-                transition: 'background 0.12s ease, color 0.12s ease',
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) {
-                  (e.currentTarget as HTMLDivElement).style.background = '#FEF3EB';
-                  (e.currentTarget as HTMLDivElement).style.color = '#E77A2D';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) {
-                  (e.currentTarget as HTMLDivElement).style.background = '#FFFFFF';
-                  (e.currentTarget as HTMLDivElement).style.color = '#111111';
-                }
-              }}
-            >
-              {name}
+        {/* Mobile top bar -- hidden by default (desktop), shown via the media
+            query above. Fixed position so it stays visible while scrolling
+            through a long admin page. */}
+        <div
+          className="admin-mobile-topbar"
+          style={{
+            display: 'none',
+            position: 'fixed',
+            top: 0, left: 0, right: 0,
+            height: `${MOBILE_TOPBAR_HEIGHT}px`,
+            zIndex: 100,
+            background: '#FFFFFF',
+            borderBottom: '1px solid #E8E2DC',
+            padding: '0 16px',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            boxSizing: 'border-box',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+            <SixSpurLogo size={26} color="#111111" />
+            <div style={{ fontSize: '14px', fontWeight: 600, color: '#111111', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {activeCategoryName}
             </div>
-          );
-        })}
-      </div>
+          </div>
+          <button
+            onClick={() => setMobileMenuOpen((open) => !open)}
+            aria-label="Toggle admin menu"
+            style={{ background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', color: '#111111', padding: '4px 8px', flexShrink: 0 }}
+          >
+            {mobileMenuOpen ? '✕' : '☰'}
+          </button>
+        </div>
 
-      {/* Content area -- each /admin/* page renders here */}
-      <div style={{ flex: 1, background: '#F7F4F0' }}>
-        {children}
+        {/* Mobile dropdown menu -- only rendered while open, so it never
+            needs its own media-query guard (the toggle button that opens
+            it is itself hidden on desktop). */}
+        {mobileMenuOpen && (
+          <div
+            style={{
+              position: 'fixed',
+              top: `${MOBILE_TOPBAR_HEIGHT}px`, left: 0, right: 0, bottom: 0,
+              zIndex: 99,
+              background: '#FFFFFF',
+              overflowY: 'auto',
+            }}
+          >
+            {CATEGORIES.map(({ name, href }) => {
+              const isActive = href === activeHref;
+              return (
+                <div
+                  key={name}
+                  onClick={() => handleNavigate(href)}
+                  style={{
+                    padding: '16px 20px',
+                    fontSize: '15px',
+                    fontWeight: 500,
+                    color: isActive ? '#FFA860' : '#111111',
+                    background: isActive ? '#111111' : '#FFFFFF',
+                    borderBottom: '1px solid #E8E2DC',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {name}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Content area -- each /admin/* page renders here. Gains top
+            padding on mobile only, to clear the fixed top bar. */}
+        <div className="admin-content-area" style={{ flex: 1, background: '#F7F4F0' }}>
+          {children}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
