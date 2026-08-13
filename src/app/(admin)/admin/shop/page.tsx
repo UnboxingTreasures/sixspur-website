@@ -172,12 +172,12 @@ function VariantEditor({ draft, setDraft, availablePhotos }: { draft: Draft; set
   };
 
   const removeDimension = (index: number) => {
-    const removedLabel = draft.dimensions[index].label;
     const nextDimensions = draft.dimensions.filter((_, i) => i !== index);
-    applyDimensions(nextDimensions);
+    const nextComboStocks = syncComboStocks(nextDimensions, draft.comboStocks);
     // If the FIRST dimension (the photo dimension) was removed, its
     // photo assignments no longer mean anything -- clear them.
-    if (index === 0) setDraft((d) => ({ ...d, variantPhotos: {} }));
+    const nextVariantPhotos = index === 0 ? {} : draft.variantPhotos;
+    setDraft({ ...draft, dimensions: nextDimensions, comboStocks: nextComboStocks, variantPhotos: nextVariantPhotos });
   };
 
   const addValue = (dimIndex: number) => {
@@ -191,12 +191,13 @@ function VariantEditor({ draft, setDraft, availablePhotos }: { draft: Draft; set
 
   const removeValue = (dimIndex: number, value: string) => {
     const nextDimensions = draft.dimensions.map((d, i) => i === dimIndex ? { ...d, values: d.values.filter((v) => v !== value) } : d);
-    applyDimensions(nextDimensions);
+    const nextComboStocks = syncComboStocks(nextDimensions, draft.comboStocks);
+    let nextVariantPhotos = draft.variantPhotos;
     if (dimIndex === 0) {
-      const nextPhotos = { ...draft.variantPhotos };
-      delete nextPhotos[value];
-      setDraft((d) => ({ ...d, variantPhotos: nextPhotos }));
+      nextVariantPhotos = { ...draft.variantPhotos };
+      delete nextVariantPhotos[value];
     }
+    setDraft({ ...draft, dimensions: nextDimensions, comboStocks: nextComboStocks, variantPhotos: nextVariantPhotos });
   };
 
   const togglePhoto = (value: string, photoUrl: string) => {
