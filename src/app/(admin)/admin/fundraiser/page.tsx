@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { getIdToken } from "@/lib/cognito";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -108,11 +109,20 @@ export default function AdminFundraiserPage() {
 
   const activeFundraiser = fundraisers.find((f) => f.status === "active");
 
+  const authedFetch = async (path: string, options: RequestInit = {}) => {
+    const token = await getIdToken();
+    if (!token) throw new Error("Not logged in");
+    return fetch(`${API_URL}${path}`, {
+      ...options,
+      headers: { ...options.headers, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+  };
+
   const fetchFundraisers = async () => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API_URL}/admin/fundraisers`);
+      const res = await authedFetch("/admin/fundraisers");
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load fundraisers");
       setFundraisers(data.fundraisers || []);
@@ -136,9 +146,8 @@ export default function AdminFundraiserPage() {
     setAddSubmitting(true);
     setAddError("");
     try {
-      const res = await fetch(`${API_URL}/admin/fundraisers`, {
+      const res = await authedFetch("/admin/fundraisers", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: addDraft.title, description: addDraft.description, goalAmount: goal, closingDate: addDraft.closingDate }),
       });
       const data = await res.json();
@@ -162,9 +171,8 @@ export default function AdminFundraiserPage() {
 
     setSavingId(fundraiserId);
     try {
-      const res = await fetch(`${API_URL}/admin/fundraisers/${fundraiserId}`, {
+      const res = await authedFetch(`/admin/fundraisers/${fundraiserId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: draft.title, description: draft.description, goalAmount: goal, closingDate: draft.closingDate }),
       });
       const data = await res.json();
@@ -186,7 +194,7 @@ export default function AdminFundraiserPage() {
 
     setLifecycleActionId(fundraiserId);
     try {
-      const res = await fetch(`${API_URL}/admin/fundraisers/${fundraiserId}/begin`, { method: "POST" });
+      const res = await authedFetch(`/admin/fundraisers/${fundraiserId}/begin`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to start fundraiser");
       await fetchFundraisers();
@@ -201,7 +209,7 @@ export default function AdminFundraiserPage() {
     if (!confirm("Stop this fundraiser? It'll be removed from the Ways to Give page immediately.")) return;
     setLifecycleActionId(fundraiserId);
     try {
-      const res = await fetch(`${API_URL}/admin/fundraisers/${fundraiserId}/stop`, { method: "POST" });
+      const res = await authedFetch(`/admin/fundraisers/${fundraiserId}/stop`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to stop fundraiser");
       setFundraisers((prev) => prev.map((f) => (f.fundraiserId === fundraiserId ? { ...f, ...data } : f)));
