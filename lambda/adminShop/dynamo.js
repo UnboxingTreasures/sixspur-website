@@ -2,14 +2,18 @@
 // Admin CRUD for shop_items. Photo pool management mirrors farm_animals
 // (add/remove/thumbnail-pick from a pool).
 //
-// UPDATED: replaced the old fixed-list size system (hasSizes/sizes,
-// limited to a hardcoded VALID_SIZES=[S,M,L,XL,2XL,3XL]) with a fully
-// custom variant system. A product can now have ONE admin-defined
-// variant dimension -- a label (e.g. "Size" or "Style") plus whatever
-// option values the admin wants (e.g. S/M/L/XL for Size, or
-// Red/Blue/Green for Style on hats), each with its own stock count.
-// Not a multi-dimensional matrix (Size AND Color at once) -- one
-// dimension per product, matching what was actually asked for.
+// FULL REWRITE for multi-dimension variants: a product can now have
+// MULTIPLE variant dimensions at once (e.g. Size AND Color together),
+// not just one. Stock is tracked per exact COMBINATION (e.g. "Medium +
+// Red" has its own stock number, distinct from "Medium + Blue") -- this
+// is a true Cartesian product across all declared dimensions, not
+// independent lists. Photos are simpler: they're assigned to the FIRST
+// dimension's values only (variantPhotos, keyed by that dimension's
+// value), matching how most real stores actually work -- picking a
+// color changes the photo, picking a size usually doesn't. The admin
+// frontend is responsible for regenerating the full combinations array
+// whenever dimensions/values change; this backend just validates that
+// what it's given is actually a complete, valid Cartesian product.
 
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, ScanCommand, GetCommand, PutCommand, UpdateCommand, DeleteCommand } = require('@aws-sdk/lib-dynamodb');
@@ -19,25 +23,54 @@ const ddb = DynamoDBDocumentClient.from(client);
 
 const TABLE_NAME = process.env.SHOP_ITEMS_TABLE || 'shop_items';
 
-function validateVariants(variantLabel, variants) {
-  if (!variantLabel || !variantLabel.trim()) {
-    throw new Error('variantLabel is required when hasVariants is true (e.g. "Size" or "Style")');
+/**
+ * Validates variantDimensions + combinations together. Rather than
+ * explicitly enumerate every expected combination and compare, this
+ * checks that (a) the combinations count matches the expected Cartesian
+ * product size for the declared dimensions, and (b) every combination
+ * has exactly one valid value per dimension with no duplicates -- those
+ * two checks together guarantee completeness and correctness.
+ */
+function validateVariantDimensions(dimensions, combinations) {
+  if (!Array.isArray(dimensions) || dimensions.length === 0) {
+    throw new Error('variantDimensions must be a non-empty array when hasVariants is true');
   }
-  if (!Array.isArray(variants) || variants.length === 0) {
-    throw new Error('variants must be a non-empty array when hasVariants is true');
+  for (const dim of dimensions) {
+    if (!dim.label || !dim.label.trim()) {
+      throw new Error('Each variant dimension needs a non-empty label (e.g. "Size" or "Color")');
+    }
+    if (!Array.isArray(dim.values) || dim.values.length === 0) {
+      throw new Error(`Dimension "${dim.label}" needs at least one value`);
+    }
+    const seenValues = new Set();
+    for (const v of dim.values) {
+      if (!v || !v.trim()) throw new Error(`Dimension "${dim.label}" has an empty value`);
+      if (seenValues.has(v)) throw new Error(`Dimension "${dim.label}" has duplicate value "${v}"`);
+      seenValues.add(v);
+    }
   }
-  const seen = new Set();
-  for (const entry of variants) {
-    if (!entry.value || !entry.value.trim()) {
-      throw new Error('Each variant needs a non-empty value (e.g. "S" or "Red")');
+
+  const expectedCount = dimensions.reduce((acc, d) => acc * d.values.length, 1);
+  if (!Array.isArray(combinations) || combinations.length !== expectedCount) {
+    throw new Error(`Expected ${expectedCount} combinations for these dimensions (one per Cartesian product entry), got ${combinations ? combinations.length : 0}`);
+  }
+
+  const seenKeys = new Set();
+  for (const combo of combinations) {
+    if (typeof combo.stock !== 'number' || combo.stock < 0) {
+      throw new Error('Every combination needs a non-negative stock number');
     }
-    if (seen.has(entry.value)) {
-      throw new Error(`Duplicate variant value "${entry.value}"`);
+    const keyParts = [];
+    for (const dim of dimensions) {
+      const val = combo.values ? combo.values[dim.label] : undefined;
+      if (!dim.values.includes(val)) {
+        throw new Error(`Invalid or missing value for dimension "${dim.label}" in a combination`);
+      }
+      keyParts.push(val);
     }
-    seen.add(entry.value);
-    if (typeof entry.stock !== 'number' || entry.stock < 0) {
-      throw new Error(`Invalid stock for "${entry.value}" -- must be a non-negative number`);
-    }
+    const key = keyParts.join('|');
+    if (seenKeys.has(key)) throw new Error(`Duplicate combination: ${keyParts.join(' + ')}`);
+    seenKeys.add(key);
   }
 }
 
@@ -55,7 +88,7 @@ function slugify(name) {
   return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
-async function createItem({ name, description, price, category, seedPhotoUrl, hasVariants, variantLabel, variants, stock }) {
+async function createItem({ name, description, price, category, seedPhotoUrl, hasVariants, variantDimensions, combinations, variantPhotos, stock }) {
   if (!name || !name.trim()) throw new Error('Name is required');
   if (typeof price !== 'number' || price < 0) throw new Error('Price must be a non-negative number');
   if (!category || !category.trim()) throw new Error('Category is required');
@@ -68,7 +101,7 @@ async function createItem({ name, description, price, category, seedPhotoUrl, ha
   if (existing) throw new Error(`A product with this name already exists (id: ${itemId})`);
 
   if (hasVariants) {
-    validateVariants(variantLabel, variants);
+    validateVariantDimensions(variantDimensions, combinations);
   }
 
   const now = new Date().toISOString();
@@ -81,7 +114,9 @@ async function createItem({ name, description, price, category, seedPhotoUrl, ha
     photos: [seedPhotoUrl],
     thumbnailUrl: seedPhotoUrl,
     hasVariants: Boolean(hasVariants),
-    ...(hasVariants ? { variantLabel: variantLabel.trim(), variants } : { stock: typeof stock === 'number' ? stock : 0 }),
+    ...(hasVariants
+      ? { variantDimensions, combinations, variantPhotos: variantPhotos || {} }
+      : { stock: typeof stock === 'number' ? stock : 0 }),
     createdAt: now,
     updatedAt: now,
   };
@@ -98,19 +133,17 @@ async function createItem({ name, description, price, category, seedPhotoUrl, ha
 /**
  * Updates any combination of fields. itemId (the slug) never changes even
  * if name is edited, same convention as farm_animals/staff_members.
- * Switching hasVariants on/off is allowed -- e.g. turning a simple
- * product into a variant one, or vice versa -- the caller must provide
- * the corresponding variantLabel+variants or stock number when doing so.
- * Admin can also just edit variantLabel/variants on an already-variant
- * product at any time -- add a size, remove a color, rename the
- * dimension label entirely.
+ * Switching hasVariants on/off is allowed. When editing an already-variant
+ * product's dimensions/combinations, the frontend always sends the FULL,
+ * regenerated combinations array (not a partial patch) -- this backend
+ * just validates and stores whatever complete set it's given.
  */
-async function updateItem(itemId, { name, description, price, category, imageUrl, hasVariants, variantLabel, variants, stock }) {
+async function updateItem(itemId, { name, description, price, category, imageUrl, hasVariants, variantDimensions, combinations, variantPhotos, stock }) {
   const existing = await getById(itemId);
   if (!existing) return null;
 
   if (hasVariants === true) {
-    validateVariants(variantLabel, variants);
+    validateVariantDimensions(variantDimensions, combinations);
   }
 
   const setClauses = [];
@@ -148,35 +181,33 @@ async function updateItem(itemId, { name, description, price, category, imageUrl
     setClauses.push('hasVariants = :hasVariants');
     values[':hasVariants'] = Boolean(hasVariants);
     if (hasVariants) {
-      // Switching TO variants: set label + variants array, drop the old single stock count.
-      setClauses.push('variantLabel = :variantLabel');
-      values[':variantLabel'] = variantLabel.trim();
-      setClauses.push('variants = :variants');
-      values[':variants'] = variants;
+      setClauses.push('variantDimensions = :variantDimensions, combinations = :combinations, variantPhotos = :variantPhotos');
+      values[':variantDimensions'] = variantDimensions;
+      values[':combinations'] = combinations;
+      values[':variantPhotos'] = variantPhotos || {};
       removeClauses.push('stock');
     } else {
-      // Switching AWAY from variants: set a single stock count, drop label + variants array.
       setClauses.push('stock = :stock');
       values[':stock'] = typeof stock === 'number' ? stock : (existing.stock ?? 0);
-      removeClauses.push('variantLabel');
-      removeClauses.push('variants');
+      removeClauses.push('variantDimensions');
+      removeClauses.push('combinations');
+      removeClauses.push('variantPhotos');
     }
-  } else if (variants !== undefined && existing.hasVariants) {
-    // Not switching modes, just updating variant values/stock on an already-variant product.
-    validateVariants(variantLabel !== undefined ? variantLabel : existing.variantLabel, variants);
-    setClauses.push('variants = :variants');
-    values[':variants'] = variants;
-    if (variantLabel !== undefined) {
-      setClauses.push('variantLabel = :variantLabel');
-      values[':variantLabel'] = variantLabel.trim();
+  } else if ((combinations !== undefined || variantPhotos !== undefined) && existing.hasVariants) {
+    // Not switching modes, just updating dimensions/combinations/photos
+    // on an already-variant product -- e.g. admin added a new size,
+    // removed a color, or reassigned photos.
+    const dims = variantDimensions !== undefined ? variantDimensions : existing.variantDimensions;
+    const combos = combinations !== undefined ? combinations : existing.combinations;
+    validateVariantDimensions(dims, combos);
+    setClauses.push('variantDimensions = :variantDimensions, combinations = :combinations');
+    values[':variantDimensions'] = dims;
+    values[':combinations'] = combos;
+    if (variantPhotos !== undefined) {
+      setClauses.push('variantPhotos = :variantPhotos');
+      values[':variantPhotos'] = variantPhotos;
     }
-  } else if (variantLabel !== undefined && existing.hasVariants && variants === undefined) {
-    // Renaming the dimension label only (e.g. "Size" -> "Sizing"), variants unchanged.
-    if (!variantLabel.trim()) throw new Error('variantLabel cannot be empty');
-    setClauses.push('variantLabel = :variantLabel');
-    values[':variantLabel'] = variantLabel.trim();
   } else if (stock !== undefined && !existing.hasVariants) {
-    // Not switching modes, just updating the single stock count.
     setClauses.push('stock = :stock');
     values[':stock'] = stock;
   }

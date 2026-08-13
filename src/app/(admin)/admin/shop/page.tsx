@@ -4,10 +4,14 @@ import { useState, useEffect } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-interface VariantEntry {
-  value: string;
+interface VariantDimension {
+  label: string;
+  values: string[];
+}
+
+interface Combination {
+  values: Record<string, string>; // dimension label -> value
   stock: number;
-  photoUrls?: string[];
 }
 
 interface ShopItem {
@@ -19,8 +23,9 @@ interface ShopItem {
   photos: string[];
   thumbnailUrl: string;
   hasVariants: boolean;
-  variantLabel?: string;
-  variants?: VariantEntry[];
+  variantDimensions?: VariantDimension[];
+  combinations?: Combination[];
+  variantPhotos?: Record<string, string[]>; // keyed by dimension[0]'s value
   stock?: number;
 }
 
@@ -47,6 +52,37 @@ async function uploadPhoto(itemId: string, file: File): Promise<string> {
   return presignData.cdnUrl;
 }
 
+// ── Cartesian product helpers ────────────────────────────────────────────
+
+interface DimensionDraft {
+  label: string;
+  values: string[];
+}
+
+function cartesianKeys(dimensions: DimensionDraft[]): string[] {
+  if (dimensions.length === 0 || dimensions.some((d) => d.values.length === 0)) return [];
+  return dimensions.reduce<string[]>((acc, dim) => {
+    if (acc.length === 0) return dim.values.map((v) => v);
+    const next: string[] = [];
+    for (const prefix of acc) {
+      for (const v of dim.values) next.push(`${prefix}|${v}`);
+    }
+    return next;
+  }, []);
+}
+
+// Regenerates the combo-stock map whenever dimensions/values change,
+// preserving stock numbers for combinations that still exist and
+// defaulting new ones to "0". This is what makes "add a new size" or
+// "add a new color" automatically create the right new stock rows
+// without the admin having to manually re-enter everything.
+function syncComboStocks(dimensions: DimensionDraft[], oldStocks: Record<string, string>): Record<string, string> {
+  const keys = cartesianKeys(dimensions);
+  const next: Record<string, string> = {};
+  for (const key of keys) next[key] = oldStocks[key] ?? "0";
+  return next;
+}
+
 // Editable draft shape used for both the Add modal and inline edit forms.
 interface Draft {
   name: string;
@@ -54,23 +90,25 @@ interface Draft {
   price: string;
   category: string;
   hasVariants: boolean;
-  variantLabel: string; // admin-defined, e.g. "Size" or "Style"
-  variantStocks: Record<string, string>; // value -> stock string, admin adds/removes entries freely
-  variantPhotoSets: Record<string, string[]>; // value -> photo URLs for that variant's own gallery, only settable once the product has a photo pool (edit view, not creation)
+  dimensions: DimensionDraft[];
+  comboStocks: Record<string, string>; // key = dimension values joined by "|" in dimension order
+  variantPhotos: Record<string, string[]>; // keyed by dimensions[0]'s values only
   stock: string; // used when !hasVariants
 }
 
 function emptyDraft(): Draft {
-  return { name: "", description: "", price: "", category: "", hasVariants: false, variantLabel: "", variantStocks: {}, variantPhotoSets: {}, stock: "0" };
+  return { name: "", description: "", price: "", category: "", hasVariants: false, dimensions: [], comboStocks: {}, variantPhotos: {}, stock: "0" };
 }
 
 function draftFromItem(item: ShopItem): Draft {
-  const variantStocks: Record<string, string> = {};
-  const variantPhotoSets: Record<string, string[]> = {};
-  if (item.hasVariants && item.variants) {
-    for (const v of item.variants) {
-      variantStocks[v.value] = String(v.stock);
-      if (v.photoUrls && v.photoUrls.length > 0) variantPhotoSets[v.value] = v.photoUrls;
+  const dimensions: DimensionDraft[] = item.hasVariants && item.variantDimensions
+    ? item.variantDimensions.map((d) => ({ label: d.label, values: [...d.values] }))
+    : [];
+  const comboStocks: Record<string, string> = {};
+  if (item.hasVariants && item.combinations && dimensions.length > 0) {
+    for (const combo of item.combinations) {
+      const key = dimensions.map((d) => combo.values[d.label]).join("|");
+      comboStocks[key] = String(combo.stock);
     }
   }
   return {
@@ -79,158 +117,234 @@ function draftFromItem(item: ShopItem): Draft {
     price: String(item.price),
     category: item.category,
     hasVariants: item.hasVariants,
-    variantLabel: item.variantLabel || "",
-    variantStocks,
-    variantPhotoSets,
+    dimensions,
+    comboStocks,
+    variantPhotos: item.hasVariants && item.variantPhotos ? item.variantPhotos : {},
     stock: String(item.stock ?? 0),
   };
 }
 
-// Fully custom now -- admin types a dimension label (e.g. "Size" or
-// "Style") and adds whatever option values they want, each with its own
-// stock. Replaces the old fixed S/M/L/XL/2XL/3XL checkbox list -- there's
-// no longer a known set of values to check off, so this is an
-// add-your-own-row editor instead.
+function draftToPayload(draft: Draft) {
+  const price = parseFloat(draft.price);
+  const payload: Record<string, unknown> = {
+    name: draft.name,
+    description: draft.description,
+    price: Number.isFinite(price) ? price : 0,
+    category: draft.category,
+    hasVariants: draft.hasVariants,
+  };
+  if (draft.hasVariants) {
+    payload.variantDimensions = draft.dimensions.map((d) => ({ label: d.label, values: d.values }));
+    payload.combinations = Object.entries(draft.comboStocks).map(([key, stock]) => {
+      const parts = key.split("|");
+      const values: Record<string, string> = {};
+      draft.dimensions.forEach((d, i) => { values[d.label] = parts[i]; });
+      return { values, stock: parseInt(stock, 10) || 0 };
+    });
+    payload.variantPhotos = draft.variantPhotos;
+  } else {
+    payload.stock = parseInt(draft.stock, 10) || 0;
+  }
+  return payload;
+}
+
+// Manages one or more variant dimensions (Size, Color, etc.) and the
+// auto-generated stock grid for every combination across all of them.
+// Photos are only assignable on the FIRST dimension's values -- matches
+// how most real stores work (picking a color changes the photo, picking
+// a size usually doesn't), and keeps the photo UI from getting
+// unmanageable as more dimensions get added.
 function VariantEditor({ draft, setDraft, availablePhotos }: { draft: Draft; setDraft: (d: Draft) => void; availablePhotos?: string[] }) {
-  const [newValue, setNewValue] = useState("");
+  const [newDimLabel, setNewDimLabel] = useState("");
+  const [newValueInputs, setNewValueInputs] = useState<Record<number, string>>({});
   const [managingPhotosFor, setManagingPhotosFor] = useState<string | null>(null);
 
-  const addValue = () => {
-    const trimmed = newValue.trim();
-    if (!trimmed) return;
-    if (trimmed in draft.variantStocks) return; // already exists, no duplicate
-    setDraft({ ...draft, variantStocks: { ...draft.variantStocks, [trimmed]: "0" } });
-    setNewValue("");
+  const applyDimensions = (nextDimensions: DimensionDraft[]) => {
+    setDraft({ ...draft, dimensions: nextDimensions, comboStocks: syncComboStocks(nextDimensions, draft.comboStocks) });
   };
 
-  const removeValue = (value: string) => {
-    const nextStocks = { ...draft.variantStocks };
-    delete nextStocks[value];
-    const nextPhotoSets = { ...draft.variantPhotoSets };
-    delete nextPhotoSets[value];
-    setDraft({ ...draft, variantStocks: nextStocks, variantPhotoSets: nextPhotoSets });
+  const addDimension = () => {
+    const label = newDimLabel.trim();
+    if (!label) return;
+    if (draft.dimensions.some((d) => d.label === label)) return;
+    applyDimensions([...draft.dimensions, { label, values: [] }]);
+    setNewDimLabel("");
+  };
+
+  const removeDimension = (index: number) => {
+    const removedLabel = draft.dimensions[index].label;
+    const nextDimensions = draft.dimensions.filter((_, i) => i !== index);
+    applyDimensions(nextDimensions);
+    // If the FIRST dimension (the photo dimension) was removed, its
+    // photo assignments no longer mean anything -- clear them.
+    if (index === 0) setDraft((d) => ({ ...d, variantPhotos: {} }));
+  };
+
+  const addValue = (dimIndex: number) => {
+    const value = (newValueInputs[dimIndex] || "").trim();
+    if (!value) return;
+    if (draft.dimensions[dimIndex].values.includes(value)) return;
+    const nextDimensions = draft.dimensions.map((d, i) => i === dimIndex ? { ...d, values: [...d.values, value] } : d);
+    applyDimensions(nextDimensions);
+    setNewValueInputs({ ...newValueInputs, [dimIndex]: "" });
+  };
+
+  const removeValue = (dimIndex: number, value: string) => {
+    const nextDimensions = draft.dimensions.map((d, i) => i === dimIndex ? { ...d, values: d.values.filter((v) => v !== value) } : d);
+    applyDimensions(nextDimensions);
+    if (dimIndex === 0) {
+      const nextPhotos = { ...draft.variantPhotos };
+      delete nextPhotos[value];
+      setDraft((d) => ({ ...d, variantPhotos: nextPhotos }));
+    }
   };
 
   const togglePhoto = (value: string, photoUrl: string) => {
-    const current = draft.variantPhotoSets[value] || [];
+    const current = draft.variantPhotos[value] || [];
     const next = current.includes(photoUrl) ? current.filter((p) => p !== photoUrl) : [...current, photoUrl];
-    setDraft({ ...draft, variantPhotoSets: { ...draft.variantPhotoSets, [value]: next } });
+    setDraft({ ...draft, variantPhotos: { ...draft.variantPhotos, [value]: next } });
   };
+
+  const comboKeys = Object.keys(draft.comboStocks);
 
   return (
     <div>
-      <div style={{ marginBottom: 10 }}>
-        <label style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", display: "block", marginBottom: 4 }}>
-          Variant Label
-        </label>
-        <input
-          value={draft.variantLabel}
-          onChange={(e) => setDraft({ ...draft, variantLabel: e.target.value })}
-          placeholder='e.g. "Size" or "Style"'
-          style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 8, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit" }}
-        />
-      </div>
-
+      {/* Dimensions */}
       <label style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", display: "block", marginBottom: 6 }}>
-        Options &amp; Stock
+        Variant Dimensions
       </label>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
-        {Object.entries(draft.variantStocks).map(([value, stock]) => {
-          const photoCount = (draft.variantPhotoSets[value] || []).length;
-          return (
-            <div key={value}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ minWidth: 90, fontSize: 13, fontWeight: 700, color: "#111111" }}>{value}</span>
-                <input
-                  type="number"
-                  min={0}
-                  value={stock}
-                  onChange={(e) => setDraft({ ...draft, variantStocks: { ...draft.variantStocks, [value]: e.target.value } })}
-                  placeholder="Stock"
-                  style={{ width: 90, padding: "6px 10px", borderRadius: 6, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit" }}
-                />
-                <button
-                  onClick={() => removeValue(value)}
-                  style={{ width: 24, height: 24, borderRadius: "50%", border: "none", background: "#FEF2F2", color: "#DC2626", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
-                  title={`Remove ${value}`}
-                >
-                  ×
-                </button>
+      {draft.dimensions.map((dim, dimIndex) => (
+        <div key={dimIndex} style={{ marginBottom: 12, padding: 10, background: "#FAFAF8", borderRadius: 8, border: "1px solid #E8E2DC" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "#111111" }}>{dim.label}</span>
+            {dimIndex === 0 && (
+              <span style={{ fontSize: 10, fontWeight: 700, color: "#E77A2D", background: "#FEF3EB", padding: "2px 6px", borderRadius: 4 }}>
+                PHOTO DIMENSION
+              </span>
+            )}
+            <button
+              onClick={() => removeDimension(dimIndex)}
+              style={{ marginLeft: "auto", fontSize: 11, color: "#DC2626", background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}
+            >
+              Remove dimension
+            </button>
+          </div>
 
-                {/* Photo assignment -- only possible once a real photo
-                    pool exists (edit view of an existing product), since
-                    a brand-new product only has one seed photo. Each
-                    variant can have its OWN gallery (multiple photos),
-                    shown when that option is selected on the site --
-                    falls back to the product's default photos when a
-                    variant has none of its own. */}
-                {availablePhotos && availablePhotos.length > 0 && (
-                  <button
-                    onClick={() => setManagingPhotosFor(managingPhotosFor === value ? null : value)}
-                    style={{
-                      padding: "5px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-                      border: photoCount > 0 ? "1.5px solid #E77A2D" : "1.5px dashed #E8D5C4",
-                      background: photoCount > 0 ? "#FEF3EB" : "#FAFAF8",
-                      color: photoCount > 0 ? "#E77A2D" : "#9CA3AF",
-                    }}
-                  >
-                    {photoCount > 0 ? `${photoCount} photo${photoCount !== 1 ? "s" : ""}` : "+ Photos"}
-                  </button>
-                )}
-              </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+            {dim.values.map((value) => (
+              <span key={value} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 8px", background: "#fff", border: "1.5px solid #E8E2DC", borderRadius: 6, fontSize: 12, fontWeight: 600, color: "#111111" }}>
+                {value}
+                <button onClick={() => removeValue(dimIndex, value)} style={{ background: "none", border: "none", color: "#DC2626", cursor: "pointer", fontWeight: 700, padding: 0, fontSize: 12 }}>×</button>
+              </span>
+            ))}
+          </div>
 
-              {managingPhotosFor === value && availablePhotos && (
-                <div style={{ marginTop: 6, marginLeft: 100, padding: 10, background: "#FAFAF8", borderRadius: 8, border: "1px solid #E8E2DC" }}>
-                  <p style={{ fontSize: 11, color: "#9CA3AF", marginBottom: 8 }}>
-                    Click to toggle which photos show when a customer picks &quot;{value}&quot;. None selected = show the product&apos;s default photos.
-                  </p>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {availablePhotos.map((photo) => {
-                      const included = (draft.variantPhotoSets[value] || []).includes(photo);
-                      return (
-                        <div key={photo} style={{ position: "relative" }}>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={photo}
-                            alt=""
-                            onClick={() => togglePhoto(value, photo)}
-                            style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 6, border: included ? "2px solid #E77A2D" : "1.5px solid #E8E2DC", cursor: "pointer", opacity: included ? 1 : 0.6 }}
-                          />
-                          {included && (
-                            <span style={{ position: "absolute", top: -5, right: -5, width: 16, height: 16, borderRadius: "50%", background: "#E77A2D", color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                              ✓
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <input
+              value={newValueInputs[dimIndex] || ""}
+              onChange={(e) => setNewValueInputs({ ...newValueInputs, [dimIndex]: e.target.value })}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addValue(dimIndex); } }}
+              placeholder={`Add a ${dim.label.toLowerCase()}...`}
+              style={{ flex: 1, padding: "6px 10px", borderRadius: 6, border: "1.5px solid #E8E2DC", fontSize: 12, fontFamily: "inherit" }}
+            />
+            <button onClick={() => addValue(dimIndex)} style={{ padding: "6px 12px", borderRadius: 6, border: "1.5px solid #E77A2D", background: "#fff", color: "#E77A2D", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+              + Add
+            </button>
+          </div>
+        </div>
+      ))}
 
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         <input
-          value={newValue}
-          onChange={(e) => setNewValue(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addValue(); } }}
-          placeholder={draft.variantLabel ? `Add a ${draft.variantLabel.toLowerCase()}...` : "Add a value..."}
+          value={newDimLabel}
+          onChange={(e) => setNewDimLabel(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addDimension(); } }}
+          placeholder='New dimension, e.g. "Size" or "Color"'
           style={{ flex: 1, padding: "8px 10px", borderRadius: 6, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit" }}
         />
-        <button
-          onClick={addValue}
-          type="button"
-          style={{ padding: "8px 14px", borderRadius: 6, border: "1.5px solid #E77A2D", background: "#fff", color: "#E77A2D", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
-        >
-          + Add
+        <button onClick={addDimension} style={{ padding: "8px 14px", borderRadius: 6, border: "1.5px solid #111111", background: "#fff", color: "#111111", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+          + Add Dimension
         </button>
       </div>
-      {(!availablePhotos || availablePhotos.length === 0) && (
-        <p style={{ fontSize: 11, color: "#9CA3AF", marginTop: 8 }}>
-          Add more photos below, then come back here to assign a gallery to each option.
+
+      {/* Combination stock + photos */}
+      {comboKeys.length > 0 && (
+        <>
+          <label style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", display: "block", marginBottom: 6 }}>
+            Stock per Combination
+          </label>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+            {comboKeys.map((key) => {
+              const parts = key.split("|");
+              const displayLabel = parts.join(" / ");
+              const photoDimValue = parts[0]; // first dimension's value for this combo
+              const photoCount = (draft.variantPhotos[photoDimValue] || []).length;
+              const showPhotoControl = draft.dimensions.length > 0 && availablePhotos && availablePhotos.length > 0;
+              return (
+                <div key={key}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ minWidth: 140, fontSize: 13, fontWeight: 700, color: "#111111" }}>{displayLabel}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={draft.comboStocks[key]}
+                      onChange={(e) => setDraft({ ...draft, comboStocks: { ...draft.comboStocks, [key]: e.target.value } })}
+                      placeholder="Stock"
+                      style={{ width: 90, padding: "6px 10px", borderRadius: 6, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit" }}
+                    />
+                    {showPhotoControl && (
+                      <button
+                        onClick={() => setManagingPhotosFor(managingPhotosFor === photoDimValue ? null : photoDimValue)}
+                        style={{
+                          padding: "5px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                          border: photoCount > 0 ? "1.5px solid #E77A2D" : "1.5px dashed #E8D5C4",
+                          background: photoCount > 0 ? "#FEF3EB" : "#FAFAF8",
+                          color: photoCount > 0 ? "#E77A2D" : "#9CA3AF",
+                        }}
+                      >
+                        {photoCount > 0 ? `${photoCount} photo${photoCount !== 1 ? "s" : ""} (${photoDimValue})` : `+ Photos for ${photoDimValue}`}
+                      </button>
+                    )}
+                  </div>
+
+                  {managingPhotosFor === photoDimValue && availablePhotos && (
+                    <div style={{ marginTop: 6, marginLeft: 150, padding: 10, background: "#FAFAF8", borderRadius: 8, border: "1px solid #E8E2DC" }}>
+                      <p style={{ fontSize: 11, color: "#9CA3AF", marginBottom: 8 }}>
+                        Photos for &quot;{photoDimValue}&quot; -- shown regardless of which other option (like size) is also picked.
+                      </p>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {availablePhotos.map((photo) => {
+                          const included = (draft.variantPhotos[photoDimValue] || []).includes(photo);
+                          return (
+                            <div key={photo} style={{ position: "relative" }}>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={photo}
+                                alt=""
+                                onClick={() => togglePhoto(photoDimValue, photo)}
+                                style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 6, border: included ? "2px solid #E77A2D" : "1.5px solid #E8E2DC", cursor: "pointer", opacity: included ? 1 : 0.6 }}
+                              />
+                              {included && (
+                                <span style={{ position: "absolute", top: -5, right: -5, width: 16, height: 16, borderRadius: "50%", background: "#E77A2D", color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                  ✓
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {(!availablePhotos || availablePhotos.length === 0) && draft.dimensions.length > 0 && (
+        <p style={{ fontSize: 11, color: "#9CA3AF", marginTop: 4 }}>
+          Add more photos below, then come back here to assign a gallery to the first dimension&apos;s options.
         </p>
       )}
     </div>
@@ -289,7 +403,7 @@ function ProductFields({ draft, setDraft, availablePhotos }: { draft: Draft; set
             checked={draft.hasVariants}
             onChange={(e) => setDraft({ ...draft, hasVariants: e.target.checked })}
           />
-          This product comes in different options (size, style, etc.)
+          This product comes in different options (size, color, style, etc.)
         </label>
       </div>
 
@@ -311,28 +425,6 @@ function ProductFields({ draft, setDraft, availablePhotos }: { draft: Draft; set
       )}
     </>
   );
-}
-
-function draftToPayload(draft: Draft) {
-  const price = parseFloat(draft.price);
-  const payload: Record<string, unknown> = {
-    name: draft.name,
-    description: draft.description,
-    price: Number.isFinite(price) ? price : 0,
-    category: draft.category,
-    hasVariants: draft.hasVariants,
-  };
-  if (draft.hasVariants) {
-    payload.variantLabel = draft.variantLabel;
-    payload.variants = Object.entries(draft.variantStocks).map(([value, stock]) => ({
-      value,
-      stock: parseInt(stock, 10) || 0,
-      ...(draft.variantPhotoSets[value] && draft.variantPhotoSets[value].length > 0 ? { photoUrls: draft.variantPhotoSets[value] } : {}),
-    }));
-  } else {
-    payload.stock = parseInt(draft.stock, 10) || 0;
-  }
-  return payload;
 }
 
 export default function AdminShopPage() {
@@ -376,15 +468,20 @@ export default function AdminShopPage() {
     fetchItems();
   }, []);
 
+  const validateDraftVariants = (draft: Draft): string | null => {
+    if (!draft.hasVariants) return null;
+    if (draft.dimensions.length === 0) return 'Add at least one variant dimension, or turn off "comes in different options"';
+    for (const dim of draft.dimensions) {
+      if (dim.values.length === 0) return `Dimension "${dim.label}" needs at least one value`;
+    }
+    return null;
+  };
+
   const submitAdd = async () => {
     if (!addDraft.name.trim()) return setAddError("Name is required");
     if (!addFile) return setAddError("At least one photo is required");
-    if (addDraft.hasVariants && !addDraft.variantLabel.trim()) {
-      return setAddError('Give your variant a label, like "Size" or "Style"');
-    }
-    if (addDraft.hasVariants && Object.keys(addDraft.variantStocks).length === 0) {
-      return setAddError('Add at least one option, or turn off "comes in different options"');
-    }
+    const variantError = validateDraftVariants(addDraft);
+    if (variantError) return setAddError(variantError);
 
     setAddSubmitting(true);
     setAddError("");
@@ -414,14 +511,8 @@ export default function AdminShopPage() {
   const saveEdit = async (itemId: string) => {
     const draft = editDrafts[itemId];
     if (!draft) return;
-    if (draft.hasVariants && !draft.variantLabel.trim()) {
-      alert('Give your variant a label, like "Size" or "Style"');
-      return;
-    }
-    if (draft.hasVariants && Object.keys(draft.variantStocks).length === 0) {
-      alert('Add at least one option, or turn off "comes in different options"');
-      return;
-    }
+    const variantError = validateDraftVariants(draft);
+    if (variantError) { alert(variantError); return; }
 
     setSavingId(itemId);
     try {
@@ -538,6 +629,7 @@ export default function AdminShopPage() {
         {items.map((item) => {
           const isExpanded = expandedId === item.itemId;
           const draft = editDrafts[item.itemId] ?? draftFromItem(item);
+          const dimLabels = item.hasVariants && item.variantDimensions ? item.variantDimensions.map((d) => d.label).join(" + ") : "";
 
           return (
             <div key={item.itemId} style={{ background: "#fff", border: "1.5px solid #E8E2DC", borderRadius: 12, overflow: "hidden" }}>
@@ -558,7 +650,7 @@ export default function AdminShopPage() {
                   <div style={{ fontWeight: 700, fontSize: 15, color: "#111111" }}>{item.name}</div>
                   <div style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>
                     ${item.price.toFixed(2)} · {item.category}
-                    {item.hasVariants && <span> · {(item.photos || []).length} photo{(item.photos || []).length !== 1 ? "s" : ""}, {item.variantLabel}</span>}
+                    {item.hasVariants && <span> · {(item.photos || []).length} photo{(item.photos || []).length !== 1 ? "s" : ""}, {dimLabels}</span>}
                   </div>
                 </div>
               </div>

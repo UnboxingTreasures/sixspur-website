@@ -2,12 +2,16 @@
 
 import { useState } from 'react';
 import ProductGallery from './ProductGallery';
-import SizePicker from './SizePicker';
+import MultiVariantPicker from './MultiVariantPicker';
 
-interface VariantEntry {
-  value: string;
+interface VariantDimension {
+  label: string;
+  values: string[];
+}
+
+interface Combination {
+  values: Record<string, string>;
   stock: number;
-  photoUrls?: string[];
 }
 
 interface ShopVariantDisplayProps {
@@ -17,24 +21,28 @@ interface ShopVariantDisplayProps {
   price: number;
   description: string;
   hasVariants: boolean;
-  variantLabel?: string;
-  variants?: VariantEntry[];
+  variantDimensions?: VariantDimension[];
+  combinations?: Combination[];
+  variantPhotos?: Record<string, string[]>; // keyed by dimensions[0]'s values
   soldOut: boolean;
 }
 
 // Holds the FULL two-column product layout (gallery on the left, details
-// + picker on the right) as one client component, so selecting a variant
-// can swap the ENTIRE gallery -- main image and thumbnail strip both --
-// to that variant's own photos, similar to how Amazon switches the whole
-// image set when you pick a color. Falls back to the product's default
-// photos when no variant is selected, or when the selected one has no
-// dedicated photos of its own.
-export default function ShopVariantDisplay({ photos, name, category, price, description, hasVariants, variantLabel, variants, soldOut }: ShopVariantDisplayProps) {
-  const [selectedVariant, setSelectedVariant] = useState<VariantEntry | null>(null);
+// + picker on the right) as one client component. Selecting the FIRST
+// dimension's value (e.g. Color) swaps the entire gallery to that
+// value's own photos -- matches how most real stores work, where color
+// changes the photo but size usually doesn't. Falls back to the
+// product's default photos when nothing's selected yet, or the selected
+// value has no dedicated photos.
+export default function ShopVariantDisplay({ photos, name, category, price, description, hasVariants, variantDimensions, combinations, variantPhotos, soldOut }: ShopVariantDisplayProps) {
+  const [firstDimPhotos, setFirstDimPhotos] = useState<string[] | null>(null);
 
-  const activePhotos = selectedVariant?.photoUrls && selectedVariant.photoUrls.length > 0
-    ? selectedVariant.photoUrls
-    : photos;
+  const activePhotos = firstDimPhotos && firstDimPhotos.length > 0 ? firstDimPhotos : photos;
+
+  const handleFirstDimensionSelect = (value: string) => {
+    const assigned = variantPhotos?.[value];
+    setFirstDimPhotos(assigned && assigned.length > 0 ? assigned : null);
+  };
 
   return (
     <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12">
@@ -49,12 +57,12 @@ export default function ShopVariantDisplay({ photos, name, category, price, desc
           <p className="text-gray-600 leading-relaxed mb-6">{description}</p>
         )}
 
-        {hasVariants && variants && variants.length > 0 && (
+        {hasVariants && variantDimensions && variantDimensions.length > 0 && combinations && (
           <div className="mb-6">
-            <SizePicker
-              label={variantLabel || 'Options'}
-              variants={variants}
-              onSelect={(variant) => setSelectedVariant(variant)}
+            <MultiVariantPicker
+              dimensions={variantDimensions}
+              combinations={combinations}
+              onFirstDimensionSelect={handleFirstDimensionSelect}
             />
           </div>
         )}

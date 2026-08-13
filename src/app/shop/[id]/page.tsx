@@ -3,10 +3,14 @@ import ShopVariantDisplay from '@/components/sections/ShopVariantDisplay';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-interface VariantEntry {
-  value: string;
+interface VariantDimension {
+  label: string;
+  values: string[];
+}
+
+interface Combination {
+  values: Record<string, string>;
   stock: number;
-  photoUrls?: string[];
 }
 
 interface ShopItemDetail {
@@ -18,8 +22,9 @@ interface ShopItemDetail {
   photos: string[];
   thumbnailUrl: string;
   hasVariants: boolean;
-  variantLabel?: string;
-  variants?: VariantEntry[];
+  variantDimensions?: VariantDimension[];
+  combinations?: Combination[];
+  variantPhotos?: Record<string, string[]>;
   stock?: number;
 }
 
@@ -51,7 +56,7 @@ export default async function ShopItemPage({ params }: { params: Promise<{ id: s
 
   const photos = item.photos && item.photos.length > 0 ? item.photos : [item.thumbnailUrl];
   const soldOut = item.hasVariants
-    ? (item.variants || []).every((v) => v.stock <= 0)
+    ? (item.combinations || []).every((c) => c.stock <= 0)
     : (item.stock ?? 0) <= 0;
 
   return (
@@ -64,8 +69,9 @@ export default async function ShopItemPage({ params }: { params: Promise<{ id: s
           price={item.price}
           description={item.description}
           hasVariants={item.hasVariants}
-          variantLabel={item.variantLabel}
-          variants={item.variants}
+          variantDimensions={item.variantDimensions}
+          combinations={item.combinations}
+          variantPhotos={item.variantPhotos}
           soldOut={soldOut}
         />
       </section>
