@@ -6,7 +6,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL;
 interface VariantEntry {
   value: string;
   stock: number;
-  photoUrl?: string;
+  photoUrls?: string[];
 }
 
 interface ShopItemDetail {

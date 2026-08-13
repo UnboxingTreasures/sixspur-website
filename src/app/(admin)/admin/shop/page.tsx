@@ -7,7 +7,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL;
 interface VariantEntry {
   value: string;
   stock: number;
-  photoUrl?: string;
+  photoUrls?: string[];
 }
 
 interface ShopItem {
@@ -56,21 +56,21 @@ interface Draft {
   hasVariants: boolean;
   variantLabel: string; // admin-defined, e.g. "Size" or "Style"
   variantStocks: Record<string, string>; // value -> stock string, admin adds/removes entries freely
-  variantPhotos: Record<string, string>; // value -> photoUrl, only settable once the product has a photo pool (edit view, not creation)
+  variantPhotoSets: Record<string, string[]>; // value -> photo URLs for that variant's own gallery, only settable once the product has a photo pool (edit view, not creation)
   stock: string; // used when !hasVariants
 }
 
 function emptyDraft(): Draft {
-  return { name: "", description: "", price: "", category: "", hasVariants: false, variantLabel: "", variantStocks: {}, variantPhotos: {}, stock: "0" };
+  return { name: "", description: "", price: "", category: "", hasVariants: false, variantLabel: "", variantStocks: {}, variantPhotoSets: {}, stock: "0" };
 }
 
 function draftFromItem(item: ShopItem): Draft {
   const variantStocks: Record<string, string> = {};
-  const variantPhotos: Record<string, string> = {};
+  const variantPhotoSets: Record<string, string[]> = {};
   if (item.hasVariants && item.variants) {
     for (const v of item.variants) {
       variantStocks[v.value] = String(v.stock);
-      if (v.photoUrl) variantPhotos[v.value] = v.photoUrl;
+      if (v.photoUrls && v.photoUrls.length > 0) variantPhotoSets[v.value] = v.photoUrls;
     }
   }
   return {
@@ -81,7 +81,7 @@ function draftFromItem(item: ShopItem): Draft {
     hasVariants: item.hasVariants,
     variantLabel: item.variantLabel || "",
     variantStocks,
-    variantPhotos,
+    variantPhotoSets,
     stock: String(item.stock ?? 0),
   };
 }
@@ -93,7 +93,7 @@ function draftFromItem(item: ShopItem): Draft {
 // add-your-own-row editor instead.
 function VariantEditor({ draft, setDraft, availablePhotos }: { draft: Draft; setDraft: (d: Draft) => void; availablePhotos?: string[] }) {
   const [newValue, setNewValue] = useState("");
-  const [pickingPhotoFor, setPickingPhotoFor] = useState<string | null>(null);
+  const [managingPhotosFor, setManagingPhotosFor] = useState<string | null>(null);
 
   const addValue = () => {
     const trimmed = newValue.trim();
@@ -106,20 +106,15 @@ function VariantEditor({ draft, setDraft, availablePhotos }: { draft: Draft; set
   const removeValue = (value: string) => {
     const nextStocks = { ...draft.variantStocks };
     delete nextStocks[value];
-    const nextPhotos = { ...draft.variantPhotos };
-    delete nextPhotos[value];
-    setDraft({ ...draft, variantStocks: nextStocks, variantPhotos: nextPhotos });
+    const nextPhotoSets = { ...draft.variantPhotoSets };
+    delete nextPhotoSets[value];
+    setDraft({ ...draft, variantStocks: nextStocks, variantPhotoSets: nextPhotoSets });
   };
 
-  const assignPhoto = (value: string, photoUrl: string) => {
-    setDraft({ ...draft, variantPhotos: { ...draft.variantPhotos, [value]: photoUrl } });
-    setPickingPhotoFor(null);
-  };
-
-  const clearPhoto = (value: string) => {
-    const next = { ...draft.variantPhotos };
-    delete next[value];
-    setDraft({ ...draft, variantPhotos: next });
+  const togglePhoto = (value: string, photoUrl: string) => {
+    const current = draft.variantPhotoSets[value] || [];
+    const next = current.includes(photoUrl) ? current.filter((p) => p !== photoUrl) : [...current, photoUrl];
+    setDraft({ ...draft, variantPhotoSets: { ...draft.variantPhotoSets, [value]: next } });
   };
 
   return (
@@ -140,77 +135,81 @@ function VariantEditor({ draft, setDraft, availablePhotos }: { draft: Draft; set
         Options &amp; Stock
       </label>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
-        {Object.entries(draft.variantStocks).map(([value, stock]) => (
-          <div key={value}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ minWidth: 90, fontSize: 13, fontWeight: 700, color: "#111111" }}>{value}</span>
-              <input
-                type="number"
-                min={0}
-                value={stock}
-                onChange={(e) => setDraft({ ...draft, variantStocks: { ...draft.variantStocks, [value]: e.target.value } })}
-                placeholder="Stock"
-                style={{ width: 90, padding: "6px 10px", borderRadius: 6, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit" }}
-              />
-              <button
-                onClick={() => removeValue(value)}
-                style={{ width: 24, height: 24, borderRadius: "50%", border: "none", background: "#FEF2F2", color: "#DC2626", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
-                title={`Remove ${value}`}
-              >
-                ×
-              </button>
+        {Object.entries(draft.variantStocks).map(([value, stock]) => {
+          const photoCount = (draft.variantPhotoSets[value] || []).length;
+          return (
+            <div key={value}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ minWidth: 90, fontSize: 13, fontWeight: 700, color: "#111111" }}>{value}</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={stock}
+                  onChange={(e) => setDraft({ ...draft, variantStocks: { ...draft.variantStocks, [value]: e.target.value } })}
+                  placeholder="Stock"
+                  style={{ width: 90, padding: "6px 10px", borderRadius: 6, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit" }}
+                />
+                <button
+                  onClick={() => removeValue(value)}
+                  style={{ width: 24, height: 24, borderRadius: "50%", border: "none", background: "#FEF2F2", color: "#DC2626", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
+                  title={`Remove ${value}`}
+                >
+                  ×
+                </button>
 
-              {/* Photo assignment -- only possible once a real photo pool
-                  exists (edit view of an existing product), since a
-                  brand-new product only has one seed photo. */}
-              {availablePhotos && availablePhotos.length > 0 && (
-                <>
-                  {draft.variantPhotos[value] ? (
-                    <div style={{ position: "relative", width: 32, height: 32 }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={draft.variantPhotos[value]}
-                        alt=""
-                        onClick={() => setPickingPhotoFor(pickingPhotoFor === value ? null : value)}
-                        style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 6, border: "2px solid #E77A2D", cursor: "pointer" }}
-                        title="Click to change photo"
-                      />
-                      <button
-                        onClick={() => clearPhoto(value)}
-                        style={{ position: "absolute", top: -5, right: -5, width: 16, height: 16, borderRadius: "50%", border: "none", background: "#DC2626", color: "#fff", fontSize: 9, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
-                        title="Remove photo assignment"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setPickingPhotoFor(pickingPhotoFor === value ? null : value)}
-                      style={{ padding: "5px 10px", borderRadius: 6, border: "1.5px dashed #E8D5C4", background: "#FAFAF8", color: "#9CA3AF", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
-                    >
-                      + Photo
-                    </button>
-                  )}
-                </>
+                {/* Photo assignment -- only possible once a real photo
+                    pool exists (edit view of an existing product), since
+                    a brand-new product only has one seed photo. Each
+                    variant can have its OWN gallery (multiple photos),
+                    shown when that option is selected on the site --
+                    falls back to the product's default photos when a
+                    variant has none of its own. */}
+                {availablePhotos && availablePhotos.length > 0 && (
+                  <button
+                    onClick={() => setManagingPhotosFor(managingPhotosFor === value ? null : value)}
+                    style={{
+                      padding: "5px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                      border: photoCount > 0 ? "1.5px solid #E77A2D" : "1.5px dashed #E8D5C4",
+                      background: photoCount > 0 ? "#FEF3EB" : "#FAFAF8",
+                      color: photoCount > 0 ? "#E77A2D" : "#9CA3AF",
+                    }}
+                  >
+                    {photoCount > 0 ? `${photoCount} photo${photoCount !== 1 ? "s" : ""}` : "+ Photos"}
+                  </button>
+                )}
+              </div>
+
+              {managingPhotosFor === value && availablePhotos && (
+                <div style={{ marginTop: 6, marginLeft: 100, padding: 10, background: "#FAFAF8", borderRadius: 8, border: "1px solid #E8E2DC" }}>
+                  <p style={{ fontSize: 11, color: "#9CA3AF", marginBottom: 8 }}>
+                    Click to toggle which photos show when a customer picks &quot;{value}&quot;. None selected = show the product&apos;s default photos.
+                  </p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {availablePhotos.map((photo) => {
+                      const included = (draft.variantPhotoSets[value] || []).includes(photo);
+                      return (
+                        <div key={photo} style={{ position: "relative" }}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={photo}
+                            alt=""
+                            onClick={() => togglePhoto(value, photo)}
+                            style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 6, border: included ? "2px solid #E77A2D" : "1.5px solid #E8E2DC", cursor: "pointer", opacity: included ? 1 : 0.6 }}
+                          />
+                          {included && (
+                            <span style={{ position: "absolute", top: -5, right: -5, width: 16, height: 16, borderRadius: "50%", background: "#E77A2D", color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              ✓
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
             </div>
-
-            {pickingPhotoFor === value && availablePhotos && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6, marginLeft: 100, padding: 8, background: "#FAFAF8", borderRadius: 8, border: "1px solid #E8E2DC" }}>
-                {availablePhotos.map((photo) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    key={photo}
-                    src={photo}
-                    alt=""
-                    onClick={() => assignPhoto(value, photo)}
-                    style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 6, border: photo === draft.variantPhotos[value] ? "2px solid #E77A2D" : "1.5px solid #E8E2DC", cursor: "pointer" }}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div style={{ display: "flex", gap: 8 }}>
@@ -231,7 +230,7 @@ function VariantEditor({ draft, setDraft, availablePhotos }: { draft: Draft; set
       </div>
       {(!availablePhotos || availablePhotos.length === 0) && (
         <p style={{ fontSize: 11, color: "#9CA3AF", marginTop: 8 }}>
-          Add more photos below, then come back here to assign one to each option.
+          Add more photos below, then come back here to assign a gallery to each option.
         </p>
       )}
     </div>
@@ -328,7 +327,7 @@ function draftToPayload(draft: Draft) {
     payload.variants = Object.entries(draft.variantStocks).map(([value, stock]) => ({
       value,
       stock: parseInt(stock, 10) || 0,
-      ...(draft.variantPhotos[value] ? { photoUrl: draft.variantPhotos[value] } : {}),
+      ...(draft.variantPhotoSets[value] && draft.variantPhotoSets[value].length > 0 ? { photoUrls: draft.variantPhotoSets[value] } : {}),
     }));
   } else {
     payload.stock = parseInt(draft.stock, 10) || 0;

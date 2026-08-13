@@ -5,23 +5,22 @@ import { useState, useEffect } from 'react';
 interface ProductGalleryProps {
   photos: string[];
   name: string;
-  forcePhoto?: string; // optional external override, e.g. from a variant picker -- Adopt's usage never passes this, so its behavior is completely unchanged
 }
 
-export default function ProductGallery({ photos, name, forcePhoto }: ProductGalleryProps) {
+export default function ProductGallery({ photos, name }: ProductGalleryProps) {
   const [activePhoto, setActivePhoto] = useState(photos[0] || '');
   const [imageError, setImageError] = useState(false);
 
-  // Jumps the main image when a parent explicitly asks for a specific
-  // photo (e.g. selecting "Black/Grey" in the variant picker) -- doesn't
-  // affect normal thumbnail-click behavior below, which still just sets
-  // activePhoto directly.
+  // Resets to the new set's first photo whenever the photos array itself
+  // changes -- this is what makes variant switching work: a parent
+  // (ShopVariantDisplay) swaps in a completely different array when a
+  // variant with its own gallery is selected, and this picks that up
+  // automatically. Adopt's usage passes a static array that never
+  // changes after mount, so this has no effect there.
   useEffect(() => {
-    if (forcePhoto) {
-      setActivePhoto(forcePhoto);
-      setImageError(false);
-    }
-  }, [forcePhoto]);
+    setActivePhoto(photos[0] || '');
+    setImageError(false);
+  }, [photos]);
 
   return (
     <div>

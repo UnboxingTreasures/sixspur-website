@@ -5,7 +5,7 @@ import { useState } from 'react';
 interface VariantEntry {
   value: string;
   stock: number;
-  photoUrl?: string;
+  photoUrls?: string[];
 }
 
 interface SizePickerProps {
