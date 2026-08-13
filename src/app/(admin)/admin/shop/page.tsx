@@ -7,6 +7,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL;
 interface VariantEntry {
   value: string;
   stock: number;
+  photoUrl?: string;
 }
 
 interface ShopItem {
@@ -55,17 +56,22 @@ interface Draft {
   hasVariants: boolean;
   variantLabel: string; // admin-defined, e.g. "Size" or "Style"
   variantStocks: Record<string, string>; // value -> stock string, admin adds/removes entries freely
+  variantPhotos: Record<string, string>; // value -> photoUrl, only settable once the product has a photo pool (edit view, not creation)
   stock: string; // used when !hasVariants
 }
 
 function emptyDraft(): Draft {
-  return { name: "", description: "", price: "", category: "", hasVariants: false, variantLabel: "", variantStocks: {}, stock: "0" };
+  return { name: "", description: "", price: "", category: "", hasVariants: false, variantLabel: "", variantStocks: {}, variantPhotos: {}, stock: "0" };
 }
 
 function draftFromItem(item: ShopItem): Draft {
   const variantStocks: Record<string, string> = {};
+  const variantPhotos: Record<string, string> = {};
   if (item.hasVariants && item.variants) {
-    for (const v of item.variants) variantStocks[v.value] = String(v.stock);
+    for (const v of item.variants) {
+      variantStocks[v.value] = String(v.stock);
+      if (v.photoUrl) variantPhotos[v.value] = v.photoUrl;
+    }
   }
   return {
     name: item.name,
@@ -75,6 +81,7 @@ function draftFromItem(item: ShopItem): Draft {
     hasVariants: item.hasVariants,
     variantLabel: item.variantLabel || "",
     variantStocks,
+    variantPhotos,
     stock: String(item.stock ?? 0),
   };
 }
@@ -84,8 +91,9 @@ function draftFromItem(item: ShopItem): Draft {
 // stock. Replaces the old fixed S/M/L/XL/2XL/3XL checkbox list -- there's
 // no longer a known set of values to check off, so this is an
 // add-your-own-row editor instead.
-function VariantEditor({ draft, setDraft }: { draft: Draft; setDraft: (d: Draft) => void }) {
+function VariantEditor({ draft, setDraft, availablePhotos }: { draft: Draft; setDraft: (d: Draft) => void; availablePhotos?: string[] }) {
   const [newValue, setNewValue] = useState("");
+  const [pickingPhotoFor, setPickingPhotoFor] = useState<string | null>(null);
 
   const addValue = () => {
     const trimmed = newValue.trim();
@@ -96,9 +104,22 @@ function VariantEditor({ draft, setDraft }: { draft: Draft; setDraft: (d: Draft)
   };
 
   const removeValue = (value: string) => {
-    const next = { ...draft.variantStocks };
+    const nextStocks = { ...draft.variantStocks };
+    delete nextStocks[value];
+    const nextPhotos = { ...draft.variantPhotos };
+    delete nextPhotos[value];
+    setDraft({ ...draft, variantStocks: nextStocks, variantPhotos: nextPhotos });
+  };
+
+  const assignPhoto = (value: string, photoUrl: string) => {
+    setDraft({ ...draft, variantPhotos: { ...draft.variantPhotos, [value]: photoUrl } });
+    setPickingPhotoFor(null);
+  };
+
+  const clearPhoto = (value: string) => {
+    const next = { ...draft.variantPhotos };
     delete next[value];
-    setDraft({ ...draft, variantStocks: next });
+    setDraft({ ...draft, variantPhotos: next });
   };
 
   return (
@@ -120,23 +141,74 @@ function VariantEditor({ draft, setDraft }: { draft: Draft; setDraft: (d: Draft)
       </label>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
         {Object.entries(draft.variantStocks).map(([value, stock]) => (
-          <div key={value} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ minWidth: 90, fontSize: 13, fontWeight: 700, color: "#111111" }}>{value}</span>
-            <input
-              type="number"
-              min={0}
-              value={stock}
-              onChange={(e) => setDraft({ ...draft, variantStocks: { ...draft.variantStocks, [value]: e.target.value } })}
-              placeholder="Stock"
-              style={{ width: 90, padding: "6px 10px", borderRadius: 6, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit" }}
-            />
-            <button
-              onClick={() => removeValue(value)}
-              style={{ width: 24, height: 24, borderRadius: "50%", border: "none", background: "#FEF2F2", color: "#DC2626", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
-              title={`Remove ${value}`}
-            >
-              ×
-            </button>
+          <div key={value}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ minWidth: 90, fontSize: 13, fontWeight: 700, color: "#111111" }}>{value}</span>
+              <input
+                type="number"
+                min={0}
+                value={stock}
+                onChange={(e) => setDraft({ ...draft, variantStocks: { ...draft.variantStocks, [value]: e.target.value } })}
+                placeholder="Stock"
+                style={{ width: 90, padding: "6px 10px", borderRadius: 6, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit" }}
+              />
+              <button
+                onClick={() => removeValue(value)}
+                style={{ width: 24, height: 24, borderRadius: "50%", border: "none", background: "#FEF2F2", color: "#DC2626", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
+                title={`Remove ${value}`}
+              >
+                ×
+              </button>
+
+              {/* Photo assignment -- only possible once a real photo pool
+                  exists (edit view of an existing product), since a
+                  brand-new product only has one seed photo. */}
+              {availablePhotos && availablePhotos.length > 0 && (
+                <>
+                  {draft.variantPhotos[value] ? (
+                    <div style={{ position: "relative", width: 32, height: 32 }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={draft.variantPhotos[value]}
+                        alt=""
+                        onClick={() => setPickingPhotoFor(pickingPhotoFor === value ? null : value)}
+                        style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 6, border: "2px solid #E77A2D", cursor: "pointer" }}
+                        title="Click to change photo"
+                      />
+                      <button
+                        onClick={() => clearPhoto(value)}
+                        style={{ position: "absolute", top: -5, right: -5, width: 16, height: 16, borderRadius: "50%", border: "none", background: "#DC2626", color: "#fff", fontSize: 9, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
+                        title="Remove photo assignment"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setPickingPhotoFor(pickingPhotoFor === value ? null : value)}
+                      style={{ padding: "5px 10px", borderRadius: 6, border: "1.5px dashed #E8D5C4", background: "#FAFAF8", color: "#9CA3AF", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+                    >
+                      + Photo
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+
+            {pickingPhotoFor === value && availablePhotos && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6, marginLeft: 100, padding: 8, background: "#FAFAF8", borderRadius: 8, border: "1px solid #E8E2DC" }}>
+                {availablePhotos.map((photo) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    key={photo}
+                    src={photo}
+                    alt=""
+                    onClick={() => assignPhoto(value, photo)}
+                    style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 6, border: photo === draft.variantPhotos[value] ? "2px solid #E77A2D" : "1.5px solid #E8E2DC", cursor: "pointer" }}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -157,11 +229,16 @@ function VariantEditor({ draft, setDraft }: { draft: Draft; setDraft: (d: Draft)
           + Add
         </button>
       </div>
+      {(!availablePhotos || availablePhotos.length === 0) && (
+        <p style={{ fontSize: 11, color: "#9CA3AF", marginTop: 8 }}>
+          Add more photos below, then come back here to assign one to each option.
+        </p>
+      )}
     </div>
   );
 }
 
-function ProductFields({ draft, setDraft }: { draft: Draft; setDraft: (d: Draft) => void }) {
+function ProductFields({ draft, setDraft, availablePhotos }: { draft: Draft; setDraft: (d: Draft) => void; availablePhotos?: string[] }) {
   return (
     <>
       <div style={{ marginBottom: 12 }}>
@@ -219,7 +296,7 @@ function ProductFields({ draft, setDraft }: { draft: Draft; setDraft: (d: Draft)
 
       {draft.hasVariants ? (
         <div style={{ marginBottom: 12 }}>
-          <VariantEditor draft={draft} setDraft={setDraft} />
+          <VariantEditor draft={draft} setDraft={setDraft} availablePhotos={availablePhotos} />
         </div>
       ) : (
         <div style={{ marginBottom: 12 }}>
@@ -251,6 +328,7 @@ function draftToPayload(draft: Draft) {
     payload.variants = Object.entries(draft.variantStocks).map(([value, stock]) => ({
       value,
       stock: parseInt(stock, 10) || 0,
+      ...(draft.variantPhotos[value] ? { photoUrl: draft.variantPhotos[value] } : {}),
     }));
   } else {
     payload.stock = parseInt(draft.stock, 10) || 0;
@@ -489,7 +567,7 @@ export default function AdminShopPage() {
               {isExpanded && (
                 <div style={{ padding: "0 20px 20px", borderTop: "1px solid #F0EBE5" }}>
                   <div style={{ marginTop: 16 }}>
-                    <ProductFields draft={draft} setDraft={(d) => setEditDrafts((prev) => ({ ...prev, [item.itemId]: d }))} />
+                    <ProductFields draft={draft} setDraft={(d) => setEditDrafts((prev) => ({ ...prev, [item.itemId]: d }))} availablePhotos={item.photos} />
                     <button
                       onClick={() => saveEdit(item.itemId)}
                       disabled={savingId === item.itemId}
