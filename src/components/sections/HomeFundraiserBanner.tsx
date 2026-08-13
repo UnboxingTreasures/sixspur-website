@@ -111,6 +111,12 @@ export default function HomeFundraiserBanner() {
 
   const percent = fundraiser.goalAmount > 0 ? Math.min(100, (fundraiser.raisedAmount / fundraiser.goalAmount) * 100) : 0;
   const isComplete = percent >= 100;
+  // Uncapped percentage, used only for the overfunded message below --
+  // the thermometer fill itself stays capped at 100% (a graphic can't
+  // physically show more than "full"), but donors and admin should
+  // still see the true magnitude when a campaign is exceeded.
+  const truePercent = fundraiser.goalAmount > 0 ? (fundraiser.raisedAmount / fundraiser.goalAmount) * 100 : 0;
+  const isOverfunded = truePercent > 100;
   // Thermometer metaphor: blue (cold, far from goal) warms to red (hot,
   // close to or at goal) as progress climbs past the halfway point.
   const fillColor = percent >= 50 ? '#DC2626' : '#3B82F6';
@@ -166,6 +172,11 @@ export default function HomeFundraiserBanner() {
             <div style={{ color: '#888888', fontSize: '0.95rem', marginBottom: '0.25rem' }}>
               raised of ${fundraiser.goalAmount.toFixed(0)} goal
             </div>
+            {isOverfunded && (
+              <div style={{ display: 'inline-block', color: '#DC2626', fontSize: '0.8rem', fontWeight: 800, background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: '20px', padding: '3px 12px', marginBottom: '0.75rem' }}>
+                {truePercent.toFixed(0)}% funded — thank you for going above and beyond!
+              </div>
+            )}
             <div style={{ color: '#888888', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
               Ends {formatDate(fundraiser.closingDate)}
             </div>

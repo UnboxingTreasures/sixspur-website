@@ -221,6 +221,8 @@ export default function FundraiserThermometer() {
 
   const percent = fundraiser.goalAmount > 0 ? Math.min(100, (fundraiser.raisedAmount / fundraiser.goalAmount) * 100) : 0;
   const isComplete = percent >= 100;
+  const truePercent = fundraiser.goalAmount > 0 ? (fundraiser.raisedAmount / fundraiser.goalAmount) * 100 : 0;
+  const isOverfunded = truePercent > 100;
   // Same thermometer-heat metaphor as the homepage version.
   const fillColor = percent >= 50 ? "#DC2626" : "#3B82F6";
 
@@ -262,10 +264,16 @@ export default function FundraiserThermometer() {
 
       <ThermometerGraphicHorizontal percent={percent} fillColor={fillColor} isComplete={isComplete} />
 
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginTop: "0.25rem", marginBottom: "1.5rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginTop: "0.25rem", marginBottom: isOverfunded ? "0.5rem" : "1.5rem" }}>
         <span style={{ fontWeight: 800, color: "#111111" }}>${fundraiser.raisedAmount.toFixed(0)} raised{isComplete ? " 🎉" : ""}</span>
         <span style={{ color: "#888888" }}>Goal: ${fundraiser.goalAmount.toFixed(0)} · Ends {formatDate(fundraiser.closingDate)}</span>
       </div>
+
+      {isOverfunded && (
+        <div style={{ textAlign: "center", color: "#DC2626", fontSize: "0.8rem", fontWeight: 800, background: "#FEF2F2", border: "1.5px solid #FECACA", borderRadius: "20px", padding: "4px 12px", marginBottom: "1.5rem" }}>
+          {truePercent.toFixed(0)}% funded — thank you for going above and beyond!
+        </div>
+      )}
 
       {donationResult === "success" && (
         <div style={{ background: "#EAF7EE", border: "1.5px solid #B7E4C7", color: "#1E8A4C", padding: "12px 16px", borderRadius: 8, fontSize: 13, marginBottom: 16, textAlign: "center" }}>
