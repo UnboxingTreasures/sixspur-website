@@ -1,15 +1,27 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface ProductGalleryProps {
   photos: string[];
   name: string;
+  forcePhoto?: string; // optional external override, e.g. from a variant picker -- Adopt's usage never passes this, so its behavior is completely unchanged
 }
 
-export default function ProductGallery({ photos, name }: ProductGalleryProps) {
+export default function ProductGallery({ photos, name, forcePhoto }: ProductGalleryProps) {
   const [activePhoto, setActivePhoto] = useState(photos[0] || '');
   const [imageError, setImageError] = useState(false);
+
+  // Jumps the main image when a parent explicitly asks for a specific
+  // photo (e.g. selecting "Black/Grey" in the variant picker) -- doesn't
+  // affect normal thumbnail-click behavior below, which still just sets
+  // activePhoto directly.
+  useEffect(() => {
+    if (forcePhoto) {
+      setActivePhoto(forcePhoto);
+      setImageError(false);
+    }
+  }, [forcePhoto]);
 
   return (
     <div>

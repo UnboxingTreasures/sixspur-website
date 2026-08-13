@@ -9,8 +9,9 @@ interface VariantEntry {
 }
 
 interface SizePickerProps {
-  label: string; // admin-defined dimension name, e.g. "Size" or "Style" -- was hardcoded "Size" before
+  label: string; // admin-defined dimension name, e.g. "Size" or "Style"
   variants: VariantEntry[];
+  onSelect?: (variant: VariantEntry) => void; // optional -- lets a parent react to selection, e.g. swapping the gallery photo
 }
 
 // No cart/checkout system exists yet -- this shows availability and lets
@@ -18,8 +19,13 @@ interface SizePickerProps {
 // action. Sold-out options are shown but disabled, not hidden, so it's
 // clear the option exists and might come back in stock rather than
 // looking unavailable.
-export default function SizePicker({ label, variants }: SizePickerProps) {
+export default function SizePicker({ label, variants, onSelect }: SizePickerProps) {
   const [selected, setSelected] = useState<string | null>(null);
+
+  const handleClick = (variant: VariantEntry) => {
+    setSelected(variant.value);
+    onSelect?.(variant);
+  };
 
   return (
     <div>
@@ -27,14 +33,15 @@ export default function SizePicker({ label, variants }: SizePickerProps) {
         {label}
       </p>
       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-        {variants.map(({ value, stock }) => {
+        {variants.map((variant) => {
+          const { value, stock } = variant;
           const soldOut = stock <= 0;
           const isSelected = selected === value;
           return (
             <button
               key={value}
               disabled={soldOut}
-              onClick={() => setSelected(value)}
+              onClick={() => handleClick(variant)}
               style={{
                 minWidth: '48px',
                 padding: '0.5rem 0.75rem',
