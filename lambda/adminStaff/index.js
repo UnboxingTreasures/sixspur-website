@@ -6,13 +6,20 @@
 //   PATCH  /admin/staff/{id}                — edit name/title/bio, optionally imageUrl
 //   DELETE /admin/staff/{id}                — delete, removes their photo from S3
 //   POST   /admin/staff/{id}/photo/presign  — presigned upload URL for a new/replacement photo
+//
+// AUTH: every route here requires a verified JWT (via the same
+// authorizer protecting /donor/* and /donate/*) AND isAdmin=true on
+// the donor record -- see requireAdmin() in adminAuth.js. This includes
+// the photo/presign route -- an unauthenticated presign endpoint would
+// let anyone upload arbitrary files into the bucket under any staffId.
 
 const { listAll, getById, createStaffMember, updateStaffMember, deleteStaffMember } = require('./dynamo');
 const { createPresignedUploadUrl, deletePhoto } = require('./s3');
+const { requireAdmin } = require('./adminAuth');
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type,Authorization',
   'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
 };
 
@@ -96,6 +103,11 @@ async function handlePresign(staffId, body) {
 exports.handler = async (event) => {
   if (event.requestContext?.http?.method === 'OPTIONS') {
     return respond(200, {});
+  }
+
+  const auth = await requireAdmin(event);
+  if (!auth.authorized) {
+    return respond(auth.statusCode, { error: auth.error });
   }
 
   const staffId = event.pathParameters?.id;
