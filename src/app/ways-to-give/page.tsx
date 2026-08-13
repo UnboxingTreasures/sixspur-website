@@ -134,7 +134,7 @@ export default function WaysToGivePage() {
   };
 
   return (
-    <main className="min-h-screen bg-white">
+    <main className="bg-white">
 
       {/* Header */}
       <section className="bg-spur-black text-white py-16 px-6">
