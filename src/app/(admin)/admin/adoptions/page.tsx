@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { getIdToken } from "@/lib/cognito";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -42,6 +43,15 @@ export default function AdminAdoptionsPage() {
   const [detailCache, setDetailCache] = useState<Record<string, Application>>({});
   const [detailLoading, setDetailLoading] = useState(false);
 
+  const authedFetch = useCallback(async (path: string, options: RequestInit = {}) => {
+    const token = await getIdToken();
+    if (!token) throw new Error("Not logged in");
+    return fetch(`${API_URL}${path}`, {
+      ...options,
+      headers: { ...options.headers, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+  }, []);
+
   const toggleExpand = async (applicationId: string) => {
     if (expandedId === applicationId) {
       setExpandedId(null);
@@ -51,7 +61,7 @@ export default function AdminAdoptionsPage() {
     if (!detailCache[applicationId]) {
       setDetailLoading(true);
       try {
-        const res = await fetch(`${API_URL}/admin/adoptions/${applicationId}`);
+        const res = await authedFetch(`/admin/adoptions/${applicationId}`);
         const data = await res.json();
         if (res.ok) {
           setDetailCache((prev) => ({ ...prev, [applicationId]: data }));
@@ -68,7 +78,7 @@ export default function AdminAdoptionsPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API_URL}/admin/adoptions?status=${encodeURIComponent(status)}`);
+      const res = await authedFetch(`/admin/adoptions?status=${encodeURIComponent(status)}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load applications");
       setApplications(data.applications || []);
@@ -78,7 +88,7 @@ export default function AdminAdoptionsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [authedFetch]);
 
   useEffect(() => {
     fetchApplications(activeTab);
@@ -89,9 +99,8 @@ export default function AdminAdoptionsPage() {
     if (!pendingStatus) return;
     setUpdating(true);
     try {
-      const res = await fetch(`${API_URL}/admin/adoptions/${pendingStatus.id}`, {
+      const res = await authedFetch(`/admin/adoptions/${pendingStatus.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: pendingStatus.status }),
       });
       if (!res.ok) {
