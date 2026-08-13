@@ -16,7 +16,13 @@ interface Donation {
   paypalTransactionId?: string;
   receiptUrl?: string;
   notes?: string;
+  campaignTitle?: string;
   createdAt: string;
+}
+
+function getDonationDescriptor(d: Donation): string {
+  if (d.campaignTitle) return `Fundraiser: ${d.campaignTitle}`;
+  return d.type === "recurring" ? "Monthly" : "One-time";
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
@@ -137,7 +143,7 @@ export default function AdminDonationsPage() {
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 15, color: "#111111" }}>${d.amount.toFixed(2)} {d.currency}</div>
                   <div style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>
-                    {d.donorEmail} · {formatDate(d.createdAt)} · {d.type === "recurring" ? "Monthly" : "One-time"} · PayPal
+                    {d.donorEmail} · {formatDate(d.createdAt)} · {getDonationDescriptor(d)} · PayPal
                   </div>
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20, background: colors.bg, color: colors.text, whiteSpace: "nowrap" }}>

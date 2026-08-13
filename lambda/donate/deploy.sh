@@ -42,12 +42,7 @@ aws iam put-role-policy \
   --profile "$PROFILE"
 
 ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME}"
-# PAYPAL_MODE=sandbox until this has been fully tested end-to-end with
-# real (small) sandbox transactions -- do NOT flip to "live" without
-# deliberately testing the full flow first, per the project's own
-# standing rule about not touching Stripe/live payment paths before
-# PayPal is fully proven out.
-ENV_VARS="Variables={DONATIONS_TABLE=donations,PAYPAL_MODE=sandbox,PAYPAL_SECRET_NAME=sixspur/paypal-api,ASSETS_BUCKET=sixspurranch-assets,CDN_BASE=https://d1s8s7aw8vf5zu.cloudfront.net,SES_FROM_ADDRESS=noreply@sixspurranch.org}"
+ENV_VARS="Variables={DONATIONS_TABLE=donations,FUNDRAISERS_TABLE=fundraisers,PAYPAL_MODE=sandbox,PAYPAL_SECRET_NAME=sixspur/paypal-api,ASSETS_BUCKET=sixspurranch-assets,CDN_BASE=https://d1s8s7aw8vf5zu.cloudfront.net,SES_FROM_ADDRESS=noreply@sixspurranch.org}"
 
 if aws lambda get-function --function-name "$FUNCTION_NAME" --profile "$PROFILE" --region "$REGION" >/dev/null 2>&1; then
   echo "Function exists, updating code..."

@@ -8,6 +8,12 @@
       "Resource": "arn:aws:dynamodb:us-east-1:658965339779:table/donations"
     },
     {
+      "Sid": "FundraiserTitleLookup",
+      "Effect": "Allow",
+      "Action": ["dynamodb:GetItem"],
+      "Resource": "arn:aws:dynamodb:us-east-1:658965339779:table/fundraisers"
+    },
+    {
       "Sid": "PayPalSecretRead",
       "Effect": "Allow",
       "Action": ["secretsmanager:GetSecretValue"],

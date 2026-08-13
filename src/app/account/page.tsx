@@ -13,7 +13,13 @@ interface Donation {
   type: "one-time" | "recurring";
   status: string;
   receiptUrl?: string;
+  campaignTitle?: string;
   createdAt: string;
+}
+
+function getDonationDescriptor(d: Donation): string {
+  if (d.campaignTitle) return `Fundraiser: ${d.campaignTitle}`;
+  return d.type === "recurring" ? "Monthly" : "One-time";
 }
 
 interface Profile {
@@ -160,7 +166,7 @@ export default function AccountDashboardPage() {
                     <div>
                       <div className="font-semibold text-spur-black">${d.amount.toFixed(2)} {d.currency}</div>
                       <div className="text-xs text-gray-500 mt-1">
-                        {formatDate(d.createdAt)} · {d.type === "recurring" ? "Monthly" : "One-time"} · {d.status}
+                        {formatDate(d.createdAt)} · {getDonationDescriptor(d)} · {d.status}
                       </div>
                     </div>
                     {d.receiptUrl && (
