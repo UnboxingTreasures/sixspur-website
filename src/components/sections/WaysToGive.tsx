@@ -35,7 +35,7 @@ const ways = [
 
 export default function WaysToGive() {
   return (
-    <section style={{ background: '#F7F4F0', padding: '6rem 1.5rem' }}>
+    <section style={{ background: '#FFFFFF', padding: '6rem 1.5rem' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
 
         {/* Header */}
@@ -64,7 +64,7 @@ export default function WaysToGive() {
             <div
               key={way.id}
               style={{
-                background: way.highlight ? '#111111' : '#FFFFFF',
+                background: way.highlight ? '#111111' : '#F7F4F0',
                 border: way.highlight ? 'none' : '1px solid #E8E2DC',
                 borderRadius: '2px',
                 padding: '2rem',
