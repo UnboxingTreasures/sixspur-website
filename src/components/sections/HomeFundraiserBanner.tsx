@@ -19,6 +19,11 @@ function formatDate(iso: string) {
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
+// 8 sparks arranged in a rough circle, each with its own outward
+// direction set via CSS custom properties -- lets all 8 share one
+// @keyframes definition instead of needing 8 separate ones.
+const FIREWORK_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
+
 // Homepage teaser only -- large thermometer + a small link to the real
 // donate flow on /ways-to-give (where FundraiserThermometer.tsx handles
 // the actual PayPal checkout). This component doesn't process any
@@ -38,12 +43,17 @@ export default function HomeFundraiserBanner() {
   if (loading || !fundraiser) return null;
 
   const percent = fundraiser.goalAmount > 0 ? Math.min(100, (fundraiser.raisedAmount / fundraiser.goalAmount) * 100) : 0;
+  const isComplete = percent >= 100;
+  // Thermometer metaphor: blue (cold, far from goal) warms to red (hot,
+  // close to or at goal) as progress climbs past the halfway point.
+  const fillColor = percent >= 50 ? '#DC2626' : '#3B82F6';
 
   return (
     <>
-      {/* Subtle "alive" pulse on the filled portion of the thermometer --
-          a gentle glow breathing outward from the fill, suggesting
-          ongoing momentum toward the goal rather than a static bar. */}
+      {/* Subtle "alive" pulse on the filled portion -- a gentle
+          brightness breathe suggesting ongoing momentum, not a static
+          bar. Uses filter (not box-shadow) since box-shadow would get
+          clipped by the track's overflow:hidden. */}
       <style>{`
         @keyframes fundraiser-pulse {
           0%, 100% { filter: brightness(1); }
@@ -51,6 +61,21 @@ export default function HomeFundraiserBanner() {
         }
         .fundraiser-thermometer-fill {
           animation: fundraiser-pulse 2.2s ease-in-out infinite;
+        }
+        @keyframes firework-spark {
+          0% { transform: translate(0, 0) scale(1); opacity: 1; }
+          100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+        }
+        .firework-spark {
+          position: absolute;
+          top: 50%;
+          right: 0;
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #E77A2D;
+          animation: firework-spark 1.1s ease-out infinite;
+          pointer-events: none;
         }
       `}</style>
 
@@ -69,14 +94,42 @@ export default function HomeFundraiserBanner() {
 
         {/* Large thermometer */}
         <div style={{ maxWidth: '640px', margin: '0 auto' }}>
-          <div style={{ width: '100%', height: '36px', background: '#FFFFFF', borderRadius: '18px', overflow: 'hidden', border: '1.5px solid #E8E2DC' }}>
+          <div style={{ position: 'relative', width: '100%', height: '36px', background: '#FFFFFF', borderRadius: '18px', overflow: isComplete ? 'visible' : 'hidden', border: '1.5px solid #E8E2DC' }}>
             <div
               className="fundraiser-thermometer-fill"
-              style={{ width: `${percent}%`, height: '100%', background: '#E77A2D', transition: 'width 0.5s ease', borderRadius: '18px' }}
-            />
+              style={{
+                width: `${percent}%`, height: '100%', background: fillColor,
+                transition: 'width 0.5s ease, background 0.5s ease',
+                borderRadius: isComplete ? '18px' : '18px 0 0 18px',
+                position: 'relative',
+              }}
+            >
+              {/* Fireworks only render once the goal is fully met --
+                  overflow on the track switches to visible above so
+                  these aren't clipped at the rounded edge. */}
+              {isComplete && FIREWORK_ANGLES.map((angle, i) => {
+                const rad = (angle * Math.PI) / 180;
+                const distance = 28;
+                const tx = Math.cos(rad) * distance;
+                const ty = Math.sin(rad) * distance;
+                return (
+                  <span
+                    key={angle}
+                    className="firework-spark"
+                    style={{
+                      '--tx': `${tx}px`,
+                      '--ty': `${ty}px`,
+                      animationDelay: `${i * 0.08}s`,
+                    } as React.CSSProperties}
+                  />
+                );
+              })}
+            </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.75rem' }}>
-            <span style={{ color: '#111111', fontWeight: 800, fontSize: '1.1rem' }}>${fundraiser.raisedAmount.toFixed(0)} raised</span>
+            <span style={{ color: '#111111', fontWeight: 800, fontSize: '1.1rem' }}>
+              ${fundraiser.raisedAmount.toFixed(0)} raised{isComplete ? ' 🎉' : ''}
+            </span>
             <span style={{ color: '#888888', fontSize: '0.9rem' }}>Goal: ${fundraiser.goalAmount.toFixed(0)} · Ends {formatDate(fundraiser.closingDate)}</span>
           </div>
         </div>
