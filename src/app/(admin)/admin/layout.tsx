@@ -23,6 +23,7 @@ const CATEGORIES: { name: string; href: string }[] = [
   { name: 'Shop', href: '/admin/shop' },
   { name: 'Social Media', href: '/admin/social-media' },
   { name: 'Staff', href: '/admin/staff' },
+  { name: 'User Access', href: '/admin/user-access' },
 ];
 
 // Home only matches the exact /admin path. Everything else matches on
@@ -75,6 +76,25 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               Six Spur Ranch<br />Admin Panel
             </div>
           </div>
+
+          {/* Leaves the admin panel entirely -- (admin)/layout.tsx is its
+              own separate root layout with no Nav/Footer, so this is a
+              plain <a>, not a Next.js Link, to force a real navigation
+              rather than a client-side route change within the admin
+              shell. */}
+          <a
+            href="/"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+              padding: '10px 16px', fontSize: '12px', fontWeight: 600, color: '#6B7280',
+              borderBottom: '1px solid #E8E2DC', textDecoration: 'none', background: '#FAFAFA',
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
+            Back to Public Site
+          </a>
 
           {CATEGORIES.map(({ name, href }) => {
             const isActive = href === activeHref;
@@ -179,6 +199,19 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                 </div>
               );
             })}
+            <a
+              href="/"
+              style={{
+                display: 'flex', alignItems: 'center', gap: '8px',
+                padding: '16px 20px', fontSize: '15px', fontWeight: 500, color: '#6B7280',
+                textDecoration: 'none',
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 12H5M12 19l-7-7 7-7"/>
+              </svg>
+              Back to Public Site
+            </a>
           </div>
         )}
 

@@ -4,16 +4,34 @@ import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { getIdToken } from '@/lib/cognito'
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL
+
 export default function Nav() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   const cartCount = 0 // TODO Session 5: wire to cart state
 
   useEffect(() => {
-    getIdToken().then((token) => setIsLoggedIn(Boolean(token)))
+    getIdToken().then(async (token) => {
+      setIsLoggedIn(Boolean(token))
+      if (!token) return
+      // Admin status isn't in the token itself -- it's a database field
+      // (isAdmin on the donor record), so this needs an actual profile
+      // fetch, not just a token check.
+      try {
+        const res = await fetch(`${API_URL}/donor/profile`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const data = await res.json()
+        setIsAdmin(Boolean(data.isAdmin))
+      } catch (err) {
+        console.error('Failed to check admin status:', err)
+      }
+    })
   }, [])
 
   const handleSearch = (e: React.FormEvent) => {
@@ -59,7 +77,7 @@ export default function Nav() {
             <Link href='/contact'     style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }}>Contact</Link>
           </div>
 
-          {/* Search + Cart icons */}
+          {/* Search + Account + Admin + Cart icons */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexShrink: 0 }}>
             {/* Search */}
             <button
@@ -80,6 +98,15 @@ export default function Nav() {
                 <circle cx="12" cy="7" r="4"/>
               </svg>
             </Link>
+
+            {/* Admin -- only shown to people with isAdmin=true, invisible to everyone else */}
+            {isAdmin && (
+              <Link href='/admin' aria-label='Admin Panel' style={{ color: '#111111', display: 'flex', alignItems: 'center' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2 4 5v6c0 5.25 3.44 9.74 8 11 4.56-1.26 8-5.75 8-11V5l-8-3z"/>
+                </svg>
+              </Link>
+            )}
 
             {/* Cart */}
             <Link href='/cart' aria-label='Cart' style={{ position: 'relative', color: '#111111', display: 'flex', alignItems: 'center' }}>
@@ -183,7 +210,7 @@ export default function Nav() {
           <Link href='/shop'        style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }} onClick={() => setMobileOpen(false)}>Shop</Link>
           <Link href='/about'       style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }} onClick={() => setMobileOpen(false)}>About</Link>
           <Link href='/contact'     style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }} onClick={() => setMobileOpen(false)}>Contact</Link>
-          <div style={{ display: 'flex', gap: '16px', paddingTop: '4px' }}>
+          <div style={{ display: 'flex', gap: '16px', paddingTop: '4px', flexWrap: 'wrap' }}>
             <Link href={isLoggedIn ? '/account' : '/account/login'} style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => setMobileOpen(false)}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
@@ -191,6 +218,14 @@ export default function Nav() {
               </svg>
               {isLoggedIn ? 'My Account' : 'Log In'}
             </Link>
+            {isAdmin && (
+              <Link href='/admin' style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => setMobileOpen(false)}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2 4 5v6c0 5.25 3.44 9.74 8 11 4.56-1.26 8-5.75 8-11V5l-8-3z"/>
+                </svg>
+                Admin Panel
+              </Link>
+            )}
             <Link href='/cart' style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => setMobileOpen(false)}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
