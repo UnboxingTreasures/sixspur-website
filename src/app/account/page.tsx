@@ -13,12 +13,18 @@ interface Donation {
   type: "one-time" | "recurring";
   status: string;
   receiptUrl?: string;
+  campaignId?: string;
   campaignTitle?: string;
   createdAt: string;
 }
 
 function getDonationDescriptor(d: Donation): string {
   if (d.campaignTitle) return `Fundraiser: ${d.campaignTitle}`;
+  // Fallback for donations tagged with a campaign before campaignTitle
+  // existed as a field (or if a title lookup ever silently fails) --
+  // still correctly shows this as a fundraiser donation rather than
+  // misleadingly falling through to "One-time".
+  if (d.campaignId) return "Fundraiser";
   return d.type === "recurring" ? "Monthly" : "One-time";
 }
 
