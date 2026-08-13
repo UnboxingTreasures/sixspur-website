@@ -6,16 +6,16 @@
 //   POST /donate/create-order   — creates a PayPal order, returns its ID for the frontend's PayPal button
 //   POST /donate/capture-order  — captures a donor-approved order, records the donation, sends the receipt
 //
-// UPDATED for Fundraiser (Session 13): both routes accept an optional
-// campaignId in the body -- passed through untouched on create (PayPal
-// doesn't need to know about it), stored on the donation record on
-// capture so it counts toward that fundraiser's live total.
+// Accepts an optional campaignId in the body on both routes -- passed
+// through untouched on create (PayPal doesn't need to know about it),
+// stored on the donation record on capture so it counts toward that
+// fundraiser's live total.
 //
 // Recurring/monthly donations are NOT handled by this Lambda -- separate,
 // not-yet-built work, see the recurring donations design doc.
 
 const { createOrder, captureOrder } = require('./paypal');
-const { createDonationFromCapture } = require('./dynamo');
+const { createDonationFromCapture, updateDonationReceipt } = require('./dynamo');
 const { generateAndSendReceipt } = require('./receipt');
 
 const CORS_HEADERS = {
@@ -92,6 +92,11 @@ exports.handler = async (event) => {
         try {
           const receiptUrl = await generateAndSendReceipt(donation);
           donation.receiptUrl = receiptUrl;
+          // The fix: actually persist it, not just mutate the in-memory
+          // object being returned below. Without this, the download
+          // link only ever worked on the very first response and
+          // silently vanished on every later page load.
+          await updateDonationReceipt(donation.donationId, receiptUrl);
         } catch (receiptErr) {
           console.error(`Donation ${donation.donationId} captured but receipt generation failed:`, receiptErr);
         }

@@ -22,7 +22,7 @@ function formatDate(iso: string) {
 // 8 sparks arranged in a rough circle, each with its own outward
 // direction set via CSS custom properties -- lets all 8 share one
 // @keyframes definition instead of needing 8 separate ones.
-const FIREWORK_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
+const FIREWORK_ANGLES = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330];
 
 // Traditional bulb-and-tube thermometer, drawn as SVG for precise
 // control over the shape -- much cleaner than faking it with CSS.
@@ -68,17 +68,19 @@ function ThermometerGraphic({ percent, fillColor, isComplete }: { percent: numbe
             top-center of the filled tube. */}
         {isComplete && FIREWORK_ANGLES.map((angle, i) => {
           const rad = (angle * Math.PI) / 180;
-          const distance = 26;
+          const distance = 46;
           const tx = Math.cos(rad) * distance;
           const ty = Math.sin(rad) * distance;
+          const color = i % 2 === 0 ? '#E77A2D' : '#FFC857';
           return (
-            <foreignObject key={angle} x="60" y="10" width="20" height="20" style={{ overflow: 'visible' }}>
+            <foreignObject key={angle} x="30" y="-20" width="80" height="80" style={{ overflow: 'visible' }}>
               <span
                 className="firework-spark"
                 style={{
                   '--tx': `${tx}px`,
                   '--ty': `${ty}px`,
-                  animationDelay: `${i * 0.08}s`,
+                  animationDelay: `${i * 0.06}s`,
+                  background: color,
                 } as React.CSSProperties}
               />
             </foreignObject>
@@ -127,16 +129,16 @@ export default function HomeFundraiserBanner() {
           animation: fundraiser-pulse 2.2s ease-in-out infinite;
         }
         @keyframes firework-spark {
-          0% { transform: translate(0, 0) scale(1); opacity: 1; }
+          0% { transform: translate(0, 0) scale(0.4); opacity: 1; }
+          15% { transform: translate(calc(var(--tx) * 0.2), calc(var(--ty) * 0.2)) scale(1.3); opacity: 1; }
           100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
         }
         .firework-spark {
           display: block;
-          width: 6px;
-          height: 6px;
+          width: 10px;
+          height: 10px;
           border-radius: 50%;
-          background: #E77A2D;
-          animation: firework-spark 1.1s ease-out infinite;
+          animation: firework-spark 0.9s ease-out infinite;
         }
       `}</style>
 
