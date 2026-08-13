@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { getIdToken } from "@/lib/cognito";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 const AGE_UNITS = ["years", "months"];
@@ -37,15 +38,26 @@ function slugify(name: string): string {
   return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
+async function authedFetch(path: string, options: RequestInit = {}) {
+  const token = await getIdToken();
+  if (!token) throw new Error("Not logged in");
+  return fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: { ...options.headers, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+  });
+}
+
 async function uploadPhoto(animalId: string, file: File): Promise<string> {
-  const presignRes = await fetch(`${API_URL}/admin/adoptable-animals/${animalId}/photos/presign`, {
+  const presignRes = await authedFetch(`/admin/adoptable-animals/${animalId}/photos/presign`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ fileName: file.name }),
   });
   const presignData = await presignRes.json();
   if (!presignRes.ok) throw new Error(presignData.error || "Failed to get upload URL");
 
+  // The actual S3 PUT uses the presigned URL itself as authorization --
+  // no bearer token here, and none needed; adding one would break the
+  // presigned signature.
   const uploadRes = await fetch(presignData.uploadUrl, {
     method: "PUT",
     body: file,
@@ -245,7 +257,7 @@ export default function AdminAdoptableAnimalsPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API_URL}/admin/adoptable-animals`);
+      const res = await authedFetch("/admin/adoptable-animals");
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load animals");
       setAnimals(data.animals || []);
@@ -257,6 +269,8 @@ export default function AdminAdoptableAnimalsPage() {
   };
 
   const fetchTypes = async () => {
+    // Public route -- deliberately NOT authedFetch. /farm-animals has no
+    // admin gate and never needs one; this just reads the public type list.
     try {
       const res = await fetch(`${API_URL}/farm-animals`);
       const data = await res.json();
@@ -287,9 +301,8 @@ export default function AdminAdoptableAnimalsPage() {
       const predictedId = slugify(addDraft.name);
       const seedPhotoUrl = await uploadPhoto(predictedId, addFile);
 
-      const res = await fetch(`${API_URL}/admin/adoptable-animals`, {
+      const res = await authedFetch("/admin/adoptable-animals", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...draftToPayload(addDraft), seedPhotoUrl }),
       });
       const data = await res.json();
@@ -312,9 +325,8 @@ export default function AdminAdoptableAnimalsPage() {
 
     setSavingId(animalId);
     try {
-      const res = await fetch(`${API_URL}/admin/adoptable-animals/${animalId}`, {
+      const res = await authedFetch(`/admin/adoptable-animals/${animalId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(draftToPayload(draft)),
       });
       const data = await res.json();
@@ -333,9 +345,8 @@ export default function AdminAdoptableAnimalsPage() {
     setUploadingPhotoFor(animalId);
     try {
       const cdnUrl = await uploadPhoto(animalId, file);
-      const res = await fetch(`${API_URL}/admin/adoptable-animals/${animalId}/photos`, {
+      const res = await authedFetch(`/admin/adoptable-animals/${animalId}/photos`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ photoUrls: [cdnUrl] }),
       });
       const data = await res.json();
@@ -353,9 +364,8 @@ export default function AdminAdoptableAnimalsPage() {
     const { animalId, photoUrl } = pendingRemovePhoto;
     setRemovingPhoto(photoUrl);
     try {
-      const res = await fetch(`${API_URL}/admin/adoptable-animals/${animalId}/photos`, {
+      const res = await authedFetch(`/admin/adoptable-animals/${animalId}/photos`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ photoUrl }),
       });
       const data = await res.json();
@@ -372,9 +382,8 @@ export default function AdminAdoptableAnimalsPage() {
   const handleSetThumbnail = async (animalId: string, photoUrl: string) => {
     setSettingThumbnail(photoUrl);
     try {
-      const res = await fetch(`${API_URL}/admin/adoptable-animals/${animalId}/thumbnail`, {
+      const res = await authedFetch(`/admin/adoptable-animals/${animalId}/thumbnail`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ photoUrl }),
       });
       const data = await res.json();
@@ -391,7 +400,7 @@ export default function AdminAdoptableAnimalsPage() {
     if (!pendingDelete) return;
     setDeleting(true);
     try {
-      const res = await fetch(`${API_URL}/admin/adoptable-animals/${pendingDelete.animalId}`, { method: "DELETE" });
+      const res = await authedFetch(`/admin/adoptable-animals/${pendingDelete.animalId}`, { method: "DELETE" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Delete failed");
       setAnimals((prev) => prev.filter((a) => a.animalId !== pendingDelete.animalId));
