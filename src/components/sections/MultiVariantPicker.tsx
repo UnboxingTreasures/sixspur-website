@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface VariantDimension {
   label: string;
@@ -29,7 +29,23 @@ interface MultiVariantPickerProps {
 // No cart/checkout system exists yet -- this shows availability and lets
 // the visitor select options, but doesn't wire up to any purchase action.
 export default function MultiVariantPicker({ dimensions, combinations, onFirstDimensionSelect }: MultiVariantPickerProps) {
-  const [selected, setSelected] = useState<Record<string, string>>({});
+  // Defaults to the first dimension's first value on load, matching
+  // Amazon-style behavior -- otherwise the gallery would show every
+  // variant's photos mixed together until the customer clicks something.
+  const [selected, setSelected] = useState<Record<string, string>>(() => {
+    const first = dimensions[0];
+    return first && first.values.length > 0 ? { [first.label]: first.values[0] } : {};
+  });
+
+  useEffect(() => {
+    const first = dimensions[0];
+    if (first && first.values.length > 0) {
+      onFirstDimensionSelect?.(first.values[0]);
+    }
+    // Only on mount -- this sets the INITIAL default photo set. Further
+    // changes happen through handleSelect below when the customer clicks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSelect = (dimLabel: string, value: string, dimIndex: number) => {
     setSelected((prev) => ({ ...prev, [dimLabel]: value }));
