@@ -47,6 +47,12 @@ function formatDate(iso) {
  * is the standard line for a pure donation, which is the only case this
  * function currently handles -- see the goodsOrServicesDescription note
  * below for what a future gift-with-benefit donation would need).
+ *
+ * UPDATED same session: adds a Campaign line when the donation was made
+ * toward a specific fundraiser -- Type still correctly says "One-time
+ * contribution" (that's a true, separate fact about payment mechanics,
+ * one-time vs recurring), the campaign name is additional information,
+ * not a replacement for it.
  */
 function buildReceiptPdf(donation) {
   return new Promise((resolve, reject) => {
@@ -69,6 +75,9 @@ function buildReceiptPdf(donation) {
     doc.text(`Donor: ${donation.donorEmail}`);
     doc.text(`Amount: ${formatCurrency(donation.amount)}`);
     doc.text(`Type: ${donation.type === 'recurring' ? 'Recurring (monthly) contribution' : 'One-time contribution'}`);
+    if (donation.campaignTitle) {
+      doc.text(`Campaign: ${donation.campaignTitle}`);
+    }
     doc.moveDown(1.5);
 
     // Standard IRS-required statement. NOTE: this assumes no goods or
@@ -105,7 +114,8 @@ async function uploadReceiptPdf(donationId, pdfBuffer) {
 async function emailReceipt(donation, receiptUrl) {
   const subject = `Your Six Spur Ranch donation receipt — ${formatCurrency(donation.amount)}`;
   const bodyText =
-    `Thank you for your generous ${formatCurrency(donation.amount)} donation to Six Spur Ranch and Rescue.\n\n` +
+    `Thank you for your generous ${formatCurrency(donation.amount)} donation to Six Spur Ranch and Rescue` +
+    `${donation.campaignTitle ? ` toward ${donation.campaignTitle}` : ''}.\n\n` +
     `Your official tax receipt is attached/available here: ${receiptUrl}\n\n` +
     `You can also view your full donation history anytime by logging into your account at sixspurranch.org/account.\n\n` +
     `Thank you for supporting the animals at Six Spur Ranch and Rescue.`;

@@ -157,14 +157,6 @@ export default function AdoptPage() {
             </>
           )}
 
-          {/* General apply CTA */}
-          <div className="mt-16 border-t border-spur-tan-light pt-12 text-center">
-            <p className="text-gray-600 text-sm mb-4">Don't see the right match yet? Submit a general application and we'll reach out when a new animal becomes available.</p>
-            <Link href="/adopt/apply" className="inline-block bg-spur-orange text-white font-semibold px-8 py-3 rounded hover:bg-spur-orange-dark transition-colors">
-              Submit a General Application
-            </Link>
-          </div>
-
         </div>
       </section>
     </main>

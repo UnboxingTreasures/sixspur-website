@@ -2,9 +2,9 @@
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "DonationsWrite",
+      "Sid": "DonationsReadWrite",
       "Effect": "Allow",
-      "Action": ["dynamodb:PutItem"],
+      "Action": ["dynamodb:PutItem", "dynamodb:UpdateItem"],
       "Resource": "arn:aws:dynamodb:us-east-1:658965339779:table/donations"
     },
     {
