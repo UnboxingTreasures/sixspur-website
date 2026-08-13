@@ -2,36 +2,39 @@
 
 import { useState } from 'react';
 
-interface SizeEntry {
-  size: string;
+interface VariantEntry {
+  value: string;
   stock: number;
+  photoUrl?: string;
 }
 
 interface SizePickerProps {
-  sizes: SizeEntry[];
+  label: string; // admin-defined dimension name, e.g. "Size" or "Style" -- was hardcoded "Size" before
+  variants: VariantEntry[];
 }
 
 // No cart/checkout system exists yet -- this shows availability and lets
-// the visitor select a size, but doesn't wire up to any purchase action.
-// Sold-out sizes are shown but disabled, not hidden, so it's clear the
-// size exists and might come back in stock rather than looking unavailable.
-export default function SizePicker({ sizes }: SizePickerProps) {
+// the visitor select an option, but doesn't wire up to any purchase
+// action. Sold-out options are shown but disabled, not hidden, so it's
+// clear the option exists and might come back in stock rather than
+// looking unavailable.
+export default function SizePicker({ label, variants }: SizePickerProps) {
   const [selected, setSelected] = useState<string | null>(null);
 
   return (
     <div>
       <p style={{ color: '#111111', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.6rem' }}>
-        Size
+        {label}
       </p>
       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-        {sizes.map(({ size, stock }) => {
+        {variants.map(({ value, stock }) => {
           const soldOut = stock <= 0;
-          const isSelected = selected === size;
+          const isSelected = selected === value;
           return (
             <button
-              key={size}
+              key={value}
               disabled={soldOut}
-              onClick={() => setSelected(size)}
+              onClick={() => setSelected(value)}
               style={{
                 minWidth: '48px',
                 padding: '0.5rem 0.75rem',
@@ -45,9 +48,9 @@ export default function SizePicker({ sizes }: SizePickerProps) {
                 textDecoration: soldOut ? 'line-through' : 'none',
                 position: 'relative',
               }}
-              title={soldOut ? `${size} — sold out` : `${size} — ${stock} in stock`}
+              title={soldOut ? `${value} — sold out` : `${value} — ${stock} in stock`}
             >
-              {size}
+              {value}
             </button>
           );
         })}

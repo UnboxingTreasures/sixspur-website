@@ -4,9 +4,10 @@ import SizePicker from '@/components/sections/SizePicker';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-interface SizeEntry {
-  size: string;
+interface VariantEntry {
+  value: string;
   stock: number;
+  photoUrl?: string;
 }
 
 interface ShopItemDetail {
@@ -17,8 +18,9 @@ interface ShopItemDetail {
   category: string;
   photos: string[];
   thumbnailUrl: string;
-  hasSizes: boolean;
-  sizes?: SizeEntry[];
+  hasVariants: boolean;
+  variantLabel?: string;
+  variants?: VariantEntry[];
   stock?: number;
 }
 
@@ -49,8 +51,8 @@ export default async function ShopItemPage({ params }: { params: Promise<{ id: s
   if (!item) notFound();
 
   const photos = item.photos && item.photos.length > 0 ? item.photos : [item.thumbnailUrl];
-  const soldOut = item.hasSizes
-    ? (item.sizes || []).every((s) => s.stock <= 0)
+  const soldOut = item.hasVariants
+    ? (item.variants || []).every((v) => v.stock <= 0)
     : (item.stock ?? 0) <= 0;
 
   return (
@@ -68,9 +70,9 @@ export default async function ShopItemPage({ params }: { params: Promise<{ id: s
               <p className="text-gray-600 leading-relaxed mb-6">{item.description}</p>
             )}
 
-            {item.hasSizes && item.sizes && item.sizes.length > 0 && (
+            {item.hasVariants && item.variants && item.variants.length > 0 && (
               <div className="mb-6">
-                <SizePicker sizes={item.sizes} />
+                <SizePicker label={item.variantLabel || 'Options'} variants={item.variants} />
               </div>
             )}
 
