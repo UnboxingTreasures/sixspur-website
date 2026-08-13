@@ -1,0 +1,10 @@
+{
+  "name": "sixspur-fundraisers",
+  "version": "1.0.0",
+  "description": "Public read access to the active fundraiser",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0"
+  }
+}

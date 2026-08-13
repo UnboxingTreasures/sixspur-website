@@ -6,8 +6,13 @@
 //   POST /donate/create-order   — creates a PayPal order, returns its ID for the frontend's PayPal button
 //   POST /donate/capture-order  — captures a donor-approved order, records the donation, sends the receipt
 //
+// UPDATED for Fundraiser (Session 13): both routes accept an optional
+// campaignId in the body -- passed through untouched on create (PayPal
+// doesn't need to know about it), stored on the donation record on
+// capture so it counts toward that fundraiser's live total.
+//
 // Recurring/monthly donations are NOT handled by this Lambda -- separate,
-// not-yet-built work, see paypal-recurring-design.md.
+// not-yet-built work, see the recurring donations design doc.
 
 const { createOrder, captureOrder } = require('./paypal');
 const { createDonationFromCapture } = require('./dynamo');
@@ -81,6 +86,7 @@ exports.handler = async (event) => {
           amount: Number(capture.amount.value),
           currency: capture.amount.currency_code,
           paypalTransactionId: capture.id,
+          campaignId: body.campaignId || undefined,
         });
 
         try {

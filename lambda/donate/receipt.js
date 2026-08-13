@@ -1,12 +1,9 @@
 // receipt.js
 // Shared module for generating a 501(c)(3) donation tax receipt (PDF) and
 // emailing it to the donor via SES. Not its own Lambda -- gets copied
-// into whichever Lambda needs to trigger a receipt (adminDonations for
-// manual entries now; the future PayPal checkout Lambda will need this
-// file copied in too once that's built). Same "duplicate shared code per
-// Lambda" pattern already used for s3.js/dynamo.js throughout this
-// project, rather than introducing a Lambda Layer (a pattern not used
-// anywhere else here).
+// into whichever Lambda needs to trigger a receipt (currently just the
+// donate Lambda, since manual entry -- and its copy of this file in
+// adminDonations -- was removed).
 //
 // PER-CHARGE receipt only. The annual summary letter (scoped Aug 11,
 // see project notes Section 13) is separate, not-yet-built work -- a
@@ -31,7 +28,7 @@ const FROM_ADDRESS = process.env.SES_FROM_ADDRESS || 'noreply@sixspurranch.org';
 // everywhere else. A tax receipt is exactly the legal-context case.
 const ORG_LEGAL_NAME = 'Six Spur Ranch Company';
 const ORG_EIN = '41-4123317';
-const ORG_ADDRESS = 'Maud, Texas'; // TODO: confirm full mailing address for the PDF -- placeholder, needs the real street address before this goes live
+const ORG_ADDRESS = 'PO Box 333, Nash, TX 75569'; // confirmed Aug 12 -- Richard's PO Box, not the county line physical address
 
 function formatCurrency(amount) {
   return `$${Number(amount).toFixed(2)}`;
@@ -125,12 +122,12 @@ async function emailReceipt(donation, receiptUrl) {
 
 /**
  * Main entry point -- call this after a donation record is created
- * (manual entry now; PayPal capture success once that's built). Returns
- * the receipt URL so the caller can store it on the donation record.
- * Does NOT throw on email failure -- a failed receipt email shouldn't
- * un-record a successful donation, but it DOES throw on PDF/S3 failure,
- * since a donation with no receipt at all is a real problem worth
- * surfacing loudly rather than silently swallowing.
+ * (PayPal capture success). Returns the receipt URL so the caller can
+ * store it on the donation record. Does NOT throw on email failure -- a
+ * failed receipt email shouldn't un-record a successful donation, but
+ * it DOES throw on PDF/S3 failure, since a donation with no receipt at
+ * all is a real problem worth surfacing loudly rather than silently
+ * swallowing.
  */
 async function generateAndSendReceipt(donation) {
   const pdfBuffer = await buildReceiptPdf(donation);

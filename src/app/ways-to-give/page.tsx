@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getIdToken } from "@/lib/cognito";
+import FundraiserThermometer from "@/components/sections/FundraiserThermometer";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
@@ -40,10 +41,6 @@ export default function WaysToGivePage() {
 
   const activeAmount = custom ? parseFloat(custom) : selected;
 
-  // Loads the PayPal JS SDK once, on demand -- not on every page load,
-  // only once someone's actually confirmed they're ready to donate
-  // (logged in, amount selected). Sandbox client ID for now, matches
-  // PAYPAL_MODE=sandbox on the backend.
   const loadPayPalScript = useCallback((): Promise<void> => {
     return new Promise((resolve, reject) => {
       if (window.paypal) {
@@ -64,8 +61,6 @@ export default function WaysToGivePage() {
   useEffect(() => {
     if (!showPayPal || !paypalContainerRef.current || !window.paypal) return;
 
-    // Clear any previous render (e.g. if the amount changed and this
-    // effect re-runs) before rendering fresh buttons.
     paypalContainerRef.current.innerHTML = "";
 
     window.paypal.Buttons({
@@ -268,6 +263,13 @@ export default function WaysToGivePage() {
           </p>
 
         </div>
+
+        {/* Active fundraiser campaign, if any -- visually distinct card,
+            deliberately NOT a third frequency option, so it doesn't read
+            as part of the Give Once/Monthly choice above. Renders
+            nothing at all if no fundraiser is currently active. */}
+        <FundraiserThermometer />
+
       </section>
 
       {/* Other ways to help */}
