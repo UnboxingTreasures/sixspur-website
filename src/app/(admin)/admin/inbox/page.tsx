@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { getIdToken } from "@/lib/cognito";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -42,6 +43,15 @@ function AdminInboxPageInner() {
   const [performingBatch, setPerformingBatch] = useState(false);
   const [showDeleted, setShowDeleted] = useState(searchParams.get("show_deleted") === "true");
   const [restoringId, setRestoringId] = useState<string | null>(null);
+
+  const authedFetch = async (path: string, options: RequestInit = {}) => {
+    const token = await getIdToken();
+    if (!token) throw new Error("Not logged in");
+    return fetch(`${API_URL}${path}`, {
+      ...options,
+      headers: { ...options.headers, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+  };
 
   // Builds the destination URL for opening a message, carrying the current
   // filter state along as query params. This is what lets "Back to Inbox"
@@ -94,7 +104,7 @@ function AdminInboxPageInner() {
         params.set("include_deleted", "true");
       }
 
-      const res = await fetch(`${API_URL}/admin/inbox?${params.toString()}`);
+      const res = await authedFetch(`/admin/inbox?${params.toString()}`);
       const data = await res.json();
 
       if (data.success) {
@@ -106,7 +116,7 @@ function AdminInboxPageInner() {
       }
     } catch (err) {
       console.error("Error fetching messages:", err);
-      setError("Failed to load messages");
+      setError(err instanceof Error ? err.message : "Failed to load messages");
     } finally {
       setLoading(false);
     }
@@ -151,9 +161,8 @@ function AdminInboxPageInner() {
 
     try {
       setPerformingBatch(true);
-      const res = await fetch(`${API_URL}/admin/inbox/batch`, {
+      const res = await authedFetch(`/admin/inbox/batch`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message_ids: selectedIds, action }),
       });
 
@@ -167,7 +176,7 @@ function AdminInboxPageInner() {
       }
     } catch (err) {
       console.error("Error performing batch action:", err);
-      alert("Batch operation failed");
+      alert(err instanceof Error ? err.message : "Batch operation failed");
     } finally {
       setPerformingBatch(false);
     }
@@ -176,7 +185,7 @@ function AdminInboxPageInner() {
   const restoreMessage = async (messageId: string) => {
     try {
       setRestoringId(messageId);
-      const res = await fetch(`${API_URL}/admin/inbox/${messageId}/restore`, {
+      const res = await authedFetch(`/admin/inbox/${messageId}/restore`, {
         method: "PATCH",
       });
       const data = await res.json();
@@ -188,7 +197,7 @@ function AdminInboxPageInner() {
       }
     } catch (err) {
       console.error("Error restoring message:", err);
-      alert("Failed to restore message");
+      alert(err instanceof Error ? err.message : "Failed to restore message");
     } finally {
       setRestoringId(null);
     }

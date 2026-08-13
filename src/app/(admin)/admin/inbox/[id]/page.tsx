@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { getIdToken } from "@/lib/cognito";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -65,6 +66,15 @@ function AdminInboxDetailPageInner() {
   const [sending, setSending] = useState(false);
   const [replySuccess, setReplySuccess] = useState(false);
 
+  const authedFetch = async (path: string, options: RequestInit = {}) => {
+    const token = await getIdToken();
+    if (!token) throw new Error("Not logged in");
+    return fetch(`${API_URL}${path}`, {
+      ...options,
+      headers: { ...options.headers, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+  };
+
   const replyTemplates = [
     {
       label: "Adoption Inquiry",
@@ -105,7 +115,7 @@ function AdminInboxDetailPageInner() {
   const fetchMessage = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_URL}/admin/inbox/${messageId}`);
+      const res = await authedFetch(`/admin/inbox/${messageId}`);
       const data = await res.json();
 
       if (data.success) {
@@ -120,7 +130,7 @@ function AdminInboxDetailPageInner() {
       }
     } catch (err) {
       console.error("Error fetching message:", err);
-      setError("Failed to load message");
+      setError(err instanceof Error ? err.message : "Failed to load message");
     } finally {
       setLoading(false);
     }
@@ -129,9 +139,8 @@ function AdminInboxDetailPageInner() {
   const markAsRead = async (isRead: boolean) => {
     try {
       setMarkingRead(true);
-      const res = await fetch(`${API_URL}/admin/inbox/${messageId}/read`, {
+      const res = await authedFetch(`/admin/inbox/${messageId}/read`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ is_read: isRead }),
       });
 
@@ -154,7 +163,7 @@ function AdminInboxDetailPageInner() {
 
     try {
       setDeleting(true);
-      const res = await fetch(`${API_URL}/admin/inbox/${messageId}`, { method: "DELETE" });
+      const res = await authedFetch(`/admin/inbox/${messageId}`, { method: "DELETE" });
       const data = await res.json();
 
       if (data.success) {
@@ -164,7 +173,7 @@ function AdminInboxDetailPageInner() {
       }
     } catch (err) {
       console.error("Error deleting message:", err);
-      alert("Failed to delete message");
+      alert(err instanceof Error ? err.message : "Failed to delete message");
     } finally {
       setDeleting(false);
     }
@@ -173,7 +182,7 @@ function AdminInboxDetailPageInner() {
   const restoreMessage = async () => {
     try {
       setRestoring(true);
-      const res = await fetch(`${API_URL}/admin/inbox/${messageId}/restore`, {
+      const res = await authedFetch(`/admin/inbox/${messageId}/restore`, {
         method: "PATCH",
       });
       const data = await res.json();
@@ -185,7 +194,7 @@ function AdminInboxDetailPageInner() {
       }
     } catch (err) {
       console.error("Error restoring message:", err);
-      alert("Failed to restore message");
+      alert(err instanceof Error ? err.message : "Failed to restore message");
     } finally {
       setRestoring(false);
     }
@@ -202,9 +211,8 @@ function AdminInboxDetailPageInner() {
     try {
       setSending(true);
 
-      const sendRes = await fetch(`${API_URL}/admin/inbox/${messageId}/reply`, {
+      const sendRes = await authedFetch(`/admin/inbox/${messageId}/reply`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           to_email: message.fromEmail,
           subject: message.subject,
@@ -219,9 +227,8 @@ function AdminInboxDetailPageInner() {
         return;
       }
 
-      const markRes = await fetch(`${API_URL}/admin/inbox/${messageId}/replied`, {
+      const markRes = await authedFetch(`/admin/inbox/${messageId}/replied`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
       });
 
       const markData = await markRes.json();
@@ -237,7 +244,7 @@ function AdminInboxDetailPageInner() {
       }
     } catch (err) {
       console.error("Error sending reply:", err);
-      alert("Failed to send reply");
+      alert(err instanceof Error ? err.message : "Failed to send reply");
     } finally {
       setSending(false);
     }

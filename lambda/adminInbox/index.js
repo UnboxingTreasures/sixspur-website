@@ -11,6 +11,13 @@
 //
 // Ported from Unboxing Treasures admin inbox backend — order logic removed,
 // adapted from MySQL to DynamoDB.
+//
+// AUTH: every route here requires a verified JWT (via the same
+// authorizer protecting /donor/* and /donate/*) AND isAdmin=true on
+// the donor record -- see requireAdmin() in adminAuth.js. Auth failures
+// go through fail() (not a raw respond()) so they match this Lambda's
+// existing { success: false, message } response shape the frontend
+// already expects.
 
 const {
   listMessages,
@@ -27,10 +34,11 @@ const {
   setThreadReadStatus,
 } = require('./dynamo');
 const { sendReply } = require('./ses');
+const { requireAdmin } = require('./adminAuth');
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type,Authorization',
   'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
 };
 
@@ -53,6 +61,11 @@ function fail(statusCode, message) {
 exports.handler = async (event) => {
   if (event.requestContext?.http?.method === 'OPTIONS') {
     return respond(200, {});
+  }
+
+  const auth = await requireAdmin(event);
+  if (!auth.authorized) {
+    return fail(auth.statusCode, auth.error);
   }
 
   const routeKey = event.routeKey; // e.g. "GET /admin/inbox/{id}"
