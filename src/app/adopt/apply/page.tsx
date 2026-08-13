@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -45,12 +45,23 @@ const optionalTag = <span className="text-gray-400 font-normal text-xs ml-1">(op
 
 function AdoptApplyForm() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const animalParam = searchParams.get("animal") || "";
 
   const [step, setStep] = useState(1);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+
+  // Applications must always be tied to a specific adoptable animal --
+  // no general/someday application. If someone lands here without an
+  // ?animal= param (typed the URL directly, old bookmark, etc.), send
+  // them to the animal listing instead of showing the form at all.
+  useEffect(() => {
+    if (!animalParam) {
+      router.replace("/adopt");
+    }
+  }, [animalParam, router]);
 
   // Step 1
   const [firstName, setFirstName] = useState("");
@@ -230,6 +241,13 @@ function AdoptApplyForm() {
     }
   };
 
+  if (!animalParam) {
+    // Redirect is already triggered by the effect above -- this just
+    // avoids rendering the full form for a split second while that
+    // happens.
+    return <main className="min-h-screen bg-white" />;
+  }
+
   if (submitted) {
     return (
       <main className="min-h-screen bg-white">
@@ -385,8 +403,11 @@ function AdoptApplyForm() {
               </div>
 
               <div>
-                <label className={labelClass}>Which animals are you interested in? {requiredStar}</label>
-                <input value={interestedIn} onChange={(e) => setInterestedIn(e.target.value)} placeholder="e.g. Dogs, Goats" className={inputClass} />
+                <label className={labelClass}>Which animal are you interested in?</label>
+                <div className={inputClass + " bg-spur-tan-light cursor-not-allowed text-gray-600"}>
+                  {interestedIn}
+                </div>
+                <p className={hintClass}>This application is for {interestedIn}. Want to apply for a different animal? <a href="/adopt" className="text-spur-orange hover:underline">Browse adoptable animals</a>.</p>
               </div>
 
               <div className="pt-4 flex justify-end">
