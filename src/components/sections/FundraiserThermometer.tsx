@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -27,6 +27,76 @@ interface Fundraiser {
 function formatDate(iso: string) {
   const d = new Date(iso + "T00:00:00");
   return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+}
+
+// 8 sparks arranged in a rough circle, sharing one @keyframes via CSS
+// custom properties set per-spark (same technique as the homepage
+// version) -- burst origin is the RIGHT edge of the fill here, since
+// this thermometer grows left-to-right instead of bottom-to-top.
+const FIREWORK_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
+
+// Horizontal counterpart to the homepage's vertical bulb-and-tube
+// thermometer -- same visual language (traditional shape, tick marks,
+// blue/red heat states, pulse, fireworks at 100%), just rotated to fit
+// this page's layout: bulb on the left (start), tube extending right
+// toward the goal, matching natural reading direction.
+function ThermometerGraphicHorizontal({ percent, fillColor, isComplete }: { percent: number; fillColor: string; isComplete: boolean }) {
+  const tubeInnerLeft = 60;
+  const tubeInnerRight = 280;
+  const tubeInnerWidth = tubeInnerRight - tubeInnerLeft;
+  const fillWidth = (percent / 100) * tubeInnerWidth;
+
+  const ticks = [0, 20, 40, 60, 80, 100];
+
+  return (
+    <div style={{ width: '100%', overflowX: 'auto' }}>
+      <svg width="320" height="110" viewBox="0 0 320 110" style={{ display: 'block', margin: '0 auto' }}>
+        {/* Tick marks + labels, below the tube */}
+        {ticks.map((tick) => {
+          const x = tubeInnerLeft + (tick / 100) * tubeInnerWidth;
+          return (
+            <g key={tick}>
+              <line x1={x} y1="72" x2={x} y2="80" stroke="#111111" strokeWidth="2" />
+              <text x={x} y="94" fontSize="10" fontWeight="700" fill="#111111" textAnchor="middle">{tick}</text>
+            </g>
+          );
+        })}
+
+        {/* Outer outline: bulb + tube */}
+        <circle cx="35" cy="50" r="35" fill="#FFFFFF" stroke="#111111" strokeWidth="6" />
+        <rect x="55" y="30" width="230" height="40" rx="20" fill="#FFFFFF" stroke="#111111" strokeWidth="6" />
+
+        {/* Fill: bulb always full, tube portion grows rightward */}
+        <circle cx="35" cy="50" r="27" fill={fillColor} />
+        <rect
+          className="fundraiser-thermometer-fill"
+          x="41" y="36" width={fillWidth + 20} height="28" rx="14"
+          fill={fillColor}
+        />
+
+        {/* Fireworks, only once the goal is fully met -- burst from the
+            right edge of the fill. */}
+        {isComplete && FIREWORK_ANGLES.map((angle, i) => {
+          const rad = (angle * Math.PI) / 180;
+          const distance = 24;
+          const tx = Math.cos(rad) * distance;
+          const ty = Math.sin(rad) * distance;
+          return (
+            <foreignObject key={angle} x="270" y="40" width="20" height="20" style={{ overflow: 'visible' }}>
+              <span
+                className="firework-spark"
+                style={{
+                  '--tx': `${tx}px`,
+                  '--ty': `${ty}px`,
+                  animationDelay: `${i * 0.08}s`,
+                } as React.CSSProperties}
+              />
+            </foreignObject>
+          );
+        })}
+      </svg>
+    </div>
+  );
 }
 
 // Self-contained: loads its own copy of the PayPal SDK and handles its
@@ -103,6 +173,7 @@ export default function FundraiserThermometer() {
           if (!res.ok) throw new Error(result.error || "Failed to confirm donation");
           setDonationResult("success");
           setShowPayPal(false);
+          setAmount("");
           // Refresh so the thermometer reflects the new total immediately.
           fetch(`${API_URL}/fundraisers/active`).then((r) => r.json()).then((d) => setFundraiser(d.fundraiser));
         } catch (err: unknown) {
@@ -147,9 +218,34 @@ export default function FundraiserThermometer() {
   if (loading || !fundraiser) return null; // No active fundraiser -- this section just doesn't render at all.
 
   const percent = fundraiser.goalAmount > 0 ? Math.min(100, (fundraiser.raisedAmount / fundraiser.goalAmount) * 100) : 0;
+  const isComplete = percent >= 100;
+  // Same thermometer-heat metaphor as the homepage version.
+  const fillColor = percent >= 50 ? "#DC2626" : "#3B82F6";
 
   return (
-    <div style={{ maxWidth: "540px", margin: "3rem auto 0", padding: "2rem", background: "#FEF3EB", border: "2px solid #E77A2D", borderRadius: "8px" }}>
+    <div style={{ maxWidth: "540px", margin: "3rem auto 0", padding: "2rem", background: "#F7F4F0", border: "4px solid #111111", borderRadius: "2px" }}>
+      <style>{`
+        @keyframes fundraiser-pulse-h {
+          0%, 100% { filter: brightness(1); }
+          50% { filter: brightness(1.25); }
+        }
+        .fundraiser-thermometer-fill {
+          animation: fundraiser-pulse-h 2.2s ease-in-out infinite;
+        }
+        @keyframes firework-spark-h {
+          0% { transform: translate(0, 0) scale(1); opacity: 1; }
+          100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+        }
+        .firework-spark {
+          display: block;
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #E77A2D;
+          animation: firework-spark-h 1.1s ease-out infinite;
+        }
+      `}</style>
+
       <p style={{ color: "#E77A2D", fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "0.5rem", textAlign: "center" }}>
         Active Campaign — Not Part of Regular Giving Above
       </p>
@@ -162,14 +258,10 @@ export default function FundraiserThermometer() {
         </p>
       )}
 
-      {/* Thermometer */}
-      <div style={{ marginBottom: "0.5rem" }}>
-        <div style={{ width: "100%", height: "24px", background: "#fff", borderRadius: "12px", overflow: "hidden", border: "1.5px solid #E8D5C4" }}>
-          <div style={{ width: `${percent}%`, height: "100%", background: "#E77A2D", transition: "width 0.4s ease", borderRadius: "12px" }} />
-        </div>
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginBottom: "1.5rem" }}>
-        <span style={{ fontWeight: 800, color: "#111111" }}>${fundraiser.raisedAmount.toFixed(0)} raised</span>
+      <ThermometerGraphicHorizontal percent={percent} fillColor={fillColor} isComplete={isComplete} />
+
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginTop: "0.25rem", marginBottom: "1.5rem" }}>
+        <span style={{ fontWeight: 800, color: "#111111" }}>${fundraiser.raisedAmount.toFixed(0)} raised{isComplete ? " 🎉" : ""}</span>
         <span style={{ color: "#888888" }}>Goal: ${fundraiser.goalAmount.toFixed(0)} · Ends {formatDate(fundraiser.closingDate)}</span>
       </div>
 
@@ -194,7 +286,7 @@ export default function FundraiserThermometer() {
               placeholder="Custom amount"
               value={amount}
               onChange={(e) => { setAmount(e.target.value); setShowPayPal(false); setDonationResult(null); }}
-              style={{ width: "100%", boxSizing: "border-box", padding: "12px 12px 12px 28px", border: "1.5px solid #E8D5C4", borderRadius: 6, fontSize: "0.95rem", color: "#111111" }}
+              style={{ width: "100%", boxSizing: "border-box", padding: "12px 12px 12px 28px", border: "1.5px solid #E8D5C4", borderRadius: 6, fontSize: "0.95rem", color: "#111111", background: "#fff" }}
             />
           </div>
           <button
