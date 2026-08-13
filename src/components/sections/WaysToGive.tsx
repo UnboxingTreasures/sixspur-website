@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import HomeFundraiserBanner from './HomeFundraiserBanner';
 
 const ways = [
   {
@@ -9,7 +10,7 @@ const ways = [
     title: 'One-time donation',
     description: 'Any amount helps feed, house, and care for the animals at Six Spur. Every dollar goes directly to the animals.',
     cta: 'Donate now',
-    href: '/donate',
+    href: '/ways-to-give',
     highlight: true,
   },
   {
@@ -51,6 +52,11 @@ export default function WaysToGive() {
             every contribution makes a real difference at Six Spur.
           </p>
         </div>
+
+        {/* Active fundraiser, if any -- large thermometer + link to the
+            real donate flow. Renders nothing at all when no fundraiser
+            is currently active. */}
+        <HomeFundraiserBanner />
 
         {/* Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.25rem', marginBottom: '3rem' }}>
