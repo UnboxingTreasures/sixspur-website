@@ -19,6 +19,7 @@ export default function ShopProductCard({ itemId, name, category, price, thumbna
     <Link href={`/shop/${itemId}`} style={{ textDecoration: 'none', display: 'block' }}>
       <div
         style={{
+          background: '#FFFFFF',
           borderRadius: '2px',
           overflow: 'hidden',
           border: '1px solid #E8E2DC',
