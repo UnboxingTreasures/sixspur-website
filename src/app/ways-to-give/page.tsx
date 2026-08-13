@@ -264,7 +264,7 @@ export default function WaysToGivePage() {
 
         </div>
 
-        {/* Active fundraiser campaign, if any -- visually distinct card,
+        {/* Active fundraiser, if any -- visually distinct card,
             deliberately NOT a third frequency option, so it doesn't read
             as part of the Give Once/Monthly choice above. Renders
             nothing at all if no fundraiser is currently active. */}
@@ -272,17 +272,21 @@ export default function WaysToGivePage() {
 
       </section>
 
-      {/* Other ways to help */}
-      <section className="bg-spur-tan-light py-16 px-6">
+      {/* Other ways to help -- BLACK background, not the original light
+          brown: light brown here would sit directly against the
+          site-wide Footer (also light brown), creating a same-color
+          seam with barely any visual break between them. Black matches
+          this page's own header above, non-adjacent so no new conflict. */}
+      <section className="bg-spur-black py-16 px-6">
         <div className="max-w-4xl mx-auto">
           <p className="eyebrow mb-3">Other Ways to Help</p>
-          <h2 className="text-2xl font-bold text-spur-black mb-10">Not ready to donate? There are other ways to make a difference.</h2>
+          <h2 className="text-2xl font-bold text-white mb-10">Not ready to donate? There are other ways to make a difference.</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div>
               <div className="orange-divider mb-4" />
-              <h3 className="font-bold text-spur-black mb-2">Adopt</h3>
-              <p className="text-gray-600 text-sm leading-relaxed mb-4">
+              <h3 className="font-bold text-white mb-2">Adopt</h3>
+              <p className="text-white/60 text-sm leading-relaxed mb-4">
                 Give one of our rescue dogs a forever home. Browse our adoptable animals and start the process today.
               </p>
               <Link href="/adopt" className="text-spur-orange text-sm font-semibold hover:underline">
@@ -292,8 +296,8 @@ export default function WaysToGivePage() {
 
             <div>
               <div className="orange-divider mb-4" />
-              <h3 className="font-bold text-spur-black mb-2">Spread the Word</h3>
-              <p className="text-gray-600 text-sm leading-relaxed mb-4">
+              <h3 className="font-bold text-white mb-2">Spread the Word</h3>
+              <p className="text-white/60 text-sm leading-relaxed mb-4">
                 Follow us on social media and share our mission. Awareness is one of the most powerful tools we have.
               </p>
               <Link href="/contact" className="text-spur-orange text-sm font-semibold hover:underline">
@@ -303,8 +307,8 @@ export default function WaysToGivePage() {
 
             <div>
               <div className="orange-divider mb-4" />
-              <h3 className="font-bold text-spur-black mb-2">Sign Up for Updates</h3>
-              <p className="text-gray-600 text-sm leading-relaxed mb-4">
+              <h3 className="font-bold text-white mb-2">Sign Up for Updates</h3>
+              <p className="text-white/60 text-sm leading-relaxed mb-4">
                 Join our newsletter to stay connected with the ranch, meet new animals, and hear about upcoming needs.
               </p>
               <Link href="/contact" className="text-spur-orange text-sm font-semibold hover:underline">
