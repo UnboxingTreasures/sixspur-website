@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { getIdToken } from "@/lib/cognito";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -50,11 +51,20 @@ export default function AdminDonationsPage() {
   const [notesDraft, setNotesDraft] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
 
+  const authedFetch = async (path: string, options: RequestInit = {}) => {
+    const token = await getIdToken();
+    if (!token) throw new Error("Not logged in");
+    return fetch(`${API_URL}${path}`, {
+      ...options,
+      headers: { ...options.headers, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+  };
+
   const fetchDonations = async () => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API_URL}/admin/donations`);
+      const res = await authedFetch("/admin/donations");
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load donations");
       setDonations(data.donations || []);
@@ -74,9 +84,8 @@ export default function AdminDonationsPage() {
     if (notes === undefined) return;
     setSavingId(donationId);
     try {
-      const res = await fetch(`${API_URL}/admin/donations/${donationId}`, {
+      const res = await authedFetch(`/admin/donations/${donationId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ notes }),
       });
       const data = await res.json();
@@ -93,9 +102,8 @@ export default function AdminDonationsPage() {
     if (!confirm("Mark this donation as refunded? This doesn't process a real refund through PayPal -- do that there first, this just updates Six Spur's own record.")) return;
     setSavingId(donationId);
     try {
-      const res = await fetch(`${API_URL}/admin/donations/${donationId}`, {
+      const res = await authedFetch(`/admin/donations/${donationId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "refunded" }),
       });
       const data = await res.json();

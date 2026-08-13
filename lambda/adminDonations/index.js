@@ -8,12 +8,19 @@
 // All donations come through the real PayPal checkout flow (see the
 // donate Lambda). Offline gifts (checks, cash) are tracked by the
 // client outside this system.
+//
+// AUTH: every route here requires a verified JWT (via the same
+// authorizer protecting /donor/* and /donate/*) AND isAdmin=true on
+// the donor record -- see requireAdmin() in adminAuth.js. This was the
+// only real protection missing here; Basic Auth on the admin PAGES was
+// never a substitute for auth on the API routes themselves.
 
 const { listAll, getById, updateDonation } = require('./dynamo');
+const { requireAdmin } = require('./adminAuth');
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type,Authorization',
   'Access-Control-Allow-Methods': 'GET,PATCH,OPTIONS',
 };
 
@@ -28,6 +35,11 @@ function respond(statusCode, body) {
 exports.handler = async (event) => {
   if (event.requestContext?.http?.method === 'OPTIONS') {
     return respond(200, {});
+  }
+
+  const auth = await requireAdmin(event);
+  if (!auth.authorized) {
+    return respond(auth.statusCode, { error: auth.error });
   }
 
   const donationId = event.pathParameters?.id;
