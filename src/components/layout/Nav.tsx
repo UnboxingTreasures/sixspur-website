@@ -55,7 +55,6 @@ export default function Nav() {
             <Link href='/ways-to-give'      style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }}>Donate</Link>
             <Link href='/adopt'       style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }}>Adopt</Link>
             <Link href='/shop'        style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }}>Shop</Link>
-            <Link href='/ways-to-give' style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }}>Ways to Give</Link>
             <Link href='/about'       style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }}>About</Link>
             <Link href='/contact'     style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }}>Contact</Link>
           </div>
@@ -182,7 +181,6 @@ export default function Nav() {
           <Link href='/ways-to-give'      style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }} onClick={() => setMobileOpen(false)}>Donate</Link>
           <Link href='/adopt'       style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }} onClick={() => setMobileOpen(false)}>Adopt</Link>
           <Link href='/shop'        style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }} onClick={() => setMobileOpen(false)}>Shop</Link>
-          <Link href='/ways-to-give' style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }} onClick={() => setMobileOpen(false)}>Ways to Give</Link>
           <Link href='/about'       style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }} onClick={() => setMobileOpen(false)}>About</Link>
           <Link href='/contact'     style={{ color: '#111111', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }} onClick={() => setMobileOpen(false)}>Contact</Link>
           <div style={{ display: 'flex', gap: '16px', paddingTop: '4px' }}>
