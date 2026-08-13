@@ -3,10 +3,9 @@
 import { useState, useEffect } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
-const VALID_SIZES = ["S", "M", "L", "XL", "2XL", "3XL"];
 
-interface SizeEntry {
-  size: string;
+interface VariantEntry {
+  value: string;
   stock: number;
 }
 
@@ -18,8 +17,9 @@ interface ShopItem {
   category: string;
   photos: string[];
   thumbnailUrl: string;
-  hasSizes: boolean;
-  sizes?: SizeEntry[];
+  hasVariants: boolean;
+  variantLabel?: string;
+  variants?: VariantEntry[];
   stock?: number;
 }
 
@@ -52,69 +52,110 @@ interface Draft {
   description: string;
   price: string;
   category: string;
-  hasSizes: boolean;
-  sizeStocks: Record<string, string>; // size -> stock string, only for checked sizes
-  stock: string; // used when !hasSizes
+  hasVariants: boolean;
+  variantLabel: string; // admin-defined, e.g. "Size" or "Style"
+  variantStocks: Record<string, string>; // value -> stock string, admin adds/removes entries freely
+  stock: string; // used when !hasVariants
 }
 
 function emptyDraft(): Draft {
-  return { name: "", description: "", price: "", category: "", hasSizes: false, sizeStocks: {}, stock: "0" };
+  return { name: "", description: "", price: "", category: "", hasVariants: false, variantLabel: "", variantStocks: {}, stock: "0" };
 }
 
 function draftFromItem(item: ShopItem): Draft {
-  const sizeStocks: Record<string, string> = {};
-  if (item.hasSizes && item.sizes) {
-    for (const s of item.sizes) sizeStocks[s.size] = String(s.stock);
+  const variantStocks: Record<string, string> = {};
+  if (item.hasVariants && item.variants) {
+    for (const v of item.variants) variantStocks[v.value] = String(v.stock);
   }
   return {
     name: item.name,
     description: item.description || "",
     price: String(item.price),
     category: item.category,
-    hasSizes: item.hasSizes,
-    sizeStocks,
+    hasVariants: item.hasVariants,
+    variantLabel: item.variantLabel || "",
+    variantStocks,
     stock: String(item.stock ?? 0),
   };
 }
 
-function SizeStockEditor({ draft, setDraft }: { draft: Draft; setDraft: (d: Draft) => void }) {
-  const toggleSize = (size: string) => {
-    const next = { ...draft.sizeStocks };
-    if (size in next) {
-      delete next[size];
-    } else {
-      next[size] = "0";
-    }
-    setDraft({ ...draft, sizeStocks: next });
+// Fully custom now -- admin types a dimension label (e.g. "Size" or
+// "Style") and adds whatever option values they want, each with its own
+// stock. Replaces the old fixed S/M/L/XL/2XL/3XL checkbox list -- there's
+// no longer a known set of values to check off, so this is an
+// add-your-own-row editor instead.
+function VariantEditor({ draft, setDraft }: { draft: Draft; setDraft: (d: Draft) => void }) {
+  const [newValue, setNewValue] = useState("");
+
+  const addValue = () => {
+    const trimmed = newValue.trim();
+    if (!trimmed) return;
+    if (trimmed in draft.variantStocks) return; // already exists, no duplicate
+    setDraft({ ...draft, variantStocks: { ...draft.variantStocks, [trimmed]: "0" } });
+    setNewValue("");
+  };
+
+  const removeValue = (value: string) => {
+    const next = { ...draft.variantStocks };
+    delete next[value];
+    setDraft({ ...draft, variantStocks: next });
   };
 
   return (
     <div>
+      <div style={{ marginBottom: 10 }}>
+        <label style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", display: "block", marginBottom: 4 }}>
+          Variant Label
+        </label>
+        <input
+          value={draft.variantLabel}
+          onChange={(e) => setDraft({ ...draft, variantLabel: e.target.value })}
+          placeholder='e.g. "Size" or "Style"'
+          style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 8, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit" }}
+        />
+      </div>
+
       <label style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", display: "block", marginBottom: 6 }}>
-        Available Sizes &amp; Stock
+        Options &amp; Stock
       </label>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {VALID_SIZES.map((size) => {
-          const checked = size in draft.sizeStocks;
-          return (
-            <div key={size} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 60, fontSize: 13, fontWeight: 700, color: "#111111", cursor: "pointer" }}>
-                <input type="checkbox" checked={checked} onChange={() => toggleSize(size)} />
-                {size}
-              </label>
-              {checked && (
-                <input
-                  type="number"
-                  min={0}
-                  value={draft.sizeStocks[size]}
-                  onChange={(e) => setDraft({ ...draft, sizeStocks: { ...draft.sizeStocks, [size]: e.target.value } })}
-                  placeholder="Stock"
-                  style={{ width: 90, padding: "6px 10px", borderRadius: 6, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit" }}
-                />
-              )}
-            </div>
-          );
-        })}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
+        {Object.entries(draft.variantStocks).map(([value, stock]) => (
+          <div key={value} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ minWidth: 90, fontSize: 13, fontWeight: 700, color: "#111111" }}>{value}</span>
+            <input
+              type="number"
+              min={0}
+              value={stock}
+              onChange={(e) => setDraft({ ...draft, variantStocks: { ...draft.variantStocks, [value]: e.target.value } })}
+              placeholder="Stock"
+              style={{ width: 90, padding: "6px 10px", borderRadius: 6, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit" }}
+            />
+            <button
+              onClick={() => removeValue(value)}
+              style={{ width: 24, height: 24, borderRadius: "50%", border: "none", background: "#FEF2F2", color: "#DC2626", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
+              title={`Remove ${value}`}
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", gap: 8 }}>
+        <input
+          value={newValue}
+          onChange={(e) => setNewValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addValue(); } }}
+          placeholder={draft.variantLabel ? `Add a ${draft.variantLabel.toLowerCase()}...` : "Add a value..."}
+          style={{ flex: 1, padding: "8px 10px", borderRadius: 6, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit" }}
+        />
+        <button
+          onClick={addValue}
+          type="button"
+          style={{ padding: "8px 14px", borderRadius: 6, border: "1.5px solid #E77A2D", background: "#fff", color: "#E77A2D", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+        >
+          + Add
+        </button>
       </div>
     </div>
   );
@@ -169,16 +210,16 @@ function ProductFields({ draft, setDraft }: { draft: Draft; setDraft: (d: Draft)
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 700, color: "#111111", cursor: "pointer" }}>
           <input
             type="checkbox"
-            checked={draft.hasSizes}
-            onChange={(e) => setDraft({ ...draft, hasSizes: e.target.checked })}
+            checked={draft.hasVariants}
+            onChange={(e) => setDraft({ ...draft, hasVariants: e.target.checked })}
           />
-          This product comes in different sizes
+          This product comes in different options (size, style, etc.)
         </label>
       </div>
 
-      {draft.hasSizes ? (
+      {draft.hasVariants ? (
         <div style={{ marginBottom: 12 }}>
-          <SizeStockEditor draft={draft} setDraft={setDraft} />
+          <VariantEditor draft={draft} setDraft={setDraft} />
         </div>
       ) : (
         <div style={{ marginBottom: 12 }}>
@@ -203,11 +244,12 @@ function draftToPayload(draft: Draft) {
     description: draft.description,
     price: Number.isFinite(price) ? price : 0,
     category: draft.category,
-    hasSizes: draft.hasSizes,
+    hasVariants: draft.hasVariants,
   };
-  if (draft.hasSizes) {
-    payload.sizes = Object.entries(draft.sizeStocks).map(([size, stock]) => ({
-      size,
+  if (draft.hasVariants) {
+    payload.variantLabel = draft.variantLabel;
+    payload.variants = Object.entries(draft.variantStocks).map(([value, stock]) => ({
+      value,
       stock: parseInt(stock, 10) || 0,
     }));
   } else {
@@ -260,8 +302,11 @@ export default function AdminShopPage() {
   const submitAdd = async () => {
     if (!addDraft.name.trim()) return setAddError("Name is required");
     if (!addFile) return setAddError("At least one photo is required");
-    if (addDraft.hasSizes && Object.keys(addDraft.sizeStocks).length === 0) {
-      return setAddError("Check at least one size, or turn off \"comes in different sizes\"");
+    if (addDraft.hasVariants && !addDraft.variantLabel.trim()) {
+      return setAddError('Give your variant a label, like "Size" or "Style"');
+    }
+    if (addDraft.hasVariants && Object.keys(addDraft.variantStocks).length === 0) {
+      return setAddError('Add at least one option, or turn off "comes in different options"');
     }
 
     setAddSubmitting(true);
@@ -292,8 +337,12 @@ export default function AdminShopPage() {
   const saveEdit = async (itemId: string) => {
     const draft = editDrafts[itemId];
     if (!draft) return;
-    if (draft.hasSizes && Object.keys(draft.sizeStocks).length === 0) {
-      alert('Check at least one size, or turn off "comes in different sizes"');
+    if (draft.hasVariants && !draft.variantLabel.trim()) {
+      alert('Give your variant a label, like "Size" or "Style"');
+      return;
+    }
+    if (draft.hasVariants && Object.keys(draft.variantStocks).length === 0) {
+      alert('Add at least one option, or turn off "comes in different options"');
       return;
     }
 
@@ -432,7 +481,7 @@ export default function AdminShopPage() {
                   <div style={{ fontWeight: 700, fontSize: 15, color: "#111111" }}>{item.name}</div>
                   <div style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>
                     ${item.price.toFixed(2)} · {item.category}
-                    {item.hasSizes && <span> · {(item.photos || []).length} photo{(item.photos || []).length !== 1 ? "s" : ""}, sized</span>}
+                    {item.hasVariants && <span> · {(item.photos || []).length} photo{(item.photos || []).length !== 1 ? "s" : ""}, {item.variantLabel}</span>}
                   </div>
                 </div>
               </div>

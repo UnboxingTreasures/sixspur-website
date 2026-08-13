@@ -3,7 +3,7 @@
 //   GET    /admin/shop                    — list all
 //   GET    /admin/shop/{id}                — one product's full detail
 //   POST   /admin/shop                     — create (requires seedPhotoUrl, already uploaded)
-//   PATCH  /admin/shop/{id}                — edit any fields, including switching hasSizes on/off
+//   PATCH  /admin/shop/{id}                — edit any fields, including switching hasVariants on/off
 //   DELETE /admin/shop/{id}                — delete, removes ALL its photos from S3
 //   POST   /admin/shop/{id}/photos/presign — presigned upload URL for a new photo
 //   POST   /admin/shop/{id}/photos         — add already-uploaded photo(s) to the pool
@@ -11,7 +11,7 @@
 //   PATCH  /admin/shop/{id}/thumbnail      — set which pool photo is the main product image
 
 const {
-  VALID_SIZES, listAll, getById, createItem, updateItem, deleteItem,
+  listAll, getById, createItem, updateItem, deleteItem,
   addPhotos, removePhoto, setThumbnail,
 } = require('./dynamo');
 const { createPresignedUploadUrl, deletePhoto } = require('./s3');
