@@ -26,7 +26,7 @@ export default async function ShopPreview() {
   const items = await getShopItems();
 
   return (
-    <section style={{ background: '#FFFFFF', padding: '6rem 1.5rem' }}>
+    <section style={{ background: '#111111', padding: '6rem 1.5rem' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
 
         {/* Header */}
@@ -35,7 +35,7 @@ export default async function ShopPreview() {
             Shop
           </p>
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-            <h2 style={{ color: '#111111', fontSize: 'clamp(2rem, 4vw, 3rem)', fontWeight: 800, lineHeight: 1.1, letterSpacing: '-0.02em', margin: 0 }}>
+            <h2 style={{ color: '#FFFFFF', fontSize: 'clamp(2rem, 4vw, 3rem)', fontWeight: 800, lineHeight: 1.1, letterSpacing: '-0.02em', margin: 0 }}>
               Wear your{' '}
               <span style={{ color: '#E77A2D' }}>support.</span>
             </h2>
@@ -46,7 +46,7 @@ export default async function ShopPreview() {
               Shop all →
             </Link>
           </div>
-          <p style={{ color: '#555555', fontSize: '1.05rem', lineHeight: 1.8, marginTop: '1rem', maxWidth: '520px' }}>
+          <p style={{ color: '#D1C0B0', fontSize: '1.05rem', lineHeight: 1.8, marginTop: '1rem', maxWidth: '520px' }}>
             Every purchase supports the animals at Six Spur Ranch and Rescue.
           </p>
         </div>

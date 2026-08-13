@@ -24,6 +24,71 @@ function formatDate(iso: string) {
 // @keyframes definition instead of needing 8 separate ones.
 const FIREWORK_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
 
+// Traditional bulb-and-tube thermometer, drawn as SVG for precise
+// control over the shape -- much cleaner than faking it with CSS.
+// Coordinates: tube runs from y=20 (rounded top) to y=250 (where it
+// meets the bulb), bulb centered at (70, 260). Fill height is computed
+// from percent and grows upward from the always-full-looking bulb.
+function ThermometerGraphic({ percent, fillColor, isComplete }: { percent: number; fillColor: string; isComplete: boolean }) {
+  const tubeInnerTop = 26;
+  const tubeInnerBottom = 250;
+  const tubeInnerHeight = tubeInnerBottom - tubeInnerTop;
+  const fillHeight = (percent / 100) * tubeInnerHeight;
+  const fillY = tubeInnerBottom - fillHeight;
+
+  const ticks = [0, 20, 40, 60, 80, 100];
+
+  return (
+    <div style={{ position: 'relative', flexShrink: 0 }}>
+      <svg width="140" height="320" viewBox="0 0 140 320">
+        {/* Tick marks + labels */}
+        {ticks.map((tick) => {
+          const y = tubeInnerBottom - (tick / 100) * tubeInnerHeight;
+          return (
+            <g key={tick}>
+              <line x1="92" y1={y} x2="102" y2={y} stroke="#111111" strokeWidth="2" />
+              <text x="107" y={y + 4} fontSize="11" fontWeight="700" fill="#111111">{tick}</text>
+            </g>
+          );
+        })}
+
+        {/* Outer outline: tube + bulb */}
+        <rect x="50" y="20" width="40" height="230" rx="20" fill="#FFFFFF" stroke="#111111" strokeWidth="6" />
+        <circle cx="70" cy="260" r="35" fill="#FFFFFF" stroke="#111111" strokeWidth="6" />
+
+        {/* Fill: tube portion grows upward, bulb portion always full */}
+        <rect
+          className="fundraiser-thermometer-fill"
+          x="56" y={fillY} width="28" height={fillHeight + 20} rx="14"
+          fill={fillColor}
+        />
+        <circle cx="70" cy="260" r="27" fill={fillColor} />
+
+        {/* Fireworks, only once the goal is fully met -- burst from the
+            top-center of the filled tube. */}
+        {isComplete && FIREWORK_ANGLES.map((angle, i) => {
+          const rad = (angle * Math.PI) / 180;
+          const distance = 26;
+          const tx = Math.cos(rad) * distance;
+          const ty = Math.sin(rad) * distance;
+          return (
+            <foreignObject key={angle} x="60" y="10" width="20" height="20" style={{ overflow: 'visible' }}>
+              <span
+                className="firework-spark"
+                style={{
+                  '--tx': `${tx}px`,
+                  '--ty': `${ty}px`,
+                  animationDelay: `${i * 0.08}s`,
+                } as React.CSSProperties}
+              />
+            </foreignObject>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
 // Homepage teaser only -- large thermometer + a small link to the real
 // donate flow on /ways-to-give (where FundraiserThermometer.tsx handles
 // the actual PayPal checkout). This component doesn't process any
@@ -52,8 +117,7 @@ export default function HomeFundraiserBanner() {
     <>
       {/* Subtle "alive" pulse on the filled portion -- a gentle
           brightness breathe suggesting ongoing momentum, not a static
-          bar. Uses filter (not box-shadow) since box-shadow would get
-          clipped by the track's overflow:hidden. */}
+          shape. */}
       <style>{`
         @keyframes fundraiser-pulse {
           0%, 100% { filter: brightness(1); }
@@ -67,15 +131,12 @@ export default function HomeFundraiserBanner() {
           100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
         }
         .firework-spark {
-          position: absolute;
-          top: 50%;
-          right: 0;
+          display: block;
           width: 6px;
           height: 6px;
           border-radius: 50%;
           background: #E77A2D;
           animation: firework-spark 1.1s ease-out infinite;
-          pointer-events: none;
         }
       `}</style>
 
@@ -92,59 +153,32 @@ export default function HomeFundraiserBanner() {
           </p>
         )}
 
-        {/* Large thermometer */}
-        <div style={{ maxWidth: '640px', margin: '0 auto' }}>
-          <div style={{ position: 'relative', width: '100%', height: '36px', background: '#FFFFFF', borderRadius: '18px', overflow: isComplete ? 'visible' : 'hidden', border: '1.5px solid #E8E2DC' }}>
-            <div
-              className="fundraiser-thermometer-fill"
+        {/* Thermometer + stats, side by side */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2.5rem', flexWrap: 'wrap' }}>
+          <ThermometerGraphic percent={percent} fillColor={fillColor} isComplete={isComplete} />
+
+          <div style={{ textAlign: 'left', minWidth: '200px' }}>
+            <div style={{ color: '#111111', fontWeight: 800, fontSize: '2rem', lineHeight: 1.1, marginBottom: '0.5rem' }}>
+              ${fundraiser.raisedAmount.toFixed(0)}{isComplete ? ' 🎉' : ''}
+            </div>
+            <div style={{ color: '#888888', fontSize: '0.95rem', marginBottom: '0.25rem' }}>
+              raised of ${fundraiser.goalAmount.toFixed(0)} goal
+            </div>
+            <div style={{ color: '#888888', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+              Ends {formatDate(fundraiser.closingDate)}
+            </div>
+
+            <Link
+              href="/ways-to-give"
               style={{
-                width: `${percent}%`, height: '100%', background: fillColor,
-                transition: 'width 0.5s ease, background 0.5s ease',
-                borderRadius: isComplete ? '18px' : '18px 0 0 18px',
-                position: 'relative',
+                display: 'inline-block',
+                color: '#E77A2D', fontSize: '0.8rem', fontWeight: 700, letterSpacing: '0.1em',
+                textTransform: 'uppercase', textDecoration: 'none', borderBottom: '2px solid #E77A2D', paddingBottom: '2px',
               }}
             >
-              {/* Fireworks only render once the goal is fully met --
-                  overflow on the track switches to visible above so
-                  these aren't clipped at the rounded edge. */}
-              {isComplete && FIREWORK_ANGLES.map((angle, i) => {
-                const rad = (angle * Math.PI) / 180;
-                const distance = 28;
-                const tx = Math.cos(rad) * distance;
-                const ty = Math.sin(rad) * distance;
-                return (
-                  <span
-                    key={angle}
-                    className="firework-spark"
-                    style={{
-                      '--tx': `${tx}px`,
-                      '--ty': `${ty}px`,
-                      animationDelay: `${i * 0.08}s`,
-                    } as React.CSSProperties}
-                  />
-                );
-              })}
-            </div>
+              Give to this campaign →
+            </Link>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.75rem' }}>
-            <span style={{ color: '#111111', fontWeight: 800, fontSize: '1.1rem' }}>
-              ${fundraiser.raisedAmount.toFixed(0)} raised{isComplete ? ' 🎉' : ''}
-            </span>
-            <span style={{ color: '#888888', fontSize: '0.9rem' }}>Goal: ${fundraiser.goalAmount.toFixed(0)} · Ends {formatDate(fundraiser.closingDate)}</span>
-          </div>
-        </div>
-
-        {/* Small link to the real donate flow */}
-        <div style={{ textAlign: 'center', marginTop: '1.75rem' }}>
-          <Link
-            href="/ways-to-give"
-            style={{
-              color: '#E77A2D', fontSize: '0.8rem', fontWeight: 700, letterSpacing: '0.1em',
-              textTransform: 'uppercase', textDecoration: 'none', borderBottom: '2px solid #E77A2D', paddingBottom: '2px',
-            }}
-          >
-            Give to this campaign →
-          </Link>
         </div>
       </div>
     </>
