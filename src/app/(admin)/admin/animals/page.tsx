@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { getIdToken } from "@/lib/cognito";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -20,15 +21,26 @@ function slugify(name: string): string {
   return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
+async function authedFetch(path: string, options: RequestInit = {}) {
+  const token = await getIdToken();
+  if (!token) throw new Error("Not logged in");
+  return fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: { ...options.headers, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+  });
+}
+
 async function uploadPhoto(animalId: string, file: File): Promise<string> {
-  const presignRes = await fetch(`${API_URL}/admin/animals/${animalId}/photos/presign`, {
+  const presignRes = await authedFetch(`/admin/animals/${animalId}/photos/presign`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ fileName: file.name }),
   });
   const presignData = await presignRes.json();
   if (!presignRes.ok) throw new Error(presignData.error || "Failed to get upload URL");
 
+  // The actual S3 PUT uses the presigned URL itself as authorization --
+  // no bearer token here, and none needed; adding one would break the
+  // presigned signature.
   const uploadRes = await fetch(presignData.uploadUrl, {
     method: "PUT",
     body: file,
@@ -71,7 +83,7 @@ export default function AdminAnimalsPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API_URL}/admin/animals`);
+      const res = await authedFetch("/admin/animals");
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load animal types");
       setAnimals(data.animals || []);
@@ -104,9 +116,8 @@ export default function AdminAnimalsPage() {
       const predictedId = slugify(addName);
       const seedPhotoUrl = await uploadPhoto(predictedId, addFile);
 
-      const res = await fetch(`${API_URL}/admin/animals`, {
+      const res = await authedFetch("/admin/animals", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: addName, description: addDescription, seedPhotoUrl }),
       });
       const data = await res.json();
@@ -129,9 +140,8 @@ export default function AdminAnimalsPage() {
 
     setRenameSaving(animalId);
     try {
-      const res = await fetch(`${API_URL}/admin/animals/${animalId}`, {
+      const res = await authedFetch(`/admin/animals/${animalId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newName }),
       });
       const data = await res.json();
@@ -149,7 +159,7 @@ export default function AdminAnimalsPage() {
     if (!pendingDeleteType) return;
     setDeletingType(true);
     try {
-      const res = await fetch(`${API_URL}/admin/animals/${pendingDeleteType.animalId}`, { method: "DELETE" });
+      const res = await authedFetch(`/admin/animals/${pendingDeleteType.animalId}`, { method: "DELETE" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Delete failed");
       setAnimals((prev) => prev.filter((a) => a.animalId !== pendingDeleteType.animalId));
@@ -167,9 +177,8 @@ export default function AdminAnimalsPage() {
     setUploadingPhotoFor(animalId);
     try {
       const cdnUrl = await uploadPhoto(animalId, file);
-      const res = await fetch(`${API_URL}/admin/animals/${animalId}/photos`, {
+      const res = await authedFetch(`/admin/animals/${animalId}/photos`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ photoUrls: [cdnUrl] }),
       });
       const data = await res.json();
@@ -187,9 +196,8 @@ export default function AdminAnimalsPage() {
     if (!pendingRemovePhoto) return;
     setRemovingPhoto(true);
     try {
-      const res = await fetch(`${API_URL}/admin/animals/${pendingRemovePhoto.animalId}/photos`, {
+      const res = await authedFetch(`/admin/animals/${pendingRemovePhoto.animalId}/photos`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ photoUrl: pendingRemovePhoto.photoUrl }),
       });
       const data = await res.json();
@@ -207,9 +215,8 @@ export default function AdminAnimalsPage() {
   const handleSetThumbnail = async (animalId: string, photoUrl: string) => {
     setSettingThumbnailFor(photoUrl);
     try {
-      const res = await fetch(`${API_URL}/admin/animals/${animalId}/thumbnail`, {
+      const res = await authedFetch(`/admin/animals/${animalId}/thumbnail`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ photoUrl }),
       });
       const data = await res.json();
