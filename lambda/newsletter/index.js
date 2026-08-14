@@ -1,27 +1,35 @@
 // index.js
-// POST /api/newsletter        — subscribes an email to the subscribers table.
-// GET  /newsletter/unsubscribe — unsubscribes, verified via email + that
-//                                 subscriber's own unsubscribeToken (both
-//                                 passed as query params from the link in
-//                                 the email itself). No login required --
-//                                 subscribing never created an account,
-//                                 so unsubscribing can't require one either.
-//                                 Verifying the token (not just the email
-//                                 alone) means the link can't be used to
-//                                 unsubscribe someone else just by knowing
-//                                 their email address.
+// POST /api/newsletter            — subscribes an email to the subscribers table.
+// GET  /api/newsletter/unsubscribe — unsubscribes, verified via email + that
+//                                     subscriber's own unsubscribeToken (both
+//                                     passed as query params from the link in
+//                                     the email itself). No login required --
+//                                     subscribing never created an account,
+//                                     so unsubscribing can't require one either.
+//                                     Verifying the token (not just the email
+//                                     alone) means the link can't be used to
+//                                     unsubscribe someone else just by knowing
+//                                     their email address.
 //
 // Both routes are public -- deliberately no admin auth here. Subscribing
 // and unsubscribing are self-service actions by design.
+//
+// Mailing list sync: if the unsubscribing email also belongs to a donor
+// account (looked up via the donors table's email-index GSI), that
+// donor's mailingListOptIn is flipped to false too, so their account
+// page checkbox reflects reality rather than staying stale-checked.
+// This is the reverse of the sync direction the donors Lambda owns
+// (donor toggling their own checkbox -> subscribers row).
 
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
+const { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, QueryCommand } = require('@aws-sdk/lib-dynamodb');
 const { randomUUID } = require('crypto');
 
 const client = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1' });
 const ddb = DynamoDBDocumentClient.from(client);
 
 const TABLE_NAME = process.env.SUBSCRIBERS_TABLE || 'subscribers';
+const DONORS_TABLE = process.env.DONORS_TABLE || 'donors';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -84,6 +92,36 @@ async function handleSubscribe(event) {
   }
 }
 
+/**
+ * If this email belongs to a donor account, flip their mailingListOptIn
+ * to false too. Best-effort: failures here are logged but never block
+ * the actual unsubscribe response, since the subscribers-table update
+ * (the part that actually stops emails) has already succeeded by the
+ * time this runs.
+ */
+async function syncDonorOptOut(email) {
+  try {
+    const result = await ddb.send(new QueryCommand({
+      TableName: DONORS_TABLE,
+      IndexName: 'email-index',
+      KeyConditionExpression: 'email = :email',
+      ExpressionAttributeValues: { ':email': email },
+    }));
+
+    const donor = result.Items?.[0];
+    if (!donor) return;
+
+    await ddb.send(new UpdateCommand({
+      TableName: DONORS_TABLE,
+      Key: { donorId: donor.donorId },
+      UpdateExpression: 'SET mailingListOptIn = :false, updatedAt = :updatedAt',
+      ExpressionAttributeValues: { ':false': false, ':updatedAt': new Date().toISOString() },
+    }));
+  } catch (err) {
+    console.error('Donor mailing list sync failed (non-fatal):', err);
+  }
+}
+
 async function handleUnsubscribe(event) {
   const qs = event.queryStringParameters || {};
   const email = (qs.email || '').trim().toLowerCase();
@@ -117,6 +155,8 @@ async function handleUnsubscribe(event) {
       UpdateExpression: 'SET isActive = :inactive',
       ExpressionAttributeValues: { ':inactive': false },
     }));
+
+    await syncDonorOptOut(email);
 
     return respond(200, { success: true, alreadyUnsubscribed: false });
   } catch (err) {

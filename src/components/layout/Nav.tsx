@@ -11,14 +11,28 @@ export default function Nav() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(() => {
+    // Optimistic initial value from the last confirmed check, so
+    // returning admins see the badge immediately instead of a brief
+    // flash while /donor/profile round-trips. Purely cosmetic -- every
+    // /admin/* route still independently enforces JWT + isAdmin
+    // server-side no matter what this cached value says.
+    if (typeof window === 'undefined') return false
+    return window.localStorage.getItem('sixspur_isAdmin') === 'true'
+  })
 
   const cartCount = 0 // TODO Session 5: wire to cart state
 
   useEffect(() => {
     getIdToken().then(async (token) => {
       setIsLoggedIn(Boolean(token))
-      if (!token) return
+      if (!token) {
+        // Logged out -- clear any stale cached admin badge so a
+        // different person on the same browser/device doesn't
+        // momentarily see someone else's admin badge on next load.
+        window.localStorage.removeItem('sixspur_isAdmin')
+        return
+      }
       // Admin status isn't in the token itself -- it's a database field
       // (isAdmin on the donor record), so this needs an actual profile
       // fetch, not just a token check.
@@ -27,7 +41,9 @@ export default function Nav() {
           headers: { Authorization: `Bearer ${token}` },
         })
         const data = await res.json()
-        setIsAdmin(Boolean(data.isAdmin))
+        const confirmedIsAdmin = Boolean(data.isAdmin)
+        setIsAdmin(confirmedIsAdmin)
+        window.localStorage.setItem('sixspur_isAdmin', String(confirmedIsAdmin))
       } catch (err) {
         console.error('Failed to check admin status:', err)
       }
