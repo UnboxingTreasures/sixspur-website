@@ -9,16 +9,23 @@
 //   POST   /admin/shop/{id}/photos         — add already-uploaded photo(s) to the pool
 //   DELETE /admin/shop/{id}/photos         — remove one photo (body: { photoUrl })
 //   PATCH  /admin/shop/{id}/thumbnail      — set which pool photo is the main product image
+//
+// AUTH: every route here requires a verified JWT (via the same
+// authorizer protecting /donor/* and /donate/*) AND isAdmin=true on
+// the donor record -- see requireAdmin() in adminAuth.js. This includes
+// the photos/presign route -- an unauthenticated presign endpoint would
+// let anyone upload arbitrary files into the bucket under any itemId.
 
 const {
   listAll, getById, createItem, updateItem, deleteItem,
   addPhotos, removePhoto, setThumbnail,
 } = require('./dynamo');
 const { createPresignedUploadUrl, deletePhoto } = require('./s3');
+const { requireAdmin } = require('./adminAuth');
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type,Authorization',
   'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
 };
 
@@ -132,6 +139,11 @@ async function handleSetThumbnail(itemId, body) {
 exports.handler = async (event) => {
   if (event.requestContext?.http?.method === 'OPTIONS') {
     return respond(200, {});
+  }
+
+  const auth = await requireAdmin(event);
+  if (!auth.authorized) {
+    return respond(auth.statusCode, { error: auth.error });
   }
 
   const itemId = event.pathParameters?.id;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { getIdToken } from "@/lib/cognito";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -33,15 +34,26 @@ function slugify(name: string): string {
   return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
+async function authedFetch(path: string, options: RequestInit = {}) {
+  const token = await getIdToken();
+  if (!token) throw new Error("Not logged in");
+  return fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: { ...options.headers, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+  });
+}
+
 async function uploadPhoto(itemId: string, file: File): Promise<string> {
-  const presignRes = await fetch(`${API_URL}/admin/shop/${itemId}/photos/presign`, {
+  const presignRes = await authedFetch(`/admin/shop/${itemId}/photos/presign`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ fileName: file.name }),
   });
   const presignData = await presignRes.json();
   if (!presignRes.ok) throw new Error(presignData.error || "Failed to get upload URL");
 
+  // The actual S3 PUT uses the presigned URL itself as authorization --
+  // no bearer token here, and none needed; adding one would break the
+  // presigned signature.
   const uploadRes = await fetch(presignData.uploadUrl, {
     method: "PUT",
     body: file,
@@ -454,7 +466,7 @@ export default function AdminShopPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API_URL}/admin/shop`);
+      const res = await authedFetch("/admin/shop");
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load products");
       setItems(data.items || []);
@@ -490,9 +502,8 @@ export default function AdminShopPage() {
       const predictedId = slugify(addDraft.name);
       const seedPhotoUrl = await uploadPhoto(predictedId, addFile);
 
-      const res = await fetch(`${API_URL}/admin/shop`, {
+      const res = await authedFetch("/admin/shop", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...draftToPayload(addDraft), seedPhotoUrl }),
       });
       const data = await res.json();
@@ -517,9 +528,8 @@ export default function AdminShopPage() {
 
     setSavingId(itemId);
     try {
-      const res = await fetch(`${API_URL}/admin/shop/${itemId}`, {
+      const res = await authedFetch(`/admin/shop/${itemId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(draftToPayload(draft)),
       });
       const data = await res.json();
@@ -536,9 +546,8 @@ export default function AdminShopPage() {
     setUploadingPhotoFor(itemId);
     try {
       const cdnUrl = await uploadPhoto(itemId, file);
-      const res = await fetch(`${API_URL}/admin/shop/${itemId}/photos`, {
+      const res = await authedFetch(`/admin/shop/${itemId}/photos`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ photoUrls: [cdnUrl] }),
       });
       const data = await res.json();
@@ -556,9 +565,8 @@ export default function AdminShopPage() {
     const { itemId, photoUrl } = pendingRemovePhoto;
     setRemovingPhoto(photoUrl);
     try {
-      const res = await fetch(`${API_URL}/admin/shop/${itemId}/photos`, {
+      const res = await authedFetch(`/admin/shop/${itemId}/photos`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ photoUrl }),
       });
       const data = await res.json();
@@ -575,9 +583,8 @@ export default function AdminShopPage() {
   const handleSetThumbnail = async (itemId: string, photoUrl: string) => {
     setSettingThumbnail(photoUrl);
     try {
-      const res = await fetch(`${API_URL}/admin/shop/${itemId}/thumbnail`, {
+      const res = await authedFetch(`/admin/shop/${itemId}/thumbnail`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ photoUrl }),
       });
       const data = await res.json();
@@ -594,7 +601,7 @@ export default function AdminShopPage() {
     if (!pendingDelete) return;
     setDeleting(true);
     try {
-      const res = await fetch(`${API_URL}/admin/shop/${pendingDelete.itemId}`, { method: "DELETE" });
+      const res = await authedFetch(`/admin/shop/${pendingDelete.itemId}`, { method: "DELETE" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Delete failed");
       setItems((prev) => prev.filter((i) => i.itemId !== pendingDelete.itemId));
