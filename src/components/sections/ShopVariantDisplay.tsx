@@ -38,7 +38,7 @@ interface ShopVariantDisplayProps {
 // product's default photos when nothing's selected yet, or the selected
 // value has no dedicated photos.
 export default function ShopVariantDisplay({ itemId, photos, name, category, price, description, hasVariants, variantDimensions, combinations, variantPhotos, stock, soldOut }: ShopVariantDisplayProps) {
-  const { addItem } = useCart();
+  const { addItem, items: cartItems } = useCart();
   const [firstDimPhotos, setFirstDimPhotos] = useState<string[] | null>(null);
   const [selectedCombo, setSelectedCombo] = useState<Combination | null>(null);
   const [selectedComboIndex, setSelectedComboIndex] = useState<number | null>(null);
@@ -61,9 +61,22 @@ export default function ShopVariantDisplay({ itemId, photos, name, category, pri
   // For a variant product: needs a fully-resolved, in-stock combination.
   // For a simple product: just needs stock > 0.
   const availableStock = hasVariants ? (selectedCombo?.stock ?? 0) : (stock ?? 0);
+
+  // How much of THIS exact item+variant is already sitting in the cart
+  // -- without checking this, the button would happily let someone
+  // click "Add to Cart" past the real stock limit, showing "Added!"
+  // each time even though CartContext silently caps the actual quantity.
+  // That's misleading: nothing is technically broken (the cart total
+  // never exceeds stock), but the button gives false positive feedback.
+  const currentComboIndex = hasVariants ? selectedComboIndex : undefined;
+  const currentCartQuantity = cartItems.find(
+    (line) => line.itemId === itemId && line.comboIndex === currentComboIndex,
+  )?.quantity ?? 0;
+  const remainingStock = Math.max(0, availableStock - currentCartQuantity);
+
   const canAddToCart = hasVariants
-    ? Boolean(selectedCombo && selectedCombo.stock > 0)
-    : availableStock > 0;
+    ? Boolean(selectedCombo && selectedCombo.stock > 0 && remainingStock > 0)
+    : availableStock > 0 && remainingStock > 0;
 
   const handleAddToCart = () => {
     if (!canAddToCart) return;
@@ -133,8 +146,8 @@ export default function ShopVariantDisplay({ itemId, photos, name, category, pri
               <span className="px-4 py-2 min-w-[2.5rem] text-center font-semibold">{quantity}</span>
               <button
                 type="button"
-                onClick={() => setQuantity((q) => Math.min(availableStock, q + 1))}
-                disabled={!canAddToCart || quantity >= availableStock}
+                onClick={() => setQuantity((q) => Math.min(remainingStock, q + 1))}
+                disabled={!canAddToCart || quantity >= remainingStock}
                 className="px-3 py-2 text-lg font-bold text-spur-black disabled:opacity-30"
                 aria-label="Increase quantity"
               >
@@ -148,7 +161,13 @@ export default function ShopVariantDisplay({ itemId, photos, name, category, pri
               disabled={!canAddToCart}
               className="flex-1 bg-spur-orange text-white font-bold py-3 px-6 rounded disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              {justAdded ? 'Added!' : hasVariants && !selectedCombo ? 'Select options' : 'Add to Cart'}
+              {justAdded
+                ? 'Added!'
+                : hasVariants && !selectedCombo
+                ? 'Select options'
+                : remainingStock <= 0
+                ? 'Already in Cart (Max Available)'
+                : 'Add to Cart'}
             </button>
           </div>
         )}
