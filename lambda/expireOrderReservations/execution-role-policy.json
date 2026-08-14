@@ -1,0 +1,17 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "OrdersTableScanAndExpire",
+      "Effect": "Allow",
+      "Action": ["dynamodb:Scan", "dynamodb:UpdateItem"],
+      "Resource": "arn:aws:dynamodb:us-east-1:658965339779:table/orders"
+    },
+    {
+      "Sid": "ShopItemsRestock",
+      "Effect": "Allow",
+      "Action": "dynamodb:UpdateItem",
+      "Resource": "arn:aws:dynamodb:us-east-1:658965339779:table/shop_items"
+    }
+  ]
+}

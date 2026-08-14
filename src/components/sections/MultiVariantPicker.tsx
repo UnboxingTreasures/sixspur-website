@@ -16,6 +16,16 @@ interface MultiVariantPickerProps {
   dimensions: VariantDimension[];
   combinations: Combination[];
   onFirstDimensionSelect?: (value: string) => void; // triggers gallery photo swap
+  // NEW: fires whenever the full set of dimensions resolves to (or stops
+  // resolving to) one exact combination -- this is what a parent needs
+  // to enable/disable "Add to Cart" and know which comboIndex to send to
+  // checkout. comboIndex is this combination's position in the
+  // `combinations` array, which is exactly what the backend's
+  // buildReservationPlan expects (see lambda/orders/dynamo.js) -- it
+  // re-reads the product fresh and indexes into ITS OWN combinations
+  // array the same way, so this only breaks if admin reorders/edits
+  // combinations between browse and checkout, an accepted edge case.
+  onSelectionChange?: (combo: Combination | null, comboIndex: number | null) => void;
 }
 
 // One picker row per dimension (Size, Color, etc.). Stock/sold-out status
@@ -25,10 +35,7 @@ interface MultiVariantPickerProps {
 // buttons don't cross-filter based on partial selections (e.g. greying
 // out a color that's sold out for the currently-picked size) -- that's a
 // nice-to-have left for later, not built here.
-//
-// No cart/checkout system exists yet -- this shows availability and lets
-// the visitor select options, but doesn't wire up to any purchase action.
-export default function MultiVariantPicker({ dimensions, combinations, onFirstDimensionSelect }: MultiVariantPickerProps) {
+export default function MultiVariantPicker({ dimensions, combinations, onFirstDimensionSelect, onSelectionChange }: MultiVariantPickerProps) {
   // Defaults to the first dimension's first value on load, matching
   // Amazon-style behavior -- otherwise the gallery would show every
   // variant's photos mixed together until the customer clicks something.
@@ -53,9 +60,20 @@ export default function MultiVariantPicker({ dimensions, combinations, onFirstDi
   };
 
   const allSelected = dimensions.every((d) => selected[d.label]);
-  const matchedCombo = allSelected
-    ? combinations.find((c) => dimensions.every((d) => c.values[d.label] === selected[d.label]))
-    : null;
+  const matchedComboIndex = allSelected
+    ? combinations.findIndex((c) => dimensions.every((d) => c.values[d.label] === selected[d.label]))
+    : -1;
+  const matchedCombo = matchedComboIndex >= 0 ? combinations[matchedComboIndex] : null;
+
+  // Report the match (or lack of one) up to the parent any time the
+  // selection resolves differently. Runs after every render where
+  // `selected` changed, via the dependency array below -- not inside
+  // handleSelect directly, so it also correctly reports null on initial
+  // mount if fewer than all dimensions default-select.
+  useEffect(() => {
+    onSelectionChange?.(matchedCombo, matchedComboIndex >= 0 ? matchedComboIndex : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchedComboIndex]);
 
   return (
     <div>

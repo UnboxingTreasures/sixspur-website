@@ -63,6 +63,7 @@ export default async function ShopItemPage({ params }: { params: Promise<{ id: s
     <main className="min-h-screen bg-white">
       <section className="py-16 px-6">
         <ShopVariantDisplay
+          itemId={item.itemId}
           photos={photos}
           name={item.name}
           category={item.category}
@@ -72,6 +73,7 @@ export default async function ShopItemPage({ params }: { params: Promise<{ id: s
           variantDimensions={item.variantDimensions}
           combinations={item.combinations}
           variantPhotos={item.variantPhotos}
+          stock={item.stock}
           soldOut={soldOut}
         />
       </section>

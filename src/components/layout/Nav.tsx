@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { getIdToken } from '@/lib/cognito'
+import { useCart } from '@/context/CartContext'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL
 
@@ -21,7 +22,7 @@ export default function Nav() {
     return window.localStorage.getItem('sixspur_isAdmin') === 'true'
   })
 
-  const cartCount = 0 // TODO Session 5: wire to cart state
+  const { cartCount } = useCart()
 
   useEffect(() => {
     getIdToken().then(async (token) => {

@@ -1,0 +1,6 @@
+{
+  "routeKey": "POST /orders/create-order",
+  "requestContext": { "http": { "method": "POST" } },
+  "headers": { "content-type": "application/json" },
+  "body": "{\"cartItems\":[{\"itemId\":\"tumbler\",\"quantity\":1}],\"shippingAddress\":{\"line1\":\"123 Test St\",\"city\":\"Maud\",\"state\":\"TX\",\"zip\":\"75567\"},\"email\":\"jaylefler1974@gmail.com\"}"
+}
