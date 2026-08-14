@@ -113,18 +113,12 @@ export default function CartPage() {
               <span>${estimatedTotal.toFixed(2)}</span>
             </div>
 
-            {/* /checkout doesn't exist yet -- next piece of this
-                build-out. Left as a disabled placeholder rather than a
-                dead link, so the cart page is fully usable/testable on
-                its own before checkout is built. */}
-            <button
-              type="button"
-              disabled
-              title="Checkout is coming in the next step of this build-out"
-              className="w-full bg-spur-orange text-white font-bold py-3 rounded mt-4 opacity-50 cursor-not-allowed"
+            <Link
+              href="/checkout"
+              className="block w-full bg-spur-orange text-white font-bold py-3 rounded mt-4 text-center"
             >
-              Checkout (coming soon)
-            </button>
+              Checkout
+            </Link>
           </div>
         </div>
       </section>
