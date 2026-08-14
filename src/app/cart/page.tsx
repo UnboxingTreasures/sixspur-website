@@ -65,7 +65,8 @@ export default function CartPage() {
                   <button
                     type="button"
                     onClick={() => updateQuantity(line.itemId, line.comboIndex, line.quantity - 1)}
-                    className="px-2.5 py-1.5 text-base font-bold text-spur-black"
+                    disabled={line.quantity <= 1}
+                    className="px-2.5 py-1.5 text-base font-bold text-spur-black disabled:opacity-30"
                     aria-label="Decrease quantity"
                   >
                     −
@@ -89,7 +90,7 @@ export default function CartPage() {
                 <button
                   type="button"
                   onClick={() => removeItem(line.itemId, line.comboIndex)}
-                  className="text-gray-400 hover:text-red-600 text-sm font-semibold"
+                  className="text-gray-600 hover:text-red-600 underline text-sm font-semibold"
                   aria-label={`Remove ${line.name} from cart`}
                 >
                   Remove
