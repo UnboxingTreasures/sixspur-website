@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { getIdToken } from "@/lib/cognito";
 
 const API_URL  = process.env.NEXT_PUBLIC_API_URL;
 const CDN_BASE = "https://d1s8s7aw8vf5zu.cloudfront.net";
@@ -15,6 +16,15 @@ interface PostResult {
   success: boolean;
   post_url?: string;
   message?: string;
+}
+
+async function authedFetch(path: string, options: RequestInit = {}) {
+  const token = await getIdToken();
+  if (!token) throw new Error("Not logged in");
+  return fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: { ...options.headers, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+  });
 }
 
 export default function SocialPostComposer() {
@@ -56,14 +66,16 @@ export default function SocialPostComposer() {
     setImageUrl(u => ({ ...u, [tab]: "" }));
 
     try {
-      const presignRes = await fetch(`${API_URL}/admin/social/presigned-url`, {
+      const presignRes = await authedFetch(`/admin/social/presigned-url`, {
         method:  "POST",
-        headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ filename: file.name, content_type: file.type }),
       });
       const presignData = await presignRes.json();
       if (!presignData.success) throw new Error(presignData.message || "Failed to get upload URL");
 
+      // The actual S3 PUT uses the presigned URL itself as authorization --
+      // no bearer token here, and none needed; adding one would break the
+      // presigned signature.
       const uploadRes = await fetch(presignData.presigned_url, {
         method:  "PUT",
         body:    file,
@@ -92,16 +104,14 @@ export default function SocialPostComposer() {
     try {
       let data: PostResult;
       if (tab === "instagram") {
-        const res  = await fetch(`${API_URL}/admin/social/post-to-instagram`, {
+        const res  = await authedFetch(`/admin/social/post-to-instagram`, {
           method:  "POST",
-          headers: { "Content-Type": "application/json" },
           body:    JSON.stringify({ caption: currentText, image_url: currentImageUrl }),
         });
         data = await res.json();
       } else {
-        const res  = await fetch(`${API_URL}/admin/social/post-to-facebook`, {
+        const res  = await authedFetch(`/admin/social/post-to-facebook`, {
           method:  "POST",
-          headers: { "Content-Type": "application/json" },
           body:    JSON.stringify({ message: currentText, ...(currentImageUrl ? { image_url: currentImageUrl } : {}) }),
         });
         data = await res.json();
@@ -113,8 +123,9 @@ export default function SocialPostComposer() {
         setPosted(p => ({ ...p, [tab]: { text: currentText, imageUrl: currentImageUrl } }));
       }
 
-    } catch {
-      setResults(r => ({ ...r, [tab]: { success: false, message: "Network error — please try again." } }));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Network error — please try again.";
+      setResults(r => ({ ...r, [tab]: { success: false, message: msg } }));
     } finally {
       setPosting(p => ({ ...p, [tab]: false }));
     }

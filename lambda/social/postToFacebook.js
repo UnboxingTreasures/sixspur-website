@@ -1,7 +1,15 @@
 // postToFacebook.js — Posts to Facebook Page via Meta Graph API
 // Supports text-only posts or text + image URL
+//
+// AUTH: this route requires a verified JWT (via the same authorizer
+// protecting /donor/* and /donate/*) AND isAdmin=true on the donor
+// record -- see requireAdmin() in adminAuth.js. This is admin-only:
+// posting to the organization's Facebook page must never be reachable
+// without that check.
+
 const { SecretsManagerClient, GetSecretValueCommand } = require("@aws-sdk/client-secrets-manager");
 const https = require('https');
+const { requireAdmin } = require('./adminAuth');
 
 const secretsClient = new SecretsManagerClient({ region: "us-east-1" });
 
@@ -31,6 +39,19 @@ exports.handler = async (event) => {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
   };
+
+  if (event.requestContext?.http?.method === 'OPTIONS') {
+    return { statusCode: 200, headers, body: '' };
+  }
+
+  const auth = await requireAdmin(event);
+  if (!auth.authorized) {
+    return {
+      statusCode: auth.statusCode,
+      headers,
+      body: JSON.stringify({ success: false, message: auth.error }),
+    };
+  }
 
   try {
     const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;

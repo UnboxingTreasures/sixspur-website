@@ -3,8 +3,16 @@
 // separate Instagram-issued token. This matches the proven-reliable architecture
 // used elsewhere, rather than the separate "Instagram Login" (IGAA token) system.
 // Every IG post requires an image URL — text-only posts are not supported.
+//
+// AUTH: this route requires a verified JWT (via the same authorizer
+// protecting /donor/* and /donate/*) AND isAdmin=true on the donor
+// record -- see requireAdmin() in adminAuth.js. This is admin-only:
+// posting to the organization's Instagram account must never be
+// reachable without that check.
+
 const { SecretsManagerClient, GetSecretValueCommand } = require("@aws-sdk/client-secrets-manager");
 const https = require('https');
+const { requireAdmin } = require('./adminAuth');
 
 const secretsClient = new SecretsManagerClient({ region: "us-east-1" });
 
@@ -69,6 +77,19 @@ exports.handler = async (event) => {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
   };
+
+  if (event.requestContext?.http?.method === 'OPTIONS') {
+    return { statusCode: 200, headers, body: '' };
+  }
+
+  const auth = await requireAdmin(event);
+  if (!auth.authorized) {
+    return {
+      statusCode: auth.statusCode,
+      headers,
+      body: JSON.stringify({ success: false, message: auth.error }),
+    };
+  }
 
   try {
     const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
