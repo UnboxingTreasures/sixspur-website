@@ -28,6 +28,40 @@ function getDonationDescriptor(d: Donation): string {
   return d.type === "recurring" ? "Monthly" : "One-time";
 }
 
+// NEW -- shop order history, mirrors the Donation History section below.
+// Comes from GET /orders/mine (the sixspur-orders Lambda, queried via
+// the donorId-index GSI), added alongside donations rather than merged
+// into one list: orders and donations are different record shapes with
+// different meanings (a purchase vs. a gift), so keeping them as two
+// clearly-labeled sections avoids conflating "money in" with "money for
+// something you got back".
+interface OrderItem {
+  itemId: string;
+  name: string;
+  unitPrice: number;
+  quantity: number;
+  variantValues?: Record<string, string> | null;
+}
+
+interface Order {
+  orderId: string;
+  items: OrderItem[];
+  subtotal: number;
+  shippingCost: number;
+  total: number;
+  status: "pending" | "paid" | "expired";
+  createdAt: string;
+}
+
+function getOrderItemsSummary(order: Order): string {
+  return order.items
+    .map((item) => {
+      const variant = item.variantValues ? ` (${Object.values(item.variantValues).join(" / ")})` : "";
+      return `${item.quantity}x ${item.name}${variant}`;
+    })
+    .join(", ");
+}
+
 interface Profile {
   email: string;
   mailingListOptIn: boolean;
@@ -42,6 +76,7 @@ export default function AccountDashboardPage() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [donations, setDonations] = useState<Donation[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -75,14 +110,17 @@ export default function AccountDashboardPage() {
       setCheckingAuth(false);
 
       try {
-        const [profileRes, donationsRes] = await Promise.all([
+        const [profileRes, donationsRes, ordersRes] = await Promise.all([
           authedFetch("/donor/profile"),
           authedFetch("/donor/donations"),
+          authedFetch("/orders/mine"),
         ]);
         const profileData = await profileRes.json();
         const donationsData = await donationsRes.json();
+        const ordersData = await ordersRes.json();
         setProfile(profileData);
         setDonations(donationsData.donations || []);
+        setOrders(ordersData.orders || []);
       } catch (err) {
         console.error("Failed to load account data:", err);
         setError("Failed to load your account. Please refresh the page.");
@@ -185,6 +223,34 @@ export default function AccountDashboardPage() {
                         Download Receipt
                       </a>
                     )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Order history -- shop purchases, separate from donations
+              above. Only 'paid' orders are meaningful to show here;
+              'pending'/'expired' reservations that never completed
+              checkout aren't real orders from the donor's perspective,
+              so they're filtered out rather than shown as confusing
+              incomplete entries. */}
+          <div>
+            <h2 className="text-xl font-bold text-spur-black mb-4">Order History</h2>
+            {loading ? (
+              <p className="text-gray-500 text-sm">Loading...</p>
+            ) : orders.filter((o) => o.status === "paid").length === 0 ? (
+              <p className="text-gray-500 text-sm">You haven&apos;t placed any shop orders yet.</p>
+            ) : (
+              <div className="border border-spur-tan-light rounded overflow-hidden">
+                {orders.filter((o) => o.status === "paid").map((o) => (
+                  <div key={o.orderId} className="flex items-center justify-between px-5 py-4 border-b border-spur-tan-light last:border-b-0">
+                    <div>
+                      <div className="font-semibold text-spur-black">${o.total.toFixed(2)}</div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {formatDate(o.createdAt)} · {getOrderItemsSummary(o)}
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>

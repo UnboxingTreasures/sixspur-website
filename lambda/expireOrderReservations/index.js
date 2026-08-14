@@ -43,25 +43,47 @@ async function findExpiredPendingOrders() {
  * call slipped in between our scan and this write; if that happens,
  * this transaction simply fails (order is no longer pending) and we
  * skip it, leaving the now-paid order and its stock decrement alone.
+ *
+ * Same grouping requirement as lambda/orders/dynamo.js's
+ * buildReservationPlan: DynamoDB TransactWriteItems rejects more than
+ * one operation against the same item (same table + key), so if an
+ * order contains two different variants of the SAME product, their
+ * restock increments must be combined into ONE Update, not two.
  */
 async function restockOrder(order) {
-  const transactItems = order.items.map((line) => {
+  const incrementsByProduct = {};
+  for (const line of order.items) {
     if (line.variantValues && Number.isInteger(line.comboIndex)) {
+      incrementsByProduct[line.itemId] = incrementsByProduct[line.itemId] || { hasVariants: true, combos: [] };
+      incrementsByProduct[line.itemId].combos.push({ comboIndex: line.comboIndex, quantity: line.quantity });
+    } else {
+      incrementsByProduct[line.itemId] = { hasVariants: false, quantity: (incrementsByProduct[line.itemId]?.quantity || 0) + line.quantity };
+    }
+  }
+
+  const transactItems = Object.entries(incrementsByProduct).map(([itemId, increment]) => {
+    if (increment.hasVariants) {
+      const setClauses = [];
+      const values = {};
+      increment.combos.forEach(({ comboIndex, quantity }, i) => {
+        setClauses.push(`combinations[${comboIndex}].stock = combinations[${comboIndex}].stock + :qty${i}`);
+        values[`:qty${i}`] = quantity;
+      });
       return {
         Update: {
           TableName: SHOP_ITEMS_TABLE,
-          Key: { itemId: line.itemId },
-          UpdateExpression: `SET combinations[${line.comboIndex}].stock = combinations[${line.comboIndex}].stock + :qty`,
-          ExpressionAttributeValues: { ':qty': line.quantity },
+          Key: { itemId },
+          UpdateExpression: `SET ${setClauses.join(', ')}`,
+          ExpressionAttributeValues: values,
         },
       };
     }
     return {
       Update: {
         TableName: SHOP_ITEMS_TABLE,
-        Key: { itemId: line.itemId },
+        Key: { itemId },
         UpdateExpression: 'SET stock = stock + :qty',
-        ExpressionAttributeValues: { ':qty': line.quantity },
+        ExpressionAttributeValues: { ':qty': increment.quantity },
       },
     };
   });

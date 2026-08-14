@@ -45,8 +45,9 @@
 const { CognitoJwtVerifier } = require('aws-jwt-verify');
 const { createOrder: createPaypalOrder, captureOrder: capturePaypalOrder } = require('./paypal');
 const {
-  buildReservationPlan, reserveCartAndCreateOrder, getOrder, markOrderPaid,
+  buildReservationPlan, reserveCartAndCreateOrder, getOrder, getOrdersByDonor, markOrderPaid,
 } = require('./dynamo');
+const { sendOrderConfirmation } = require('./email');
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -176,7 +177,31 @@ async function handleCaptureOrder(body) {
     return respond(500, { error: 'Payment was received but we could not finalize your order. Please contact us so we can sort this out.' });
   }
 
+  // Confirmation email, same "never undo a successful payment over an
+  // email hiccup" reasoning as donate/index.js's receipt generation --
+  // failure here is logged but the order response still succeeds.
+  try {
+    await sendOrderConfirmation(updated);
+  } catch (emailErr) {
+    console.error(`Order ${orderId} captured successfully but confirmation email failed to send:`, emailErr);
+  }
+
   return respond(200, updated);
+}
+
+/**
+ * Order history for the account page. UNLIKE create-order/capture-order,
+ * this route DOES have the standard JWT authorizer attached at API
+ * Gateway (see deployment notes) -- there's no guest equivalent of "my
+ * order history", so this can rely on the gateway having already
+ * verified the token, same as donate/index.js's getVerifiedDonor.
+ */
+async function handleGetMyOrders(event) {
+  const claims = event.requestContext?.authorizer?.jwt?.claims;
+  if (!claims?.sub) return respond(401, { error: 'Not authenticated' });
+
+  const orders = await getOrdersByDonor(claims.sub);
+  return respond(200, { orders });
 }
 
 exports.handler = async (event) => {
@@ -197,6 +222,7 @@ exports.handler = async (event) => {
     switch (event.routeKey) {
       case 'POST /orders/create-order': return await handleCreateOrder(event, body);
       case 'POST /orders/capture-order': return await handleCaptureOrder(body);
+      case 'GET /orders/mine': return await handleGetMyOrders(event);
       default:
         return respond(404, { error: `No handler for route: ${event.routeKey}` });
     }

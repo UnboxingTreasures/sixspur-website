@@ -25,7 +25,7 @@
 
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const {
-  DynamoDBDocumentClient, GetCommand, UpdateCommand, TransactWriteCommand,
+  DynamoDBDocumentClient, GetCommand, UpdateCommand, TransactWriteCommand, QueryCommand,
 } = require('@aws-sdk/lib-dynamodb');
 const { randomUUID } = require('crypto');
 
@@ -56,25 +56,78 @@ const SHIPPING_FLAT_RATE = Number(process.env.SHIPPING_FLAT_RATE || 7.5);
  *   as returned by the public shop detail fetch -- required when the
  *   product hasVariants, omitted otherwise.
  */
+/**
+ * Looks up each cart line's live product record and validates it,
+ * computing the actual price and building the exact per-PRODUCT
+ * transact operations needed to reserve everything.
+ *
+ * IMPORTANT: operations are grouped per-product (per itemId), not
+ * per-cart-line. DynamoDB's TransactWriteItems REJECTS a transaction
+ * that contains more than one operation against the same item (same
+ * table + key) -- even if those operations touch different elements
+ * inside it. A variant product stores every combination's stock inside
+ * ONE row (combinations[]), so two different sizes/colors of the SAME
+ * product in the cart would otherwise generate two separate Update
+ * operations against that identical row, and DynamoDB would reject the
+ * whole transaction with "Transaction request cannot include multiple
+ * operations on one item". Surfaced by actually testing checkout with
+ * two variants of the same product in the cart, not caught in review.
+ * Fix: collapse every cart line for a given product into ONE Update,
+ * with one SET clause per combo index and all their conditions ANDed
+ * together, so DynamoDB sees exactly one operation per item no matter
+ * how many of that product's variants are in the cart.
+ *
+ * cartItems: [{ itemId, quantity, comboIndex? }]
+ *   comboIndex is the index into that product's combinations[] array,
+ *   as returned by the public shop detail fetch -- required when the
+ *   product hasVariants, omitted otherwise.
+ */
 async function buildReservationPlan(cartItems) {
   if (!Array.isArray(cartItems) || cartItems.length === 0) {
     throw new Error('Cart is empty');
   }
 
-  const transactItems = [];
-  const orderLineItems = [];
-  let subtotal = 0;
-
+  // Defensive merge: sum quantities for any duplicate (itemId,
+  // comboIndex) lines. The frontend cart already prevents duplicates,
+  // but the backend shouldn't assume that -- and this also means the
+  // per-product grouping below never has to worry about the same combo
+  // index appearing twice within one product's decrement.
+  const mergedByKey = new Map();
   for (const line of cartItems) {
     const quantity = Number(line.quantity);
     if (!Number.isInteger(quantity) || quantity <= 0) {
       throw new Error(`Invalid quantity for item ${line.itemId}`);
     }
+    const key = `${line.itemId}::${line.comboIndex ?? ''}`;
+    const existing = mergedByKey.get(key);
+    if (existing) {
+      existing.quantity += quantity;
+    } else {
+      mergedByKey.set(key, { itemId: line.itemId, comboIndex: line.comboIndex, quantity });
+    }
+  }
+  const mergedLines = Array.from(mergedByKey.values());
 
-    const product = (await ddb.send(new GetCommand({ TableName: SHOP_ITEMS_TABLE, Key: { itemId: line.itemId } }))).Item;
-    if (!product) throw new Error(`Product no longer available: ${line.itemId}`);
+  // Fetch each distinct product once, even if it appears via multiple
+  // variant lines.
+  const productIds = Array.from(new Set(mergedLines.map((l) => l.itemId)));
+  const products = {};
+  for (const id of productIds) {
+    const product = (await ddb.send(new GetCommand({ TableName: SHOP_ITEMS_TABLE, Key: { itemId: id } }))).Item;
+    if (!product) throw new Error(`Product no longer available: ${id}`);
+    products[id] = product;
+  }
 
-    let unitPrice = product.price;
+  // decrementsByProduct groups every cart line by itemId so each
+  // product becomes exactly one transact operation, per the DynamoDB
+  // constraint explained above.
+  const decrementsByProduct = {};
+  const orderLineItems = [];
+  let subtotal = 0;
+
+  for (const line of mergedLines) {
+    const product = products[line.itemId];
+    const unitPrice = product.price;
     let variantValues = null;
 
     if (product.hasVariants) {
@@ -84,45 +137,73 @@ async function buildReservationPlan(cartItems) {
         throw new Error(`Invalid variant selection for ${product.name}`);
       }
       variantValues = combo.values;
-
-      transactItems.push({
-        Update: {
-          TableName: SHOP_ITEMS_TABLE,
-          Key: { itemId: product.itemId },
-          UpdateExpression: `SET combinations[${comboIndex}].stock = combinations[${comboIndex}].stock - :qty`,
-          ConditionExpression: `combinations[${comboIndex}].stock >= :qty`,
-          ExpressionAttributeValues: { ':qty': quantity },
-        },
-      });
+      decrementsByProduct[line.itemId] = decrementsByProduct[line.itemId] || { hasVariants: true, combos: [] };
+      decrementsByProduct[line.itemId].combos.push({ comboIndex, quantity: line.quantity });
     } else {
-      transactItems.push({
-        Update: {
-          TableName: SHOP_ITEMS_TABLE,
-          Key: { itemId: product.itemId },
-          UpdateExpression: 'SET stock = stock - :qty',
-          ConditionExpression: 'stock >= :qty',
-          ExpressionAttributeValues: { ':qty': quantity },
-        },
-      });
+      decrementsByProduct[line.itemId] = { hasVariants: false, quantity: line.quantity };
     }
 
     orderLineItems.push({
       itemId: product.itemId,
       name: product.name,
       unitPrice,
-      quantity,
+      quantity: line.quantity,
       comboIndex: product.hasVariants ? Number(line.comboIndex) : undefined,
       variantValues,
     });
 
-    subtotal += unitPrice * quantity;
+    subtotal += unitPrice * line.quantity;
+  }
+
+  // Build exactly one TransactWriteItems Update per product.
+  // productOrder tracks which itemId each transactItems[i] belongs to,
+  // in the same order -- needed later to translate a
+  // TransactionCanceledException's per-operation CancellationReasons
+  // back into "which product(s) actually sold out" for the buyer.
+  const transactItems = [];
+  const productOrder = [];
+
+  for (const [itemId, decrement] of Object.entries(decrementsByProduct)) {
+    productOrder.push(itemId);
+
+    if (decrement.hasVariants) {
+      const setClauses = [];
+      const condClauses = [];
+      const values = {};
+      decrement.combos.forEach(({ comboIndex, quantity }, i) => {
+        setClauses.push(`combinations[${comboIndex}].stock = combinations[${comboIndex}].stock - :qty${i}`);
+        condClauses.push(`combinations[${comboIndex}].stock >= :qty${i}`);
+        values[`:qty${i}`] = quantity;
+      });
+      transactItems.push({
+        Update: {
+          TableName: SHOP_ITEMS_TABLE,
+          Key: { itemId },
+          UpdateExpression: `SET ${setClauses.join(', ')}`,
+          ConditionExpression: condClauses.join(' AND '),
+          ExpressionAttributeValues: values,
+        },
+      });
+    } else {
+      transactItems.push({
+        Update: {
+          TableName: SHOP_ITEMS_TABLE,
+          Key: { itemId },
+          UpdateExpression: 'SET stock = stock - :qty',
+          ConditionExpression: 'stock >= :qty',
+          ExpressionAttributeValues: { ':qty': decrement.quantity },
+        },
+      });
+    }
   }
 
   subtotal = Math.round(subtotal * 100) / 100;
   const shippingCost = SHIPPING_FLAT_RATE;
   const total = Math.round((subtotal + shippingCost) * 100) / 100;
 
-  return { transactItems, orderLineItems, subtotal, shippingCost, total };
+  return {
+    transactItems, productOrder, orderLineItems, subtotal, shippingCost, total,
+  };
 }
 
 /**
@@ -134,7 +215,9 @@ async function buildReservationPlan(cartItems) {
  * went wrong".
  */
 async function reserveCartAndCreateOrder({ cartItems, donorId, email, shippingAddress, paypalOrderId }) {
-  const { transactItems, orderLineItems, subtotal, shippingCost, total } = await buildReservationPlan(cartItems);
+  const {
+    transactItems, productOrder, orderLineItems, subtotal, shippingCost, total,
+  } = await buildReservationPlan(cartItems);
 
   const now = new Date();
   const orderId = randomUUID();
@@ -169,22 +252,24 @@ async function reserveCartAndCreateOrder({ cartItems, donorId, email, shippingAd
   } catch (err) {
     if (err.name === 'TransactionCanceledException') {
       // CancellationReasons is positional, same order as transactItems.
-      // The last entry is always the order Put; everything before it is
-      // a stock-decrement Update, one per cart line.
+      // Since transactItems is now grouped PER PRODUCT (see
+      // buildReservationPlan), reasons[i] corresponds to productOrder[i]
+      // -- one entry per distinct product in the cart, not one per cart
+      // line. The last entry is always the order Put.
       const reasons = err.CancellationReasons || [];
-      const failedLines = [];
-      cartItems.forEach((line, i) => {
+      const failedItemIds = [];
+      productOrder.forEach((itemId, i) => {
         if (reasons[i] && reasons[i].Code === 'ConditionalCheckFailed') {
-          failedLines.push(line.itemId);
+          failedItemIds.push(itemId);
         }
       });
       const outOfStockError = new Error(
-        failedLines.length > 0
-          ? `Sorry, some items sold out while you were checking out: ${failedLines.join(', ')}`
+        failedItemIds.length > 0
+          ? `Sorry, some items sold out while you were checking out: ${failedItemIds.join(', ')}`
           : 'Could not reserve your cart, please try again',
       );
       outOfStockError.code = 'OUT_OF_STOCK';
-      outOfStockError.failedItemIds = failedLines;
+      outOfStockError.failedItemIds = failedItemIds;
       throw outOfStockError;
     }
     throw err;
@@ -196,6 +281,24 @@ async function reserveCartAndCreateOrder({ cartItems, donorId, email, shippingAd
 async function getOrder(orderId) {
   const result = await ddb.send(new GetCommand({ TableName: ORDERS_TABLE, Key: { orderId } }));
   return result.Item || null;
+}
+
+/**
+ * Order history for the account page -- queries the donorId-index GSI
+ * rather than scanning the whole table. Guest orders (donorId stored as
+ * a real NULL type, not a string) are automatically excluded from this
+ * index by DynamoDB itself, so this can never accidentally leak a
+ * guest's order into someone else's history. Sorted newest-first for
+ * display, same convention as donation history.
+ */
+async function getOrdersByDonor(donorId) {
+  const result = await ddb.send(new QueryCommand({
+    TableName: ORDERS_TABLE,
+    IndexName: 'donorId-index',
+    KeyConditionExpression: 'donorId = :donorId',
+    ExpressionAttributeValues: { ':donorId': donorId },
+  }));
+  return (result.Items || []).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
 /**
@@ -223,5 +326,5 @@ async function markOrderPaid(orderId, { paypalTransactionId }) {
 }
 
 module.exports = {
-  buildReservationPlan, reserveCartAndCreateOrder, getOrder, markOrderPaid, SHIPPING_FLAT_RATE,
+  buildReservationPlan, reserveCartAndCreateOrder, getOrder, getOrdersByDonor, markOrderPaid, SHIPPING_FLAT_RATE,
 };
