@@ -2,20 +2,32 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { getIdToken } from "@/lib/cognito";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   "https://vvabeaemg5.execute-api.us-east-1.amazonaws.com";
 
+async function authedFetch(path: string, options: RequestInit = {}) {
+  const token = await getIdToken();
+  if (!token) throw new Error("Not logged in");
+  return fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: { ...options.headers, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+  });
+}
+
 async function uploadPhoto(slugHint: string, file: File): Promise<string> {
-  const presignRes = await fetch(`${API_URL}/admin/news/photo/presign`, {
+  const presignRes = await authedFetch(`/admin/news/photo/presign`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ slugHint, fileName: file.name }),
   });
   const presignData = await presignRes.json();
   if (!presignRes.ok) throw new Error(presignData.error || "Failed to get upload URL");
 
+  // The actual S3 PUT uses the presigned URL itself as authorization --
+  // no bearer token here, and none needed; adding one would break the
+  // presigned signature.
   const uploadRes = await fetch(presignData.uploadUrl, {
     method: "PUT",
     body: file,
@@ -53,7 +65,7 @@ export default function AdminNewsEditExistingPage() {
   const fetchPost = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_URL}/admin/news/${slug}`);
+      const res = await authedFetch(`/admin/news/${slug}`);
       if (!res.ok) throw new Error("Post not found");
       const data = await res.json();
       setForm({
@@ -66,7 +78,7 @@ export default function AdminNewsEditExistingPage() {
       setIsPublished(data.isPublished === "true");
     } catch (err) {
       console.error("Error fetching post:", err);
-      setError("Could not load this post.");
+      setError(err instanceof Error ? err.message : "Could not load this post.");
     } finally {
       setLoading(false);
     }
@@ -99,9 +111,8 @@ export default function AdminNewsEditExistingPage() {
     }
     try {
       setSaving(true);
-      const res = await fetch(`${API_URL}/admin/news/${slug}`, {
+      const res = await authedFetch(`/admin/news/${slug}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...form, published }),
       });
       if (!res.ok) {

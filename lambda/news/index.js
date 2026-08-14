@@ -8,6 +8,14 @@
 //   PATCH  /admin/news/{slug}           (admin: update, incl. publish/unpublish)
 //   DELETE /admin/news/{slug}           (admin: delete)
 //   POST   /admin/news/photo/presign    (admin: presigned upload URL for the post image) -- NEW Aug 11
+//
+// AUTH: this Lambda is a MIXED public/admin handler, unlike the other
+// admin Lambdas. Only the /admin/news* routes require a verified JWT
+// (via the same authorizer protecting /donor/* and /donate/*) AND
+// isAdmin=true on the donor record -- see requireAdmin() in adminAuth.js.
+// The public /news and /news/{slug} routes are deliberately left open --
+// they're how the public news page and individual post pages work, and
+// must NOT be gated.
 
 const {
   listPublishedPosts,
@@ -19,10 +27,11 @@ const {
   deletePost,
 } = require('./dynamo');
 const { createPresignedUploadUrl, deletePhotoSafely } = require('./s3');
+const { requireAdmin } = require('./adminAuth');
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type,Authorization',
   'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
 };
 
@@ -34,12 +43,31 @@ function respond(statusCode, body) {
   };
 }
 
+const ADMIN_ROUTES = new Set([
+  'GET /admin/news',
+  'GET /admin/news/{slug}',
+  'POST /admin/news',
+  'PATCH /admin/news/{slug}',
+  'DELETE /admin/news/{slug}',
+  'POST /admin/news/photo/presign',
+]);
+
 exports.handler = async (event) => {
   if (event.requestContext?.http?.method === 'OPTIONS') {
     return respond(200, {});
   }
 
   const routeKey = event.routeKey;
+
+  // Only gate the /admin/news* routes -- public /news and /news/{slug}
+  // must stay open for the public site to keep working.
+  if (ADMIN_ROUTES.has(routeKey)) {
+    const auth = await requireAdmin(event);
+    if (!auth.authorized) {
+      return respond(auth.statusCode, { error: auth.error });
+    }
+  }
+
   const slug = event.pathParameters?.slug;
   let body = {};
   try {

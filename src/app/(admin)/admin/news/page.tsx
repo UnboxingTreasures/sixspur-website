@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { getIdToken } from "@/lib/cognito";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -20,6 +21,15 @@ function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+async function authedFetch(path: string, options: RequestInit = {}) {
+  const token = await getIdToken();
+  if (!token) throw new Error("Not logged in");
+  return fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: { ...options.headers, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+  });
+}
+
 export default function AdminNewsPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,13 +42,13 @@ export default function AdminNewsPage() {
   const fetchPosts = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_URL}/admin/news`);
+      const res = await authedFetch("/admin/news");
       if (!res.ok) throw new Error("Failed to load posts");
       const data = await res.json();
       setPosts(data);
     } catch (err) {
       console.error("Error fetching posts:", err);
-      setError("Failed to load posts");
+      setError(err instanceof Error ? err.message : "Failed to load posts");
     } finally {
       setLoading(false);
     }
@@ -46,9 +56,8 @@ export default function AdminNewsPage() {
 
   const togglePublished = async (slug: string, currentlyPublished: boolean) => {
     try {
-      const res = await fetch(`${API_URL}/admin/news/${slug}`, {
+      const res = await authedFetch(`/admin/news/${slug}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ published: !currentlyPublished }),
       });
       if (!res.ok) throw new Error("Failed to update post");
@@ -57,19 +66,19 @@ export default function AdminNewsPage() {
       );
     } catch (err) {
       console.error("Error toggling published status:", err);
-      alert("Failed to update post status. Please try again.");
+      alert(err instanceof Error ? err.message : "Failed to update post status. Please try again.");
     }
   };
 
   const deletePost = async (slug: string) => {
     if (!confirm("Delete this post? This cannot be undone.")) return;
     try {
-      const res = await fetch(`${API_URL}/admin/news/${slug}`, { method: "DELETE" });
+      const res = await authedFetch(`/admin/news/${slug}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete post");
       setPosts((prev) => prev.filter((p) => p.slug !== slug));
     } catch (err) {
       console.error("Error deleting post:", err);
-      alert("Failed to delete post. Please try again.");
+      alert(err instanceof Error ? err.message : "Failed to delete post. Please try again.");
     }
   };
 
