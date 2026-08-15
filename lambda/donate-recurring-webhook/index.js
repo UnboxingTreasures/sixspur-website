@@ -45,7 +45,12 @@ exports.handler = async (event) => {
   }
 
   const resource = webhookEvent.resource || {};
-  const subscriptionId = resource.id || resource.billing_agreement_id;
+  // billing_agreement_id is the subscription ID on PAYMENT.SALE.COMPLETED
+  // events (resource.id there is the transaction/sale ID instead) --
+  // for BILLING.SUBSCRIPTION.* events, billing_agreement_id doesn't
+  // exist on the resource at all, so this correctly falls through to
+  // resource.id in that case.
+  const subscriptionId = resource.billing_agreement_id || resource.id;
 
   try {
     switch (webhookEvent.event_type) {
