@@ -20,13 +20,14 @@ const ddb = DynamoDBDocumentClient.from(client);
 
 const RECURRING_TABLE = process.env.RECURRING_DONATIONS_TABLE || 'recurring_donations';
 
-async function createSubscriptionRecord({ subscriptionId, donorId, donorEmail, tier }) {
+async function createSubscriptionRecord({ subscriptionId, donorId, donorEmail, tier, isCustom = false }) {
   const now = new Date().toISOString();
   const item = {
     subscriptionId,
     donorId,
     donorEmail,
     tier,
+    isCustom,
     status: 'pending', // becomes "active" once BILLING.SUBSCRIPTION.ACTIVATED arrives
     failedPaymentCount: 0,
     createdAt: now,

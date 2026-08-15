@@ -20,11 +20,20 @@ const PAYPAL_API_BASE = PAYPAL_MODE === 'live' ? 'https://api-m.paypal.com' : 'h
 const SECRET_NAME = process.env.PAYPAL_SECRET_NAME || 'sixspur/paypal-api';
 
 const TIER_PLAN_IDS = {
+  5: process.env.PLAN_ID_5,
   10: process.env.PLAN_ID_10,
-  25: process.env.PLAN_ID_25,
-  50: process.env.PLAN_ID_50,
-  100: process.env.PLAN_ID_100,
+  20: process.env.PLAN_ID_20,
 };
+
+// Custom amounts don't get their own PayPal Plan -- there's no way to
+// pre-create a Plan for every possible dollar figure a donor might
+// type in. Instead, a custom subscription attaches to this TEMPLATE
+// plan_id but overrides its price via the `plan.billing_cycles`
+// override PayPal's Subscriptions API supports at creation time (see
+// createSubscription below). Which tier's plan_id is used as the
+// template doesn't matter functionally -- the override replaces the
+// price entirely -- so the $5 plan was picked arbitrarily.
+const CUSTOM_TEMPLATE_PLAN_ID = process.env.PLAN_ID_5;
 
 let cachedCredentials = null;
 
@@ -64,16 +73,44 @@ function planIdForTier(tier) {
 }
 
 /**
- * Creates a subscription for a preset tier. Unlike a one-time order,
- * this does NOT complete synchronously -- PayPal returns an "approve"
- * link the donor must be redirected to, approve on PayPal's site, then
- * get redirected back to return_url. The subscription only becomes
- * ACTIVE after that approval, confirmed to us via the
- * BILLING.SUBSCRIPTION.ACTIVATED webhook, not this response.
+ * Creates a subscription for either a preset tier OR a custom dollar
+ * amount -- exactly one of `tier` / `customAmount` should be passed.
+ * Unlike a one-time order, this does NOT complete synchronously --
+ * PayPal returns an "approve" link the donor must be redirected to,
+ * approve on PayPal's site, then get redirected back to return_url.
+ * The subscription only becomes ACTIVE after that approval, confirmed
+ * to us via the BILLING.SUBSCRIPTION.ACTIVATED webhook, not this
+ * response.
  */
-async function createSubscription({ tier, donorId, donorEmail, returnUrl, cancelUrl }) {
+async function createSubscription({ tier, customAmount, donorId, donorEmail, returnUrl, cancelUrl }) {
   const token = await getAccessToken();
-  const planId = planIdForTier(tier);
+
+  const body = {
+    custom_id: donorId, // threaded back to us on every webhook event for this subscription
+    subscriber: { email_address: donorEmail },
+    application_context: {
+      brand_name: 'Six Spur Ranch and Rescue',
+      user_action: 'SUBSCRIBE_NOW',
+      return_url: returnUrl,
+      cancel_url: cancelUrl,
+    },
+  };
+
+  if (customAmount) {
+    // Custom amount: attach to the template plan, then override its
+    // first billing cycle's price for this specific subscriber.
+    body.plan_id = CUSTOM_TEMPLATE_PLAN_ID;
+    body.plan = {
+      billing_cycles: [
+        {
+          sequence: 1,
+          pricing_scheme: { fixed_price: { value: customAmount.toFixed(2), currency_code: 'USD' } },
+        },
+      ],
+    };
+  } else {
+    body.plan_id = planIdForTier(tier);
+  }
 
   const res = await fetch(`${PAYPAL_API_BASE}/v1/billing/subscriptions`, {
     method: 'POST',
@@ -81,17 +118,7 @@ async function createSubscription({ tier, donorId, donorEmail, returnUrl, cancel
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      plan_id: planId,
-      custom_id: donorId, // threaded back to us on every webhook event for this subscription
-      subscriber: { email_address: donorEmail },
-      application_context: {
-        brand_name: 'Six Spur Ranch and Rescue',
-        user_action: 'SUBSCRIBE_NOW',
-        return_url: returnUrl,
-        cancel_url: cancelUrl,
-      },
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {

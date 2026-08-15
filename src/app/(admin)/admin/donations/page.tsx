@@ -43,6 +43,7 @@ interface RecurringDonation {
   donorId: string;
   donorEmail: string;
   tier: number;
+  isCustom?: boolean;
   status: "pending" | "active" | "suspended" | "cancelled";
   failedPaymentCount?: number;
   nextBillingAt?: string;
@@ -236,7 +237,9 @@ export default function AdminDonationsPage() {
               return (
                 <div key={r.subscriptionId} style={{ background: "#fff", border: "1.5px solid #E8E2DC", borderRadius: 12, padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: 15, color: "#111111" }}>${r.tier}/month</div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: "#111111" }}>
+                      ${r.tier}/month{r.isCustom && <span style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", marginLeft: 6 }}>CUSTOM</span>}
+                    </div>
                     <div style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>
                       {r.donorEmail} · Since {formatDate(r.createdAt)}
                       {r.status === "active" && r.nextBillingAt && ` · Next charge ${formatDate(r.nextBillingAt)}`}

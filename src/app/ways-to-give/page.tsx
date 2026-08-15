@@ -19,11 +19,12 @@ const AMAZON_WISHLIST_URL = "https://www.amazon.com/hz/wishlist/ls/RQ32EPLM2YJW?
 
 const PRESET_AMOUNTS = [5, 10, 20, 50];
 
-// NEW -- monthly preset tiers, per the recurring-donations scoping
-// decision: preset PayPal Plans only (no custom-amount override), since
-// each tier maps to a real pre-created PayPal Plan ID (PLAN_ID_10 etc.
-// on the donate-recurring Lambda) rather than a per-subscriber price.
-const RECURRING_TIERS = [10, 25, 50, 100];
+// NEW -- monthly preset tiers, each mapped to a real pre-created
+// PayPal Plan (PLAN_ID_5/10/20 on the donate-recurring Lambda). Custom
+// amounts below don't get their own preset button -- they use PayPal's
+// per-subscription price override instead, same mechanism as the
+// one-time custom-amount input elsewhere on this page.
+const RECURRING_TIERS = [5, 10, 20];
 
 const IMPACT = [
   { amount: 5,  label: "Feeds a chicken flock for a day" },
@@ -55,8 +56,11 @@ export default function WaysToGivePage() {
   // capture vs. a Subscriptions approval redirect), not just a
   // different number.
   const [recurringTier, setRecurringTier] = useState<number | null>(null);
+  const [recurringCustom, setRecurringCustom] = useState("");
   const [recurringLoading, setRecurringLoading] = useState(false);
   const [recurringError, setRecurringError] = useState("");
+
+  const activeRecurringAmount = recurringCustom ? parseFloat(recurringCustom) : recurringTier;
 
   const paypalContainerRef = useRef<HTMLDivElement>(null);
   const scriptLoadedRef = useRef(false);
@@ -165,7 +169,7 @@ export default function WaysToGivePage() {
   // Donations section reflects real status from there, not this
   // redirect alone.
   const handleSubscribe = async () => {
-    if (!recurringTier) return;
+    if (!activeRecurringAmount || activeRecurringAmount < 1) return;
     setRecurringError("");
     setRecurringLoading(true);
 
@@ -175,11 +179,18 @@ export default function WaysToGivePage() {
       return;
     }
 
+    // Preset tier and custom amount are mutually exclusive on the
+    // backend (POST /donate/recurring/create-subscription) -- send
+    // whichever one is actually active, not both.
+    const requestBody = recurringCustom
+      ? { amount: activeRecurringAmount }
+      : { tier: recurringTier };
+
     try {
       const res = await fetch(`${API_URL}/donate/recurring/create-subscription`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ tier: recurringTier }),
+        body: JSON.stringify(requestBody),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to start monthly donation");
@@ -222,7 +233,7 @@ export default function WaysToGivePage() {
               Give Once
             </button>
             <button
-              onClick={() => { setFrequency("monthly"); setRecurringError(""); }}
+              onClick={() => { setFrequency("monthly"); setRecurringError(""); setRecurringCustom(""); setRecurringTier(null); }}
               className={`flex-1 py-3 text-sm font-semibold transition-colors ${
                 frequency === "monthly"
                   ? "bg-spur-black text-white"
@@ -236,13 +247,13 @@ export default function WaysToGivePage() {
           {frequency === "monthly" ? (
             <>
               {/* Monthly tiers */}
-              <div className="grid grid-cols-4 gap-3 mb-4">
+              <div className="grid grid-cols-3 gap-3 mb-4">
                 {RECURRING_TIERS.map((tier) => (
                   <button
                     key={tier}
-                    onClick={() => { setRecurringTier(tier); setRecurringError(""); }}
+                    onClick={() => { setRecurringTier(tier); setRecurringCustom(""); setRecurringError(""); }}
                     className={`py-4 rounded text-sm font-bold transition-colors border ${
-                      recurringTier === tier
+                      recurringTier === tier && !recurringCustom
                         ? "bg-spur-orange text-white border-spur-orange"
                         : "bg-white text-spur-black border-spur-tan hover:border-spur-orange"
                     }`}
@@ -250,6 +261,19 @@ export default function WaysToGivePage() {
                     ${tier}/mo
                   </button>
                 ))}
+              </div>
+
+              {/* Custom monthly amount */}
+              <div className="relative mb-8">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-semibold">$</span>
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="Custom monthly amount"
+                  value={recurringCustom}
+                  onChange={(e) => { setRecurringCustom(e.target.value); setRecurringTier(null); setRecurringError(""); }}
+                  className="w-full pl-8 pr-4 py-4 border border-spur-tan rounded focus:outline-none focus:border-spur-orange transition-colors text-spur-black placeholder-gray-400"
+                />
               </div>
 
               {recurringError && (
@@ -260,19 +284,22 @@ export default function WaysToGivePage() {
 
               <button
                 onClick={handleSubscribe}
-                disabled={!recurringTier || recurringLoading}
+                disabled={!activeRecurringAmount || activeRecurringAmount < 1 || recurringLoading}
                 className="w-full bg-spur-orange text-white font-bold py-4 rounded hover:bg-spur-orange-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-sm uppercase tracking-widest"
               >
                 {recurringLoading
                   ? "One moment..."
-                  : recurringTier
-                  ? `Subscribe — $${recurringTier}/month`
+                  : activeRecurringAmount && activeRecurringAmount >= 1
+                  ? `Subscribe — $${activeRecurringAmount.toFixed(2)}/month`
                   : "Select a Monthly Amount"}
               </button>
 
               <p className="text-center text-xs text-gray-400 mt-4">
                 You&apos;ll approve your monthly donation on PayPal, then be redirected back here.
                 You can manage or cancel it anytime from your account.
+              </p>
+              <p className="text-center text-xs text-gray-400 mt-4">
+                You&apos;ll need to log in or create a free account to complete your donation — this lets us send your tax receipt and keep your giving history in one place.
               </p>
             </>
           ) : (

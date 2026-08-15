@@ -25,7 +25,7 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'POST,GET,OPTIONS',
 };
 
-const ALLOWED_TIERS = [10, 25, 50, 100];
+const ALLOWED_TIERS = [5, 10, 20];
 
 function respond(statusCode, body) {
   return {
@@ -63,25 +63,43 @@ exports.handler = async (event) => {
   try {
     switch (event.routeKey) {
       case 'POST /donate/recurring/create-subscription': {
-        const tier = Number(body.tier);
-        if (!ALLOWED_TIERS.includes(tier)) {
-          return respond(400, { error: `tier must be one of: ${ALLOWED_TIERS.join(', ')}` });
+        // Exactly one of tier (preset) or amount (custom) is expected.
+        // tier takes precedence if somehow both are sent -- amount is
+        // only used when tier is absent/invalid.
+        let tier, customAmount;
+        if (body.tier !== undefined) {
+          tier = Number(body.tier);
+          if (!ALLOWED_TIERS.includes(tier)) {
+            return respond(400, { error: `tier must be one of: ${ALLOWED_TIERS.join(', ')}` });
+          }
+        } else {
+          customAmount = Number(body.amount);
+          if (!Number.isFinite(customAmount) || customAmount < 1) {
+            return respond(400, { error: 'amount must be a number of at least $1' });
+          }
         }
 
         const siteUrl = process.env.SITE_URL || 'https://sixspurranch.org';
         const paypalSub = await createSubscription({
           tier,
+          customAmount,
           donorId: donor.donorId,
           donorEmail: donor.email,
           returnUrl: `${siteUrl}/account?recurring=confirmed`,
           cancelUrl: `${siteUrl}/donate?recurring=cancelled`,
         });
 
+        // The record stores whichever amount actually applies (preset
+        // tier or custom) under `tier` -- it's the true monthly dollar
+        // figure either way, just sourced differently. `isCustom` lets
+        // the admin view distinguish a custom pledge from a preset one
+        // without having to cross-reference PayPal Plan IDs.
         await createSubscriptionRecord({
           subscriptionId: paypalSub.id,
           donorId: donor.donorId,
           donorEmail: donor.email,
-          tier,
+          tier: tier || customAmount,
+          isCustom: tier === undefined,
         });
 
         const approveLink = paypalSub.links?.find((l) => l.rel === 'approve')?.href;

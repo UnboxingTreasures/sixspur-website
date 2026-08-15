@@ -43,12 +43,12 @@ aws iam put-role-policy \
 
 ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME}"
 
-# IMPORTANT: PLAN_ID_10/25/50/100 are placeholders -- fill these in with
-# the real PayPal Plan IDs after creating the 4 preset-tier Plans (one-time
-# PayPal setup, see the plan-creation script). Deploying with placeholders
+# IMPORTANT: PLAN_ID_5/10/20 are placeholders -- fill these in with
+# the real PayPal Plan IDs after creating the 3 preset-tier Plans (one-time
+# PayPal setup, see recreate-paypal-plans.js). Deploying with placeholders
 # means create-subscription will fail with "No PayPal plan configured for
 # tier: X" until these are set for real via update-function-configuration.
-ENV_VARS="Variables={RECURRING_DONATIONS_TABLE=recurring_donations,PAYPAL_MODE=sandbox,PAYPAL_SECRET_NAME=sixspur/paypal-api,SITE_URL=https://sixspurranch.org,PLAN_ID_10=REPLACE_ME,PLAN_ID_25=REPLACE_ME,PLAN_ID_50=REPLACE_ME,PLAN_ID_100=REPLACE_ME}"
+ENV_VARS="Variables={RECURRING_DONATIONS_TABLE=recurring_donations,PAYPAL_MODE=sandbox,PAYPAL_SECRET_NAME=sixspur/paypal-api,SITE_URL=https://sixspurranch.org,PLAN_ID_5=REPLACE_ME,PLAN_ID_10=REPLACE_ME,PLAN_ID_20=REPLACE_ME}"
 
 if aws lambda get-function --function-name "$FUNCTION_NAME" --profile "$PROFILE" --region "$REGION" >/dev/null 2>&1; then
   echo "Function exists, updating code..."

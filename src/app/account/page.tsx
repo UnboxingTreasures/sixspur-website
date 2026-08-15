@@ -37,6 +37,7 @@ function getDonationDescriptor(d: Donation): string {
 interface RecurringDonation {
   subscriptionId: string;
   tier: number;
+  isCustom?: boolean;
   status: "pending" | "active" | "suspended" | "cancelled" | "cancelling";
   nextBillingAt?: string;
   lastPaymentAt?: string;
