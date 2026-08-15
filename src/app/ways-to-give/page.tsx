@@ -9,6 +9,14 @@ import FundraiserThermometer from "@/components/sections/FundraiserThermometer";
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
 
+// NEW -- real client-provided static outbound links, confirmed static
+// (no API/embed) per the earlier scoping discussion. AMAZON_WISHLIST_URL
+// received Aug 14 2026; Chewy's is still pending, so that card renders
+// as a "coming soon" placeholder rather than a dead/broken link until
+// the real URL is provided.
+const AMAZON_WISHLIST_URL = "https://www.amazon.com/hz/wishlist/ls/RQ32EPLM2YJW?ref_=wl_share";
+const CHEWY_WISHLIST_URL = null; // set this to the real URL once Richard provides it
+
 const PRESET_AMOUNTS = [5, 10, 20, 50];
 
 const IMPACT = [
@@ -270,6 +278,61 @@ export default function WaysToGivePage() {
             nothing at all if no fundraiser is currently active. */}
         <FundraiserThermometer />
 
+      </section>
+
+      {/* Wish Lists -- NEW. Placed directly under the donation portion
+          per Jay's request Aug 14 2026, with id="wish-list" so the
+          homepage WaysToGive card and Footer's "Wish lists" link can
+          both jump straight here via /ways-to-give#wish-list instead of
+          landing at the top of the page. Background is light tan
+          (bg-spur-tan-light), deliberately NOT white or black --
+          matches the site's established rule that no two adjacent
+          sections share a background (this sits between the white
+          donation section above and the black "Other Ways to Help"
+          section below). */}
+      <section id="wish-list" className="bg-spur-tan-light py-16 px-6 scroll-mt-16">
+        <div className="max-w-4xl mx-auto text-center">
+          <p className="eyebrow mb-3">Send Supplies</p>
+          <h2 className="text-2xl md:text-3xl font-bold text-spur-black mb-4">Shop Our Wish Lists</h2>
+          <p className="text-gray-600 max-w-xl mx-auto leading-relaxed mb-10">
+            Prefer to send supplies directly? Dog food, hay, medical supplies, and more —
+            everything on our wish lists goes straight to the animals at Six Spur.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-xl mx-auto">
+            {/* Amazon -- live link */}
+            <a
+              href={AMAZON_WISHLIST_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex flex-col items-center justify-center gap-3 bg-white border border-spur-tan rounded p-8 hover:border-spur-orange transition-colors"
+            >
+              <span className="text-3xl">📦</span>
+              <span className="font-bold text-spur-black">Amazon Wish List</span>
+              <span className="text-spur-orange text-sm font-semibold">View list →</span>
+            </a>
+
+            {/* Chewy -- placeholder until Richard provides the real URL */}
+            {CHEWY_WISHLIST_URL ? (
+              <a
+                href={CHEWY_WISHLIST_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex flex-col items-center justify-center gap-3 bg-white border border-spur-tan rounded p-8 hover:border-spur-orange transition-colors"
+              >
+                <span className="text-3xl">🐾</span>
+                <span className="font-bold text-spur-black">Chewy Wish List</span>
+                <span className="text-spur-orange text-sm font-semibold">View list →</span>
+              </a>
+            ) : (
+              <div className="flex flex-col items-center justify-center gap-3 bg-white border border-spur-tan rounded p-8 opacity-50">
+                <span className="text-3xl">🐾</span>
+                <span className="font-bold text-spur-black">Chewy Wish List</span>
+                <span className="text-gray-400 text-sm font-semibold">Coming soon</span>
+              </div>
+            )}
+          </div>
+        </div>
       </section>
 
       {/* Other ways to help -- BLACK background, not the original light

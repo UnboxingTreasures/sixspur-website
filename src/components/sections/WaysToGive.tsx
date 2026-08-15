@@ -28,7 +28,9 @@ const ways = [
     title: 'Wish lists',
     description: 'Send supplies directly from our Amazon and Chewy wish lists. Dog food, hay, medical supplies — it all helps.',
     cta: 'View wish lists',
-    href: '/ways-to-give',
+    // Jumps straight to the Wish Lists section on /ways-to-give
+    // (id="wish-list") instead of landing at the top of the page.
+    href: '/ways-to-give#wish-list',
     highlight: false,
   },
 ];
