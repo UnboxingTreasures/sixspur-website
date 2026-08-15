@@ -38,9 +38,28 @@ const ddb = DynamoDBDocumentClient.from(client, { marshallOptions: { removeUndef
 
 const ORDERS_TABLE = process.env.ORDERS_TABLE || 'orders';
 const SHOP_ITEMS_TABLE = process.env.SHOP_ITEMS_TABLE || 'shop_items';
+const SHOP_SETTINGS_TABLE = process.env.SHOP_SETTINGS_TABLE || 'shop_settings';
 
 const RESERVATION_MINUTES = 15;
-const SHIPPING_FLAT_RATE = Number(process.env.SHIPPING_FLAT_RATE || 7.5);
+// Fallback ONLY -- used if the shop_settings row doesn't exist yet (e.g.
+// right after the table was created, before an admin has ever saved a
+// rate). The real, admin-editable value lives in DynamoDB now, not in
+// this env var -- see getShippingRate() below. Session 18: shipping was
+// a hardcoded constant before this; now it's a live setting so Richard
+// can change it from the admin Shop page without a code deploy.
+const DEFAULT_SHIPPING_FLAT_RATE = Number(process.env.SHIPPING_FLAT_RATE || 7.5);
+
+/**
+ * Live shipping rate, read fresh on every call rather than cached --
+ * this Lambda is invoked per-request anyway (no long-lived warm state
+ * to worry about going stale), so a rate change from the admin panel
+ * takes effect on the very next checkout, no redeploy needed.
+ */
+async function getShippingRate() {
+  const result = await ddb.send(new GetCommand({ TableName: SHOP_SETTINGS_TABLE, Key: { settingId: 'shipping' } }));
+  const rate = result.Item?.flatRate;
+  return typeof rate === 'number' && rate >= 0 ? rate : DEFAULT_SHIPPING_FLAT_RATE;
+}
 
 /**
  * Looks up each cart line's live product record and validates it,
@@ -198,7 +217,7 @@ async function buildReservationPlan(cartItems) {
   }
 
   subtotal = Math.round(subtotal * 100) / 100;
-  const shippingCost = SHIPPING_FLAT_RATE;
+  const shippingCost = await getShippingRate();
   const total = Math.round((subtotal + shippingCost) * 100) / 100;
 
   return {
@@ -326,5 +345,5 @@ async function markOrderPaid(orderId, { paypalTransactionId }) {
 }
 
 module.exports = {
-  buildReservationPlan, reserveCartAndCreateOrder, getOrder, getOrdersByDonor, markOrderPaid, SHIPPING_FLAT_RATE,
+  buildReservationPlan, reserveCartAndCreateOrder, getOrder, getOrdersByDonor, markOrderPaid, getShippingRate,
 };

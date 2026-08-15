@@ -45,14 +45,14 @@
 const { CognitoJwtVerifier } = require('aws-jwt-verify');
 const { createOrder: createPaypalOrder, captureOrder: capturePaypalOrder } = require('./paypal');
 const {
-  buildReservationPlan, reserveCartAndCreateOrder, getOrder, getOrdersByDonor, markOrderPaid,
+  buildReservationPlan, reserveCartAndCreateOrder, getOrder, getOrdersByDonor, markOrderPaid, getShippingRate,
 } = require('./dynamo');
 const { sendOrderConfirmation } = require('./email');
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-  'Access-Control-Allow-Methods': 'POST,OPTIONS',
+  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
 };
 
 const verifier = CognitoJwtVerifier.create({
@@ -204,6 +204,18 @@ async function handleGetMyOrders(event) {
   return respond(200, { orders });
 }
 
+/**
+ * Public, unauthenticated -- same reasoning as create-order/capture-order,
+ * this needs to be readable by anyone browsing the cart/checkout pages,
+ * not just logged-in donors. Lets the frontend display the REAL live
+ * rate instead of a hardcoded guess that could drift from what
+ * checkout actually charges once this became admin-editable.
+ */
+async function handleGetShopSettings() {
+  const flatRate = await getShippingRate();
+  return respond(200, { flatRate });
+}
+
 exports.handler = async (event) => {
   if (event.requestContext?.http?.method === 'OPTIONS') {
     return respond(200, {});
@@ -223,6 +235,7 @@ exports.handler = async (event) => {
       case 'POST /orders/create-order': return await handleCreateOrder(event, body);
       case 'POST /orders/capture-order': return await handleCaptureOrder(body);
       case 'GET /orders/mine': return await handleGetMyOrders(event);
+      case 'GET /shop-settings': return await handleGetShopSettings();
       default:
         return respond(404, { error: `No handler for route: ${event.routeKey}` });
     }

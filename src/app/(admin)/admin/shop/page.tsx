@@ -446,6 +446,15 @@ export default function AdminShopPage() {
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // NEW Session 18 -- admin-editable shipping rate. Kept separate from
+  // the product items state below since it's a different kind of data
+  // (one shop-wide setting, not a product), fetched/saved independently.
+  const [shippingRate, setShippingRate] = useState("");
+  const [shippingLoading, setShippingLoading] = useState(true);
+  const [shippingSaving, setShippingSaving] = useState(false);
+  const [shippingSaved, setShippingSaved] = useState(false);
+  const [shippingError, setShippingError] = useState("");
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [addDraft, setAddDraft] = useState<Draft>(emptyDraft());
   const [addFile, setAddFile] = useState<File | null>(null);
@@ -479,7 +488,49 @@ export default function AdminShopPage() {
 
   useEffect(() => {
     fetchItems();
+    fetchShippingSettings();
   }, []);
+
+  const fetchShippingSettings = async () => {
+    setShippingLoading(true);
+    setShippingError("");
+    try {
+      const res = await authedFetch("/admin/shop-settings");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load shipping settings");
+      setShippingRate(String(data.flatRate));
+    } catch (err: unknown) {
+      setShippingError(err instanceof Error ? err.message : "Failed to load shipping settings");
+    } finally {
+      setShippingLoading(false);
+    }
+  };
+
+  const saveShippingRate = async () => {
+    const numericRate = parseFloat(shippingRate);
+    if (!Number.isFinite(numericRate) || numericRate < 0) {
+      setShippingError("Enter a valid, non-negative shipping rate");
+      return;
+    }
+    setShippingSaving(true);
+    setShippingError("");
+    setShippingSaved(false);
+    try {
+      const res = await authedFetch("/admin/shop-settings", {
+        method: "PATCH",
+        body: JSON.stringify({ flatRate: numericRate }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to save shipping rate");
+      setShippingRate(String(data.flatRate));
+      setShippingSaved(true);
+      setTimeout(() => setShippingSaved(false), 2000);
+    } catch (err: unknown) {
+      setShippingError(err instanceof Error ? err.message : "Failed to save shipping rate");
+    } finally {
+      setShippingSaving(false);
+    }
+  };
 
   const validateDraftVariants = (draft: Draft): string | null => {
     if (!draft.hasVariants) return null;
@@ -624,6 +675,41 @@ export default function AdminShopPage() {
         >
           + Add Product
         </button>
+      </div>
+
+      {/* Shipping settings -- NEW Session 18. Own card, above the
+          product list, since it's shop-wide config rather than a
+          product. Saves independently of everything else on this page. */}
+      <div style={{ background: "#fff", border: "1.5px solid #E8E2DC", borderRadius: 12, padding: "20px 24px", marginBottom: "1.5rem" }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#111111", marginBottom: 4 }}>Shipping</div>
+        <p style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 12 }}>
+          Flat rate charged on every order, regardless of cart size. Takes effect immediately on the live site.
+        </p>
+        {shippingLoading ? (
+          <p style={{ color: "#9CA3AF", fontSize: 13 }}>Loading…</p>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 14, color: "#6B7280" }}>$</span>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={shippingRate}
+              onChange={(e) => { setShippingRate(e.target.value); setShippingSaved(false); }}
+              style={{ width: 100, boxSizing: "border-box", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit" }}
+            />
+            <button
+              onClick={saveShippingRate}
+              disabled={shippingSaving}
+              style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#111111", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: shippingSaving ? 0.6 : 1 }}
+            >
+              {shippingSaving ? "Saving…" : shippingSaved ? "Saved ✓" : "Save"}
+            </button>
+          </div>
+        )}
+        {shippingError && (
+          <p style={{ fontSize: 12, color: "#DC2626", marginTop: 8 }}>{shippingError}</p>
+        )}
       </div>
 
       {loading && <p style={{ color: "#9CA3AF", fontSize: 14 }}>Loading…</p>}

@@ -1,21 +1,38 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useCart } from '@/context/CartContext';
 
-// Flat shipping rate, matching lambda/orders/dynamo.js's SHIPPING_FLAT_RATE
-// default. This is a client-side DISPLAY estimate only -- the real,
-// authoritative total is always computed server-side at checkout
-// (POST /orders/create-order), which is also where PayPal actually
-// gets a total to quote. If the admin-editable shipping setting is ever
-// built, this constant should be replaced with a live fetch of it so
-// the displayed estimate can't drift from the real charge.
-const DISPLAY_SHIPPING_ESTIMATE = 7.5;
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+// Fallback shown ONLY until the real rate loads (or if the fetch fails)
+// -- matches the Lambda's own DEFAULT_SHIPPING_FLAT_RATE fallback, so
+// worst case this briefly shows the same number the backend would have
+// used anyway. The real, authoritative total is always computed
+// server-side at checkout (POST /orders/create-order); this is just
+// for display before that happens. Now fetched live from
+// GET /shop-settings instead of hardcoded, since Session 18 made the
+// rate admin-editable.
+const FALLBACK_SHIPPING_ESTIMATE = 7.5;
 
 export default function CartPage() {
   const { items, subtotal, updateQuantity, removeItem } = useCart();
+  const [shippingRate, setShippingRate] = useState(FALLBACK_SHIPPING_ESTIMATE);
 
-  const estimatedTotal = Math.round((subtotal + (items.length > 0 ? DISPLAY_SHIPPING_ESTIMATE : 0)) * 100) / 100;
+  useEffect(() => {
+    fetch(`${API_URL}/shop-settings`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (typeof data.flatRate === 'number') setShippingRate(data.flatRate);
+      })
+      .catch(() => {
+        // Silently keep the fallback -- a failed settings fetch
+        // shouldn't block someone from viewing their cart.
+      });
+  }, []);
+
+  const estimatedTotal = Math.round((subtotal + (items.length > 0 ? shippingRate : 0)) * 100) / 100;
 
   if (items.length === 0) {
     return (
@@ -106,7 +123,7 @@ export default function CartPage() {
             </div>
             <div className="flex justify-between text-gray-600">
               <span>Shipping (estimated)</span>
-              <span>${DISPLAY_SHIPPING_ESTIMATE.toFixed(2)}</span>
+              <span>${shippingRate.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-lg font-bold text-spur-black pt-2 border-t border-spur-tan-light">
               <span>Total</span>

@@ -9,6 +9,8 @@
 //   POST   /admin/shop/{id}/photos         — add already-uploaded photo(s) to the pool
 //   DELETE /admin/shop/{id}/photos         — remove one photo (body: { photoUrl })
 //   PATCH  /admin/shop/{id}/thumbnail      — set which pool photo is the main product image
+//   GET    /admin/shop-settings            — current shop-wide settings (currently just shipping)
+//   PATCH  /admin/shop-settings            — update shop-wide settings
 //
 // AUTH: every route here requires a verified JWT (via the same
 // authorizer protecting /donor/* and /donate/*) AND isAdmin=true on
@@ -18,7 +20,7 @@
 
 const {
   listAll, getById, createItem, updateItem, deleteItem,
-  addPhotos, removePhoto, setThumbnail,
+  addPhotos, removePhoto, setThumbnail, getShopSettings, updateShopSettings,
 } = require('./dynamo');
 const { createPresignedUploadUrl, deletePhoto } = require('./s3');
 const { requireAdmin } = require('./adminAuth');
@@ -136,6 +138,20 @@ async function handleSetThumbnail(itemId, body) {
   return respond(200, updated);
 }
 
+async function handleGetShopSettings() {
+  const settings = await getShopSettings();
+  return respond(200, settings);
+}
+
+async function handleUpdateShopSettings(body) {
+  try {
+    const updated = await updateShopSettings(body);
+    return respond(200, updated);
+  } catch (err) {
+    return respond(400, { error: err.message });
+  }
+}
+
 exports.handler = async (event) => {
   if (event.requestContext?.http?.method === 'OPTIONS') {
     return respond(200, {});
@@ -167,6 +183,8 @@ exports.handler = async (event) => {
       case 'POST /admin/shop/{id}/photos':        return await handleAddPhotos(itemId, body);
       case 'DELETE /admin/shop/{id}/photos':      return await handleRemovePhoto(itemId, body);
       case 'PATCH /admin/shop/{id}/thumbnail':    return await handleSetThumbnail(itemId, body);
+      case 'GET /admin/shop-settings':            return await handleGetShopSettings();
+      case 'PATCH /admin/shop-settings':          return await handleUpdateShopSettings(body);
       default:
         return respond(404, { error: `No handler for route: ${event.routeKey}` });
     }

@@ -8,7 +8,7 @@ import { useCart } from '@/context/CartContext';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
-const SHIPPING_ESTIMATE = 7.5; // matches lambda/orders SHIPPING_FLAT_RATE default -- real total always comes from the server response, this is just for display before that happens
+const SHIPPING_FALLBACK = 7.5; // shown ONLY until the real rate loads, matches the Lambda's own fallback default
 
 declare global {
   interface Window {
@@ -35,6 +35,7 @@ export default function CheckoutPage() {
 
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState<ShippingAddress>(EMPTY_ADDRESS);
+  const [shippingRate, setShippingRate] = useState(SHIPPING_FALLBACK);
   const [showPayPal, setShowPayPal] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [result, setResult] = useState<'success' | 'error' | 'out_of_stock' | null>(null);
@@ -51,6 +52,20 @@ export default function CheckoutPage() {
   const ourOrderIdRef = useRef<string | null>(null);
 
   const isFormValid = email.trim() && address.line1.trim() && address.city.trim() && address.state.trim() && address.zip.trim();
+
+  // Live shipping rate, fetched from the same admin-editable setting
+  // the server uses to compute the real total at create-order time.
+  useEffect(() => {
+    fetch(`${API_URL}/shop-settings`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (typeof data.flatRate === 'number') setShippingRate(data.flatRate);
+      })
+      .catch(() => {
+        // Silently keep the fallback -- checkout still works fine off
+        // the server's own authoritative total either way.
+      });
+  }, []);
 
   const loadPayPalScript = useCallback((): Promise<void> => {
     return new Promise((resolve, reject) => {
@@ -326,11 +341,11 @@ export default function CheckoutPage() {
               </div>
               <div className="flex justify-between text-sm text-gray-600">
                 <span>Shipping</span>
-                <span>${SHIPPING_ESTIMATE.toFixed(2)}</span>
+                <span>${shippingRate.toFixed(2)}</span>
               </div>
               <div className="flex justify-between font-bold text-spur-black pt-2 border-t border-spur-tan-light">
                 <span>Total</span>
-                <span>${(subtotal + SHIPPING_ESTIMATE).toFixed(2)}</span>
+                <span>${(subtotal + shippingRate).toFixed(2)}</span>
               </div>
             </div>
           </div>

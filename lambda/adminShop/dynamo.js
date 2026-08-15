@@ -14,6 +14,12 @@
 // frontend is responsible for regenerating the full combinations array
 // whenever dimensions/values change; this backend just validates that
 // what it's given is actually a complete, valid Cartesian product.
+//
+// SHOP SETTINGS (added Session 18): a second, unrelated table --
+// shop_settings, one row, settingId="shipping" -- for the admin-
+// editable flat shipping rate. Kept as its own table rather than a
+// field bolted onto shop_items, since it isn't a product and doesn't
+// belong in listAll()'s product scan/sort.
 
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, ScanCommand, GetCommand, PutCommand, UpdateCommand, DeleteCommand } = require('@aws-sdk/lib-dynamodb');
@@ -22,6 +28,7 @@ const client = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1
 const ddb = DynamoDBDocumentClient.from(client);
 
 const TABLE_NAME = process.env.SHOP_ITEMS_TABLE || 'shop_items';
+const SHOP_SETTINGS_TABLE = process.env.SHOP_SETTINGS_TABLE || 'shop_settings';
 
 /**
  * Validates variantDimensions + combinations together. Rather than
@@ -307,6 +314,28 @@ async function setThumbnail(itemId, photoUrl) {
   return result.Attributes;
 }
 
+// ── Shop settings (NEW Session 18) ──────────────────────────────────────
+// One-row table, always fixed key settingId="shipping". PutCommand
+// (not UpdateCommand) is intentional -- this is a singleton setting the
+// admin is always intending to fully set, not incrementally patch, so
+// a plain overwrite is simpler and avoids ConditionExpression games for
+// a row that's expected to be created the very first time it's saved.
+
+async function getShopSettings() {
+  const result = await ddb.send(new GetCommand({ TableName: SHOP_SETTINGS_TABLE, Key: { settingId: 'shipping' } }));
+  return { flatRate: typeof result.Item?.flatRate === 'number' ? result.Item.flatRate : 7.5 };
+}
+
+async function updateShopSettings({ flatRate }) {
+  const numericRate = Number(flatRate);
+  if (!Number.isFinite(numericRate) || numericRate < 0) {
+    throw new Error('Shipping rate must be a non-negative number');
+  }
+  const item = { settingId: 'shipping', flatRate: numericRate, updatedAt: new Date().toISOString() };
+  await ddb.send(new PutCommand({ TableName: SHOP_SETTINGS_TABLE, Item: item }));
+  return item;
+}
+
 module.exports = {
   listAll,
   getById,
@@ -316,4 +345,6 @@ module.exports = {
   addPhotos,
   removePhoto,
   setThumbnail,
+  getShopSettings,
+  updateShopSettings,
 };
