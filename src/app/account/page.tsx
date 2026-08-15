@@ -39,6 +39,8 @@ interface RecurringDonation {
   tier: number;
   isCustom?: boolean;
   status: "pending" | "active" | "suspended" | "cancelled" | "cancelling";
+  activatedAt?: string;
+  cancelledAt?: string;
   nextBillingAt?: string;
   lastPaymentAt?: string;
   createdAt: string;
@@ -304,7 +306,9 @@ function AccountDashboardContent() {
                         <div className="font-semibold text-spur-black">${r.tier}/month</div>
                         <div className="text-xs text-gray-500 mt-1">
                           {RECURRING_STATUS_LABEL[r.status] || r.status}
+                          {r.status === "active" && r.activatedAt && ` since ${formatDate(r.activatedAt)}`}
                           {r.status === "active" && r.nextBillingAt && ` · Next charge ${formatDate(r.nextBillingAt)}`}
+                          {r.status === "cancelled" && r.cancelledAt && ` on ${formatDate(r.cancelledAt)}`}
                         </div>
                       </div>
                       {(r.status === "active" || r.status === "suspended" || r.status === "pending") && (
