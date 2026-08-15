@@ -76,6 +76,7 @@ export default function AdminDonationsPage() {
   const [donations, setDonations] = useState<Donation[]>([]);
   const [recurring, setRecurring] = useState<RecurringDonation[]>([]);
   const [recurringFilter, setRecurringFilter] = useState<"active" | "cancelled" | "all">("active");
+  const [donationsOpen, setDonationsOpen] = useState(true);
   const [loading, setLoading] = useState(true);
   const [recurringLoading, setRecurringLoading] = useState(true);
   const [error, setError] = useState("");
@@ -230,6 +231,7 @@ export default function AdminDonationsPage() {
   return (
     <main style={{ padding: "2rem", maxWidth: "900px", margin: "0 auto" }}>
       <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#111111", marginBottom: "0.5rem" }}>Donations</h1>
+      <div style={{ width: 40, height: 3, background: "#E77A2D", borderRadius: 2, marginBottom: "0.75rem" }} />
       <p style={{ fontSize: 13, color: "#6B7280", marginBottom: "1.25rem" }}>
         {periodLabel}: <strong style={{ color: "#111111" }}>${totalForPeriod.toFixed(2)}</strong>
         {!recurringLoading && recurring.some((r) => r.status === "active") && (
@@ -239,8 +241,9 @@ export default function AdminDonationsPage() {
 
       {/* Recurring subscriptions */}
       <div style={{ marginBottom: "2rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-          <h2 style={{ fontSize: 16, fontWeight: 700, color: "#111111" }}>Recurring Subscriptions</h2>
+        <div style={{ marginBottom: "0.75rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <h2 style={{ fontSize: 16, fontWeight: 700, color: "#111111" }}>Recurring Subscriptions</h2>
           <div style={{ display: "flex", gap: 4, background: "#F7F4F0", borderRadius: 8, padding: 3 }}>
             {(["active", "cancelled", "all"] as const).map((option) => (
               <button
@@ -263,6 +266,8 @@ export default function AdminDonationsPage() {
               </button>
             ))}
           </div>
+          </div>
+          <div style={{ width: 40, height: 3, background: "#E77A2D", borderRadius: 2, marginTop: 8 }} />
         </div>
         {recurringLoading ? (
           <p style={{ color: "#9CA3AF", fontSize: 14 }}>Loading…</p>
@@ -300,8 +305,20 @@ export default function AdminDonationsPage() {
         )}
       </div>
 
-      <h2 style={{ fontSize: 16, fontWeight: 700, color: "#111111", marginBottom: "0.75rem" }}>All Donations</h2>
+      <button
+        type="button"
+        onClick={() => setDonationsOpen((open) => !open)}
+        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit" }}
+      >
+        <h2 style={{ fontSize: 16, fontWeight: 700, color: "#111111" }}>
+          All Donations{donations.length > 0 ? ` (${donations.length})` : ""}
+        </h2>
+        <span style={{ color: "#9CA3AF", fontSize: 13 }}>{donationsOpen ? "▾" : "▸"}</span>
+      </button>
+      <div style={{ width: 40, height: 3, background: "#E77A2D", borderRadius: 2, marginTop: 8, marginBottom: "0.75rem" }} />
 
+      {donationsOpen && (
+        <>
       {/* Archive filter */}
       <div style={{ display: "flex", gap: 10, marginBottom: "1.5rem" }}>
         <select
@@ -412,6 +429,8 @@ export default function AdminDonationsPage() {
           );
         })}
       </div>
+        </>
+      )}
     </main>
   );
 }
