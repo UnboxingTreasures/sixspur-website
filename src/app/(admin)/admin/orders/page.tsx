@@ -1,10 +1,7 @@
 "use client";
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { getIdToken } from "@/lib/cognito";
-
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
-
 interface OrderItem {
   itemId: string;
   name: string;
@@ -12,7 +9,6 @@ interface OrderItem {
   quantity: number;
   variantValues?: Record<string, string> | null;
 }
-
 interface ShippingAddress {
   name: string;
   line1: string;
@@ -21,7 +17,6 @@ interface ShippingAddress {
   state: string;
   zip: string;
 }
-
 interface Order {
   orderId: string;
   email: string;
@@ -38,7 +33,6 @@ interface Order {
   createdAt: string;
   paidAt?: string;
 }
-
 function getItemsSummary(o: Order): string {
   return o.items
     .map((item) => {
@@ -47,27 +41,29 @@ function getItemsSummary(o: Order): string {
     })
     .join(", ");
 }
-
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   paid: { bg: "#EAF7EE", text: "#1E8A4C" },
   shipped: { bg: "#EAF2FE", text: "#1D5FB5" },
   refunded: { bg: "#FEF9E7", text: "#B5900F" },
 };
-
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
-
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
-
   const [notesDraft, setNotesDraft] = useState<Record<string, string>>({});
   const [trackingDraft, setTrackingDraft] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
-
+  // Archive filter, same pattern as the Donations page -- Month is only
+  // meaningful once a specific year is chosen, and switching years or
+  // back to "All Years" always resets Month to "all" so the two
+  // controls never land in a contradictory state.
+  const [selectedYear, setSelectedYear] = useState<string>("all");
+  const [selectedMonth, setSelectedMonth] = useState<string>("all");
   const authedFetch = async (path: string, options: RequestInit = {}) => {
     const token = await getIdToken();
     if (!token) throw new Error("Not logged in");
@@ -76,7 +72,6 @@ export default function AdminOrdersPage() {
       headers: { ...options.headers, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     });
   };
-
   const fetchOrders = async () => {
     setLoading(true);
     setError("");
@@ -91,11 +86,9 @@ export default function AdminOrdersPage() {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     fetchOrders();
   }, []);
-
   const saveOrder = async (orderId: string, fields: Record<string, string>) => {
     setSavingId(orderId);
     try {
@@ -112,37 +105,86 @@ export default function AdminOrdersPage() {
       setSavingId(null);
     }
   };
-
   const saveNotes = (orderId: string) => {
     const notes = notesDraft[orderId];
     if (notes === undefined) return;
     saveOrder(orderId, { notes });
   };
-
   const markShipped = (orderId: string) => {
     const trackingNumber = trackingDraft[orderId] || "";
     saveOrder(orderId, { status: "shipped", trackingNumber });
   };
-
   const markRefunded = (orderId: string) => {
     if (!confirm("Mark this order as refunded? This doesn't process a real refund through PayPal -- do that there first, this just updates Six Spur's own record.")) return;
     saveOrder(orderId, { status: "refunded" });
   };
+  const availableYears = useMemo(() => {
+    const years = new Set(orders.map((o) => new Date(o.createdAt).getFullYear()));
+    return Array.from(years).sort((a, b) => b - a);
+  }, [orders]);
 
-  const totalThisMonth = orders
-    .filter((o) => {
-      const d = new Date(o.createdAt);
-      const now = new Date();
-      return o.status !== "refunded" && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    })
+  const filteredOrders = useMemo(() => {
+    if (selectedYear === "all") return orders;
+    const year = Number(selectedYear);
+    return orders.filter((o) => {
+      const date = new Date(o.createdAt);
+      if (date.getFullYear() !== year) return false;
+      if (selectedMonth !== "all" && date.getMonth() !== Number(selectedMonth)) return false;
+      return true;
+    });
+  }, [orders, selectedYear, selectedMonth]);
+
+  const handleYearChange = (year: string) => {
+    setSelectedYear(year);
+    setSelectedMonth("all");
+  };
+
+  // Shipped orders are NOT excluded here -- only refunded orders don't
+  // count toward the total, same as the original "This month" figure
+  // did. Every status (paid, shipped) still shows up in the list below
+  // regardless of the period filter -- the filter is purely date-based.
+  const totalForPeriod = filteredOrders
+    .filter((o) => o.status !== "refunded")
     .reduce((sum, o) => sum + o.total, 0);
 
+  const periodLabel = selectedYear === "all"
+    ? "All time"
+    : selectedMonth === "all"
+    ? `${selectedYear}`
+    : `${MONTH_NAMES[Number(selectedMonth)]} ${selectedYear}`;
   return (
     <main style={{ padding: "2rem", maxWidth: "900px", margin: "0 auto" }}>
       <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#111111", marginBottom: "0.5rem" }}>Orders</h1>
-      <p style={{ fontSize: 13, color: "#6B7280", marginBottom: "1.5rem" }}>
-        This month: <strong style={{ color: "#111111" }}>${totalThisMonth.toFixed(2)}</strong>
+      <div style={{ width: 40, height: 3, background: "#E77A2D", borderRadius: 2, marginBottom: "0.75rem" }} />
+      <p style={{ fontSize: 13, color: "#6B7280", marginBottom: "1.25rem" }}>
+        {periodLabel}: <strong style={{ color: "#111111" }}>${totalForPeriod.toFixed(2)}</strong>
       </p>
+
+      {/* Archive filter */}
+      <div style={{ display: "flex", gap: 10, marginBottom: "1.5rem" }}>
+        <select
+          value={selectedYear}
+          onChange={(e) => handleYearChange(e.target.value)}
+          style={{ padding: "8px 12px", borderRadius: 8, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit", color: "#111111", background: "#fff" }}
+        >
+          <option value="all">All Years</option>
+          {availableYears.map((year) => (
+            <option key={year} value={year}>{year}</option>
+          ))}
+        </select>
+
+        <select
+          value={selectedMonth}
+          onChange={(e) => setSelectedMonth(e.target.value)}
+          disabled={selectedYear === "all"}
+          style={{ padding: "8px 12px", borderRadius: 8, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit", color: selectedYear === "all" ? "#C4C4C4" : "#111111", background: selectedYear === "all" ? "#F7F4F0" : "#fff", cursor: selectedYear === "all" ? "not-allowed" : "pointer" }}
+        >
+          <option value="all">All Months</option>
+          {MONTH_NAMES.map((name, i) => (
+            <option key={name} value={i}>{name}</option>
+          ))}
+        </select>
+      </div>
 
       {loading && <p style={{ color: "#9CA3AF", fontSize: 14 }}>Loading…</p>}
       {error && (
@@ -153,9 +195,11 @@ export default function AdminOrdersPage() {
       {!loading && !error && orders.length === 0 && (
         <p style={{ color: "#9CA3AF", fontSize: 14 }}>No orders yet.</p>
       )}
-
+      {!loading && !error && orders.length > 0 && filteredOrders.length === 0 && (
+        <p style={{ color: "#9CA3AF", fontSize: 14 }}>No orders in {periodLabel.toLowerCase()}.</p>
+      )}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {orders.map((o) => {
+        {filteredOrders.map((o) => {
           const isExpanded = expandedId === o.orderId;
           const colors = STATUS_COLORS[o.status];
           return (
@@ -178,7 +222,6 @@ export default function AdminOrdersPage() {
                   {o.status}
                 </span>
               </div>
-
               {isExpanded && (
                 <div style={{ padding: "0 20px 20px", borderTop: "1px solid #F0EBE5" }}>
                   <div style={{ marginTop: 16, marginBottom: 16 }}>
@@ -196,7 +239,6 @@ export default function AdminOrdersPage() {
                       Subtotal ${o.subtotal.toFixed(2)} + Shipping ${o.shippingCost.toFixed(2)} = <strong>${o.total.toFixed(2)}</strong>
                     </div>
                   </div>
-
                   <div style={{ marginBottom: 16 }}>
                     <label style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", display: "block", marginBottom: 4 }}>Shipping Address</label>
                     <div style={{ fontSize: 13, color: "#111111", lineHeight: 1.5 }}>
@@ -206,14 +248,12 @@ export default function AdminOrdersPage() {
                       {o.shippingAddress.city}, {o.shippingAddress.state} {o.shippingAddress.zip}
                     </div>
                   </div>
-
                   {o.paypalTransactionId && (
                     <p style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 12 }}>PayPal transaction: {o.paypalTransactionId}</p>
                   )}
                   <p style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>
                     {o.donorId ? "Placed by logged-in donor" : "Guest checkout"}
                   </p>
-
                   <div style={{ marginBottom: 16 }}>
                     <label style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", display: "block", marginBottom: 4 }}>Notes</label>
                     <textarea
@@ -230,7 +270,6 @@ export default function AdminOrdersPage() {
                       {savingId === o.orderId ? "Saving…" : "Save Notes"}
                     </button>
                   </div>
-
                   {o.status === "paid" && (
                     <div style={{ paddingTop: 16, borderTop: "1px solid #F0EBE5" }}>
                       <label style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", display: "block", marginBottom: 4 }}>Tracking Number (optional)</label>
@@ -259,7 +298,6 @@ export default function AdminOrdersPage() {
                       </div>
                     </div>
                   )}
-
                   {o.status === "shipped" && o.trackingNumber && (
                     <p style={{ fontSize: 13, color: "#111111", paddingTop: 16, borderTop: "1px solid #F0EBE5" }}>
                       Tracking: <strong>{o.trackingNumber}</strong>

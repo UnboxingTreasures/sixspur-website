@@ -1,10 +1,7 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import { getIdToken } from "@/lib/cognito";
-
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
-
 interface Fundraiser {
   fundraiserId: string;
   title: string;
@@ -15,25 +12,21 @@ interface Fundraiser {
   raisedAmount: number;
   createdAt: string;
 }
-
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   draft: { bg: "#F0EBE5", text: "#6B7280" },
   active: { bg: "#EAF7EE", text: "#1E8A4C" },
   stopped: { bg: "#FEF2F2", text: "#DC2626" },
   archived: { bg: "#F0EBE5", text: "#9CA3AF" },
 };
-
 interface Draft {
   title: string;
   description: string;
   goalAmount: string;
   closingDate: string;
 }
-
 function emptyDraft(): Draft {
   return { title: "", description: "", goalAmount: "", closingDate: "" };
 }
-
 function draftFromFundraiser(f: Fundraiser): Draft {
   return {
     title: f.title,
@@ -42,7 +35,6 @@ function draftFromFundraiser(f: Fundraiser): Draft {
     closingDate: f.closingDate,
   };
 }
-
 function FundraiserFields({ draft, setDraft }: { draft: Draft; setDraft: (d: Draft) => void }) {
   return (
     <>
@@ -55,7 +47,6 @@ function FundraiserFields({ draft, setDraft }: { draft: Draft; setDraft: (d: Dra
           style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 8, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit" }}
         />
       </div>
-
       <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
         <div style={{ flex: 1 }}>
           <label style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", display: "block", marginBottom: 4 }}>Goal Amount ($)</label>
@@ -78,7 +69,6 @@ function FundraiserFields({ draft, setDraft }: { draft: Draft; setDraft: (d: Dra
           />
         </div>
       </div>
-
       <div style={{ marginBottom: 12 }}>
         <label style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", display: "block", marginBottom: 4 }}>Description</label>
         <textarea
@@ -92,34 +82,27 @@ function FundraiserFields({ draft, setDraft }: { draft: Draft; setDraft: (d: Dra
     </>
   );
 }
-
 export default function AdminFundraiserPage() {
   const [fundraisers, setFundraisers] = useState<Fundraiser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
-
   const [showAddModal, setShowAddModal] = useState(false);
   const [addDraft, setAddDraft] = useState<Draft>(emptyDraft());
   const [addSubmitting, setAddSubmitting] = useState(false);
   const [addError, setAddError] = useState("");
-
   const [editDrafts, setEditDrafts] = useState<Record<string, Draft>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [lifecycleActionId, setLifecycleActionId] = useState<string | null>(null);
-
   // NEW -- collapsible archive section, default open.
   const [archiveOpen, setArchiveOpen] = useState(true);
-
   // Archived fundraisers are shown in their own read-only section, not
   // mixed into the normal editable list -- an archived card never gets
   // FundraiserFields, an expand-to-edit affordance, or ANY lifecycle
   // button, since the whole point is that it's a closed, final record.
   const liveFundraisers = fundraisers.filter((f) => f.status !== "archived");
   const archivedFundraisers = fundraisers.filter((f) => f.status === "archived");
-
   const activeFundraiser = fundraisers.find((f) => f.status === "active");
-
   const authedFetch = async (path: string, options: RequestInit = {}) => {
     const token = await getIdToken();
     if (!token) throw new Error("Not logged in");
@@ -128,7 +111,6 @@ export default function AdminFundraiserPage() {
       headers: { ...options.headers, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     });
   };
-
   const fetchFundraisers = async () => {
     setLoading(true);
     setError("");
@@ -143,17 +125,14 @@ export default function AdminFundraiserPage() {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     fetchFundraisers();
   }, []);
-
   const submitAdd = async () => {
     if (!addDraft.title.trim()) return setAddError("Title is required");
     const goal = parseFloat(addDraft.goalAmount);
     if (!Number.isFinite(goal) || goal <= 0) return setAddError("Enter a valid goal amount");
     if (!addDraft.closingDate) return setAddError("Closing date is required");
-
     setAddSubmitting(true);
     setAddError("");
     try {
@@ -163,7 +142,6 @@ export default function AdminFundraiserPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create fundraiser");
-
       setFundraisers((prev) => [{ ...data, raisedAmount: 0 }, ...prev]);
       setShowAddModal(false);
       setAddDraft(emptyDraft());
@@ -173,13 +151,11 @@ export default function AdminFundraiserPage() {
       setAddSubmitting(false);
     }
   };
-
   const saveEdit = async (fundraiserId: string) => {
     const draft = editDrafts[fundraiserId];
     if (!draft) return;
     const goal = parseFloat(draft.goalAmount);
     if (!Number.isFinite(goal) || goal <= 0) return alert("Enter a valid goal amount");
-
     setSavingId(fundraiserId);
     try {
       const res = await authedFetch(`/admin/fundraisers/${fundraiserId}`, {
@@ -195,14 +171,12 @@ export default function AdminFundraiserPage() {
       setSavingId(null);
     }
   };
-
   const handleBegin = async (fundraiserId: string) => {
     const other = fundraisers.find((f) => f.status === "active" && f.fundraiserId !== fundraiserId);
     const confirmMsg = other
       ? `This will stop "${other.title}" (currently active) and start this one instead. Continue?`
       : "Start this fundraiser? It'll appear live on the Ways to Give page.";
     if (!confirm(confirmMsg)) return;
-
     setLifecycleActionId(fundraiserId);
     try {
       const res = await authedFetch(`/admin/fundraisers/${fundraiserId}/begin`, { method: "POST" });
@@ -215,7 +189,6 @@ export default function AdminFundraiserPage() {
       setLifecycleActionId(null);
     }
   };
-
   const handleStop = async (fundraiserId: string) => {
     if (!confirm("Stop this fundraiser? It'll be removed from the Ways to Give page immediately.")) return;
     setLifecycleActionId(fundraiserId);
@@ -230,7 +203,6 @@ export default function AdminFundraiserPage() {
       setLifecycleActionId(null);
     }
   };
-
   // One-way -- the confirmation wording says exactly that, matching the
   // Aug 14 scoping spec verbatim, so there's no ambiguity about what
   // clicking through actually does.
@@ -249,7 +221,6 @@ export default function AdminFundraiserPage() {
       setLifecycleActionId(null);
     }
   };
-
   return (
     <main style={{ padding: "2rem", maxWidth: "900px", margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
@@ -261,12 +232,26 @@ export default function AdminFundraiserPage() {
           + Create Fundraiser
         </button>
       </div>
-      <p style={{ fontSize: 13, color: "#6B7280", marginBottom: "1.5rem" }}>
-        {activeFundraiser
-          ? <>Currently live: <strong style={{ color: "#111111" }}>{activeFundraiser.title}</strong> — ${activeFundraiser.raisedAmount.toFixed(2)} of ${activeFundraiser.goalAmount.toFixed(2)}</>
-          : "No fundraiser is currently active."}
-      </p>
+      <div style={{ width: 40, height: 3, background: "#E77A2D", borderRadius: 2, marginBottom: "1.5rem" }} />
 
+      {/* Active -- always rendered, even with nothing running, so it's
+          obvious at a glance whether a campaign is live without
+          scanning the list below. This is a summary only; the same
+          fundraiser stays editable via its card further down -- this
+          isn't a second interactive copy of it. */}
+      <h2 style={{ fontSize: 16, fontWeight: 700, color: "#111111", marginBottom: 8 }}>Active</h2>
+      <div style={{ width: 40, height: 3, background: "#E77A2D", borderRadius: 2, marginBottom: "0.75rem" }} />
+      {activeFundraiser ? (
+        <div style={{ background: "#EAF7EE", border: "1.5px solid #B9E4C9", borderRadius: 12, padding: "14px 20px", marginBottom: "2rem" }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: "#111111" }}>{activeFundraiser.title}</div>
+          <div style={{ fontSize: 13, color: "#1E8A4C", marginTop: 2 }}>
+            ${activeFundraiser.raisedAmount.toFixed(2)} of ${activeFundraiser.goalAmount.toFixed(2)} (
+            {(activeFundraiser.goalAmount > 0 ? Math.min(100, (activeFundraiser.raisedAmount / activeFundraiser.goalAmount) * 100) : 0).toFixed(0)}%) · Closes {activeFundraiser.closingDate}
+          </div>
+        </div>
+      ) : (
+        <p style={{ color: "#9CA3AF", fontSize: 14, marginBottom: "2rem" }}>No fundraiser is currently active.</p>
+      )}
       {loading && <p style={{ color: "#9CA3AF", fontSize: 14 }}>Loading…</p>}
       {error && (
         <div style={{ padding: "12px 16px", borderRadius: 10, background: "#FEF2F2", border: "1.5px solid #FECACA", color: "#DC2626", fontSize: 13, marginBottom: "1rem" }}>
@@ -276,14 +261,12 @@ export default function AdminFundraiserPage() {
       {!loading && !error && liveFundraisers.length === 0 && (
         <p style={{ color: "#9CA3AF", fontSize: 14 }}>No fundraisers created yet.</p>
       )}
-
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {liveFundraisers.map((f) => {
           const isExpanded = expandedId === f.fundraiserId;
           const draft = editDrafts[f.fundraiserId] ?? draftFromFundraiser(f);
           const colors = STATUS_COLORS[f.status];
           const percent = f.goalAmount > 0 ? Math.min(100, (f.raisedAmount / f.goalAmount) * 100) : 0;
-
           return (
             <div key={f.fundraiserId} style={{ background: "#fff", border: "1.5px solid #E8E2DC", borderRadius: 12, overflow: "hidden" }}>
               <div
@@ -303,7 +286,6 @@ export default function AdminFundraiserPage() {
                   {f.status}
                 </span>
               </div>
-
               {isExpanded && (
                 <div style={{ padding: "0 20px 20px", borderTop: "1px solid #F0EBE5" }}>
                   <div style={{ marginTop: 16 }}>
@@ -316,7 +298,6 @@ export default function AdminFundraiserPage() {
                       {savingId === f.fundraiserId ? "Saving…" : "Save"}
                     </button>
                   </div>
-
                   <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid #F0EBE5", display: "flex", gap: 8 }}>
                     {f.status !== "active" && (
                       <button
@@ -355,7 +336,6 @@ export default function AdminFundraiserPage() {
           );
         })}
       </div>
-
       {/* Read-only archive -- separate section, visually distinct
           (muted border/background), no expand-to-edit and no lifecycle
           buttons of any kind. This is the "separate archive menu" from
@@ -375,6 +355,7 @@ export default function AdminFundraiserPage() {
             </h2>
             <span style={{ color: "#9CA3AF", fontSize: 13 }}>{archiveOpen ? "▾" : "▸"}</span>
           </button>
+          <div style={{ width: 40, height: 3, background: "#E77A2D", borderRadius: 2, marginTop: 8, marginBottom: 8 }} />
           <p style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>Closed-out fundraisers, view-only.</p>
           {archiveOpen && (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -403,17 +384,13 @@ export default function AdminFundraiserPage() {
           )}
         </div>
       )}
-
       {showAddModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(17,17,17,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, zIndex: 50, overflowY: "auto" }}>
           <div style={{ background: "#fff", borderRadius: 12, padding: 24, maxWidth: 460, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
             <div style={{ fontSize: 16, fontWeight: 700, color: "#111111", marginBottom: 4 }}>Create Fundraiser</div>
             <p style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>Starts as a draft -- use &quot;Begin&quot; from the list to make it live.</p>
-
             <FundraiserFields draft={addDraft} setDraft={setAddDraft} />
-
             {addError && <div style={{ fontSize: 12, color: "#DC2626", marginBottom: 12 }}>{addError}</div>}
-
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button
                 onClick={() => { setShowAddModal(false); setAddError(""); }}
