@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { getIdToken } from "@/lib/cognito";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -38,6 +38,8 @@ const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   failed: { bg: "#FEF2F2", text: "#DC2626" },
 };
 
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
@@ -50,6 +52,15 @@ export default function AdminDonationsPage() {
 
   const [notesDraft, setNotesDraft] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+
+  // NEW -- archive filter. Year defaults to "all" (full history); Month
+  // is only meaningful once a specific year is chosen, since "January"
+  // across every year at once isn't a well-defined filter -- picking a
+  // year resets month back to "all" for that year, and switching back
+  // to "All years" resets month to "all" too, so the two controls can
+  // never land in a contradictory state.
+  const [selectedYear, setSelectedYear] = useState<string>("all");
+  const [selectedMonth, setSelectedMonth] = useState<string>("all");
 
   const authedFetch = async (path: string, options: RequestInit = {}) => {
     const token = await getIdToken();
@@ -78,6 +89,30 @@ export default function AdminDonationsPage() {
   useEffect(() => {
     fetchDonations();
   }, []);
+
+  // Years that actually have donations in them, newest first -- avoids
+  // showing empty years in the dropdown that would just filter to
+  // nothing.
+  const availableYears = useMemo(() => {
+    const years = new Set(donations.map((d) => new Date(d.createdAt).getFullYear()));
+    return Array.from(years).sort((a, b) => b - a);
+  }, [donations]);
+
+  const filteredDonations = useMemo(() => {
+    if (selectedYear === "all") return donations;
+    const year = Number(selectedYear);
+    return donations.filter((d) => {
+      const date = new Date(d.createdAt);
+      if (date.getFullYear() !== year) return false;
+      if (selectedMonth !== "all" && date.getMonth() !== Number(selectedMonth)) return false;
+      return true;
+    });
+  }, [donations, selectedYear, selectedMonth]);
+
+  const handleYearChange = (year: string) => {
+    setSelectedYear(year);
+    setSelectedMonth("all"); // avoids a stale month filter surviving a year change
+  };
 
   const saveNotes = async (donationId: string) => {
     const notes = notesDraft[donationId];
@@ -116,20 +151,48 @@ export default function AdminDonationsPage() {
     }
   };
 
-  const totalThisMonth = donations
-    .filter((d) => {
-      const d1 = new Date(d.createdAt);
-      const now = new Date();
-      return d.status === "completed" && d1.getMonth() === now.getMonth() && d1.getFullYear() === now.getFullYear();
-    })
+  const totalForPeriod = filteredDonations
+    .filter((d) => d.status === "completed")
     .reduce((sum, d) => sum + d.amount, 0);
+
+  const periodLabel = selectedYear === "all"
+    ? "All time"
+    : selectedMonth === "all"
+    ? `${selectedYear}`
+    : `${MONTH_NAMES[Number(selectedMonth)]} ${selectedYear}`;
 
   return (
     <main style={{ padding: "2rem", maxWidth: "900px", margin: "0 auto" }}>
       <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#111111", marginBottom: "0.5rem" }}>Donations</h1>
-      <p style={{ fontSize: 13, color: "#6B7280", marginBottom: "1.5rem" }}>
-        This month: <strong style={{ color: "#111111" }}>${totalThisMonth.toFixed(2)}</strong>
+      <p style={{ fontSize: 13, color: "#6B7280", marginBottom: "1.25rem" }}>
+        {periodLabel}: <strong style={{ color: "#111111" }}>${totalForPeriod.toFixed(2)}</strong>
       </p>
+
+      {/* Archive filter */}
+      <div style={{ display: "flex", gap: 10, marginBottom: "1.5rem" }}>
+        <select
+          value={selectedYear}
+          onChange={(e) => handleYearChange(e.target.value)}
+          style={{ padding: "8px 12px", borderRadius: 8, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit", color: "#111111", background: "#fff" }}
+        >
+          <option value="all">All Years</option>
+          {availableYears.map((year) => (
+            <option key={year} value={year}>{year}</option>
+          ))}
+        </select>
+
+        <select
+          value={selectedMonth}
+          onChange={(e) => setSelectedMonth(e.target.value)}
+          disabled={selectedYear === "all"}
+          style={{ padding: "8px 12px", borderRadius: 8, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit", color: selectedYear === "all" ? "#C4C4C4" : "#111111", background: selectedYear === "all" ? "#F7F4F0" : "#fff", cursor: selectedYear === "all" ? "not-allowed" : "pointer" }}
+        >
+          <option value="all">All Months</option>
+          {MONTH_NAMES.map((name, i) => (
+            <option key={name} value={i}>{name}</option>
+          ))}
+        </select>
+      </div>
 
       {loading && <p style={{ color: "#9CA3AF", fontSize: 14 }}>Loading…</p>}
       {error && (
@@ -140,9 +203,12 @@ export default function AdminDonationsPage() {
       {!loading && !error && donations.length === 0 && (
         <p style={{ color: "#9CA3AF", fontSize: 14 }}>No donations recorded yet.</p>
       )}
+      {!loading && !error && donations.length > 0 && filteredDonations.length === 0 && (
+        <p style={{ color: "#9CA3AF", fontSize: 14 }}>No donations in {periodLabel.toLowerCase()}.</p>
+      )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {donations.map((d) => {
+        {filteredDonations.map((d) => {
           const isExpanded = expandedId === d.donationId;
           const colors = STATUS_COLORS[d.status];
           return (
