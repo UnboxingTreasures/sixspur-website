@@ -32,6 +32,31 @@ function getDonationDescriptor(d: Donation): string {
   return d.type === "recurring" ? "Monthly" : "One-time";
 }
 
+// NEW -- recurring subscriptions, from the separate adminRecurringDonations
+// Lambda / recurring_donations table. Kept as its own section rather
+// than merged into the donations list below: a subscription is a
+// standing record (tier, status), not an individual charge -- the
+// actual monthly charges still appear in Donations below as type:
+// "recurring" rows once the webhook records them.
+interface RecurringDonation {
+  subscriptionId: string;
+  donorId: string;
+  donorEmail: string;
+  tier: number;
+  status: "pending" | "active" | "suspended" | "cancelled";
+  failedPaymentCount?: number;
+  nextBillingAt?: string;
+  lastPaymentAt?: string;
+  createdAt: string;
+}
+
+const RECURRING_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
+  active: { bg: "#EAF7EE", text: "#1E8A4C" },
+  pending: { bg: "#FEF9E7", text: "#B5900F" },
+  suspended: { bg: "#FEF9E7", text: "#B5900F" },
+  cancelled: { bg: "#F3F4F6", text: "#6B7280" },
+};
+
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   completed: { bg: "#EAF7EE", text: "#1E8A4C" },
   refunded: { bg: "#FEF9E7", text: "#B5900F" },
@@ -46,7 +71,9 @@ function formatDate(iso: string) {
 
 export default function AdminDonationsPage() {
   const [donations, setDonations] = useState<Donation[]>([]);
+  const [recurring, setRecurring] = useState<RecurringDonation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [recurringLoading, setRecurringLoading] = useState(true);
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -86,8 +113,25 @@ export default function AdminDonationsPage() {
     }
   };
 
+  const fetchRecurring = async () => {
+    setRecurringLoading(true);
+    try {
+      const res = await authedFetch("/admin/recurring-donations");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load recurring donations");
+      setRecurring(data.subscriptions || []);
+    } catch (err) {
+      // Non-fatal for the page as a whole -- one-time donations still
+      // load and display normally if this call fails.
+      console.error("Failed to load recurring donations:", err);
+    } finally {
+      setRecurringLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchDonations();
+    fetchRecurring();
   }, []);
 
   // Years that actually have donations in them, newest first -- avoids
@@ -161,12 +205,55 @@ export default function AdminDonationsPage() {
     ? `${selectedYear}`
     : `${MONTH_NAMES[Number(selectedMonth)]} ${selectedYear}`;
 
+  // Sum of active monthly subscriptions -- projected recurring revenue,
+  // distinct from totalForPeriod above which only reflects money
+  // already collected.
+  const monthlyRecurringTotal = recurring
+    .filter((r) => r.status === "active")
+    .reduce((sum, r) => sum + r.tier, 0);
+
   return (
     <main style={{ padding: "2rem", maxWidth: "900px", margin: "0 auto" }}>
       <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#111111", marginBottom: "0.5rem" }}>Donations</h1>
       <p style={{ fontSize: 13, color: "#6B7280", marginBottom: "1.25rem" }}>
         {periodLabel}: <strong style={{ color: "#111111" }}>${totalForPeriod.toFixed(2)}</strong>
+        {!recurringLoading && recurring.some((r) => r.status === "active") && (
+          <> · <strong style={{ color: "#111111" }}>${monthlyRecurringTotal.toFixed(2)}/mo</strong> in active recurring donations</>
+        )}
       </p>
+
+      {/* Recurring subscriptions */}
+      <div style={{ marginBottom: "2rem" }}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, color: "#111111", marginBottom: "0.75rem" }}>Recurring Subscriptions</h2>
+        {recurringLoading ? (
+          <p style={{ color: "#9CA3AF", fontSize: 14 }}>Loading…</p>
+        ) : recurring.length === 0 ? (
+          <p style={{ color: "#9CA3AF", fontSize: 14 }}>No recurring donations yet.</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {recurring.map((r) => {
+              const colors = RECURRING_STATUS_COLORS[r.status] || RECURRING_STATUS_COLORS.pending;
+              return (
+                <div key={r.subscriptionId} style={{ background: "#fff", border: "1.5px solid #E8E2DC", borderRadius: 12, padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: "#111111" }}>${r.tier}/month</div>
+                    <div style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>
+                      {r.donorEmail} · Since {formatDate(r.createdAt)}
+                      {r.status === "active" && r.nextBillingAt && ` · Next charge ${formatDate(r.nextBillingAt)}`}
+                      {(r.failedPaymentCount ?? 0) > 0 && ` · ${r.failedPaymentCount} failed payment${r.failedPaymentCount === 1 ? "" : "s"}`}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20, background: colors.bg, color: colors.text, whiteSpace: "nowrap" }}>
+                    {r.status}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <h2 style={{ fontSize: 16, fontWeight: 700, color: "#111111", marginBottom: "0.75rem" }}>All Donations</h2>
 
       {/* Archive filter */}
       <div style={{ display: "flex", gap: 10, marginBottom: "1.5rem" }}>

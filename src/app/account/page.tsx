@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { getIdToken, signOut, changePassword } from "@/lib/cognito";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -27,6 +27,29 @@ function getDonationDescriptor(d: Donation): string {
   if (d.campaignId) return "Fundraiser";
   return d.type === "recurring" ? "Monthly" : "One-time";
 }
+
+// NEW -- recurring subscriptions, separate from the one-time/recurring
+// CHARGE history above. A subscription is a standing record (tier,
+// status, next billing date) that outlives any single payment -- the
+// individual monthly charges still show up in Donation History above
+// as type: "recurring" rows, same as before. This section is about
+// managing the subscription itself, not viewing past charges.
+interface RecurringDonation {
+  subscriptionId: string;
+  tier: number;
+  status: "pending" | "active" | "suspended" | "cancelled" | "cancelling";
+  nextBillingAt?: string;
+  lastPaymentAt?: string;
+  createdAt: string;
+}
+
+const RECURRING_STATUS_LABEL: Record<string, string> = {
+  pending: "Pending approval",
+  active: "Active",
+  suspended: "Payment issue — paused by PayPal",
+  cancelled: "Cancelled",
+  cancelling: "Cancelling…",
+};
 
 // NEW -- shop order history, mirrors the Donation History section below.
 // Comes from GET /orders/mine (the sixspur-orders Lambda, queried via
@@ -73,26 +96,38 @@ function formatDate(iso: string) {
 
 export default function AccountDashboardPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [donations, setDonations] = useState<Donation[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [recurring, setRecurring] = useState<RecurringDonation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const [savingOptIn, setSavingOptIn] = useState(false);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   // NEW -- collapsible history sections, default open so nothing looks
   // missing on first load; collapsing is purely a decluttering option
   // once someone has enough history to want it.
   const [donationsOpen, setDonationsOpen] = useState(true);
   const [ordersOpen, setOrdersOpen] = useState(true);
+  const [recurringOpen, setRecurringOpen] = useState(true);
 
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
+
+  // Shows a one-time confirmation banner if we just landed back here
+  // from PayPal's subscription approval redirect (?recurring=confirmed,
+  // set by the donate-recurring Lambda's return_url). This is NOT proof
+  // the subscription is active -- that only happens once the webhook
+  // fires -- so it's phrased as "approved" rather than "active", and the
+  // real status still comes from the subscriptions list below.
+  const justApprovedRecurring = searchParams.get("recurring") === "confirmed";
 
   const authedFetch = useCallback(async (path: string, options: RequestInit = {}) => {
     const token = await getIdToken();
@@ -116,17 +151,20 @@ export default function AccountDashboardPage() {
       setCheckingAuth(false);
 
       try {
-        const [profileRes, donationsRes, ordersRes] = await Promise.all([
+        const [profileRes, donationsRes, ordersRes, recurringRes] = await Promise.all([
           authedFetch("/donor/profile"),
           authedFetch("/donor/donations"),
           authedFetch("/orders/mine"),
+          authedFetch("/donate/recurring/mine"),
         ]);
         const profileData = await profileRes.json();
         const donationsData = await donationsRes.json();
         const ordersData = await ordersRes.json();
+        const recurringData = await recurringRes.json();
         setProfile(profileData);
         setDonations(donationsData.donations || []);
         setOrders(ordersData.orders || []);
+        setRecurring(recurringData.subscriptions || []);
       } catch (err) {
         console.error("Failed to load account data:", err);
         setError("Failed to load your account. Please refresh the page.");
@@ -151,6 +189,30 @@ export default function AccountDashboardPage() {
       console.error("Failed to update mailing list preference:", err);
     } finally {
       setSavingOptIn(false);
+    }
+  };
+
+  // NEW -- cancels a subscription. Calls the site's cancel endpoint,
+  // which itself calls PayPal but deliberately does NOT flip the DB
+  // status (see donate-recurring/index.js) -- the webhook does that, so
+  // this optimistically shows "Cancelling…" via the API's returned
+  // status rather than assuming success and marking it "Cancelled"
+  // outright.
+  const cancelSubscription = async (subscriptionId: string) => {
+    if (!confirm("Cancel this monthly donation? This can't be undone from here -- you'd need to start a new one to resume.")) return;
+    setCancellingId(subscriptionId);
+    try {
+      const res = await authedFetch("/donate/recurring/cancel", {
+        method: "POST",
+        body: JSON.stringify({ subscriptionId }),
+      });
+      const updated = await res.json();
+      if (!res.ok) throw new Error(updated.error || "Failed to cancel");
+      setRecurring((prev) => prev.map((r) => (r.subscriptionId === subscriptionId ? { ...r, status: updated.status } : r)));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to cancel. Please try again or contact us.");
+    } finally {
+      setCancellingId(null);
     }
   };
 
@@ -201,6 +263,59 @@ export default function AccountDashboardPage() {
       <section className="py-16 px-6">
         <div className="max-w-3xl mx-auto space-y-10">
           {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">{error}</div>}
+
+          {justApprovedRecurring && (
+            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded text-sm">
+              Thanks! Your monthly donation is approved and will show as Active below shortly.
+            </div>
+          )}
+
+          {/* Recurring donations */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setRecurringOpen((open) => !open)}
+              className="w-full flex items-center justify-between mb-4"
+            >
+              <h2 className="text-xl font-bold text-spur-black">
+                Recurring Donations{recurring.length > 0 ? ` (${recurring.length})` : ""}
+              </h2>
+              <span className="text-gray-400 text-sm">{recurringOpen ? "▾" : "▸"}</span>
+            </button>
+            {recurringOpen && (
+              loading ? (
+                <p className="text-gray-500 text-sm">Loading...</p>
+              ) : recurring.length === 0 ? (
+                <p className="text-gray-500 text-sm">
+                  You don&apos;t have any monthly donations set up. You can start one from{" "}
+                  <a href="/ways-to-give" className="text-spur-orange font-semibold hover:underline">Ways to Give</a>.
+                </p>
+              ) : (
+                <div className="border border-spur-tan-light rounded overflow-hidden">
+                  {recurring.map((r) => (
+                    <div key={r.subscriptionId} className="flex items-center justify-between px-5 py-4 border-b border-spur-tan-light last:border-b-0">
+                      <div>
+                        <div className="font-semibold text-spur-black">${r.tier}/month</div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {RECURRING_STATUS_LABEL[r.status] || r.status}
+                          {r.status === "active" && r.nextBillingAt && ` · Next charge ${formatDate(r.nextBillingAt)}`}
+                        </div>
+                      </div>
+                      {(r.status === "active" || r.status === "suspended" || r.status === "pending") && (
+                        <button
+                          onClick={() => cancelSubscription(r.subscriptionId)}
+                          disabled={cancellingId === r.subscriptionId}
+                          className="text-red-600 text-sm font-semibold hover:underline whitespace-nowrap disabled:opacity-50"
+                        >
+                          {cancellingId === r.subscriptionId ? "Cancelling…" : "Cancel"}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+          </div>
 
           {/* Donation history */}
           <div>

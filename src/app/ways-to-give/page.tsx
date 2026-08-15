@@ -19,6 +19,12 @@ const AMAZON_WISHLIST_URL = "https://www.amazon.com/hz/wishlist/ls/RQ32EPLM2YJW?
 
 const PRESET_AMOUNTS = [5, 10, 20, 50];
 
+// NEW -- monthly preset tiers, per the recurring-donations scoping
+// decision: preset PayPal Plans only (no custom-amount override), since
+// each tier maps to a real pre-created PayPal Plan ID (PLAN_ID_10 etc.
+// on the donate-recurring Lambda) rather than a per-subscriber price.
+const RECURRING_TIERS = [10, 25, 50, 100];
+
 const IMPACT = [
   { amount: 5,  label: "Feeds a chicken flock for a day" },
   { amount: 10, label: "Covers a goat's weekly feed" },
@@ -43,6 +49,14 @@ export default function WaysToGivePage() {
   const [showPayPal, setShowPayPal] = useState(false);
   const [donationResult, setDonationResult] = useState<"success" | "error" | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
+
+  // NEW -- monthly giving state, separate from the one-time amount
+  // state above since the two flows are genuinely different (Orders v2
+  // capture vs. a Subscriptions approval redirect), not just a
+  // different number.
+  const [recurringTier, setRecurringTier] = useState<number | null>(null);
+  const [recurringLoading, setRecurringLoading] = useState(false);
+  const [recurringError, setRecurringError] = useState("");
 
   const paypalContainerRef = useRef<HTMLDivElement>(null);
   const scriptLoadedRef = useRef(false);
@@ -141,6 +155,41 @@ export default function WaysToGivePage() {
     }
   };
 
+  // NEW -- starts a monthly subscription. Unlike one-time giving, this
+  // is a REDIRECT flow, not a PayPal Buttons popup: the backend
+  // (donate-recurring Lambda) creates the subscription server-side via
+  // PayPal's REST API and hands back an approval URL, so the browser
+  // just navigates there. PayPal redirects back to /account?recurring=
+  // confirmed after approval, but the subscription isn't truly ACTIVE
+  // until the webhook confirms it -- the account page's Recurring
+  // Donations section reflects real status from there, not this
+  // redirect alone.
+  const handleSubscribe = async () => {
+    if (!recurringTier) return;
+    setRecurringError("");
+    setRecurringLoading(true);
+
+    const token = await getIdToken();
+    if (!token) {
+      router.push(`/account/login?returnTo=${encodeURIComponent("/ways-to-give")}`);
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/donate/recurring/create-subscription`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ tier: recurringTier }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to start monthly donation");
+      window.location.href = data.approveUrl;
+    } catch (err: unknown) {
+      setRecurringError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      setRecurringLoading(false);
+    }
+  };
+
   return (
     <main className="bg-white">
 
@@ -173,7 +222,7 @@ export default function WaysToGivePage() {
               Give Once
             </button>
             <button
-              onClick={() => { setFrequency("monthly"); setShowPayPal(false); setDonationResult(null); }}
+              onClick={() => { setFrequency("monthly"); setRecurringError(""); }}
               className={`flex-1 py-3 text-sm font-semibold transition-colors ${
                 frequency === "monthly"
                   ? "bg-spur-black text-white"
@@ -185,13 +234,47 @@ export default function WaysToGivePage() {
           </div>
 
           {frequency === "monthly" ? (
-            <div className="bg-spur-tan-light border border-spur-tan rounded p-6 text-center mb-8">
-              <p className="text-spur-black font-semibold mb-2">Monthly giving is coming soon.</p>
-              <p className="text-sm text-gray-600">
-                We&apos;re still setting up recurring donations. In the meantime, a one-time gift makes an immediate difference —
-                or <Link href="/contact" className="text-spur-orange font-semibold hover:underline">get in touch</Link> and we can help set up recurring support directly.
+            <>
+              {/* Monthly tiers */}
+              <div className="grid grid-cols-4 gap-3 mb-4">
+                {RECURRING_TIERS.map((tier) => (
+                  <button
+                    key={tier}
+                    onClick={() => { setRecurringTier(tier); setRecurringError(""); }}
+                    className={`py-4 rounded text-sm font-bold transition-colors border ${
+                      recurringTier === tier
+                        ? "bg-spur-orange text-white border-spur-orange"
+                        : "bg-white text-spur-black border-spur-tan hover:border-spur-orange"
+                    }`}
+                  >
+                    ${tier}/mo
+                  </button>
+                ))}
+              </div>
+
+              {recurringError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm mb-4 text-center">
+                  {recurringError}
+                </div>
+              )}
+
+              <button
+                onClick={handleSubscribe}
+                disabled={!recurringTier || recurringLoading}
+                className="w-full bg-spur-orange text-white font-bold py-4 rounded hover:bg-spur-orange-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-sm uppercase tracking-widest"
+              >
+                {recurringLoading
+                  ? "One moment..."
+                  : recurringTier
+                  ? `Subscribe — $${recurringTier}/month`
+                  : "Select a Monthly Amount"}
+              </button>
+
+              <p className="text-center text-xs text-gray-400 mt-4">
+                You&apos;ll approve your monthly donation on PayPal, then be redirected back here.
+                You can manage or cancel it anytime from your account.
               </p>
-            </div>
+            </>
           ) : (
             <>
               {/* Preset amounts */}
