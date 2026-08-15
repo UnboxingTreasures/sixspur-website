@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getIdToken, signOut, changePassword } from "@/lib/cognito";
 
@@ -94,7 +94,12 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-export default function AccountDashboardPage() {
+// Split out from the default export so useSearchParams() -- which
+// requires a Suspense boundary in Next.js's static export -- is
+// isolated inside one. This is purely a build-requirement wrapper, not
+// a UI change; the fallback below should essentially never be visible
+// since the whole page is client-rendered post-auth-check anyway.
+function AccountDashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -459,5 +464,17 @@ export default function AccountDashboardPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function AccountDashboardPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-white flex items-center justify-center">
+        <p className="text-gray-500 text-sm">Loading...</p>
+      </main>
+    }>
+      <AccountDashboardContent />
+    </Suspense>
   );
 }
