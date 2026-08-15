@@ -43,7 +43,7 @@ export default function Footer() {
             <h4 className={headingClass}>Adopt</h4>
             <div className="flex flex-col gap-2">
               <Link href="/adopt" className={linkClass}>Adoptable dogs</Link>
-              <Link href="/adopt" className={linkClass}>Recently adopted</Link>
+              <Link href="/adopt/recently-adopted" className={linkClass}>Recently adopted</Link>
               <Link href="/adopt/process" className={linkClass}>Adoption process</Link>
               <Link href="/faq" className={linkClass}>FAQ</Link>
             </div>

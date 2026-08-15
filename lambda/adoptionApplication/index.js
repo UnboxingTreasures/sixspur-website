@@ -80,6 +80,7 @@ async function handleApply(body) {
 
   await saveApplication({
     applicationId,
+    animalId: body.animalId || null,
     firstName: body.firstName,
     lastName: body.lastName,
     primaryEmail: body.primaryEmail,

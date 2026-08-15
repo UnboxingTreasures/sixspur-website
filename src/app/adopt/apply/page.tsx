@@ -47,6 +47,14 @@ function AdoptApplyForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const animalParam = searchParams.get("animal") || "";
+  // NEW Session 18 -- the actual animalId, so the backend can reliably
+  // link this application back to a specific adoptable_animals record
+  // (used by adminAdoptions to auto-mark the animal adopted on
+  // approval). animalParam (the animal's NAME) stays as the
+  // human-readable label shown throughout this form and in emails/PDF;
+  // animalId is the new machine-readable link, nullable for robustness
+  // in case an old link is missing it.
+  const animalIdParam = searchParams.get("animalId") || "";
 
   const [step, setStep] = useState(1);
   const [submitted, setSubmitted] = useState(false);
@@ -207,6 +215,7 @@ function AdoptApplyForm() {
       // in S3 by now, so the backend can fetch and embed them in the PDF.
       const payload = {
         applicationId,
+        animalId: animalIdParam || undefined,
         firstName, lastName, partner,
         street, apt, city, state, county, zip,
         primaryPhone, primaryPhoneType, secondaryPhone, secondaryPhoneType,

@@ -3,6 +3,18 @@
 // Listing by status uses the status-index GSI so each of the four tabs
 // (Open / Under Review / Approved / Denied) queries directly rather than
 // scanning the whole table on every page load.
+//
+// RECENTLY ADOPTED (added Session 18): when a status update lands on
+// "Approved", this also writes adoptedAt onto the linked animal's record
+// in adoptable_animals -- confirmed spec: approving IS the action that
+// marks an animal adopted, not a separate manual step anywhere else.
+// This is a cross-table write from this Lambda (new IAM grant needed,
+// see execution-role-policy.json), kept as a best-effort SECOND step
+// after the application status update itself succeeds -- if it fails
+// (animal deleted, missing animalId on an older application submitted
+// before this field existed, etc.), the approval itself still stands;
+// this never rolls back or blocks the primary action. Same reasoning as
+// notifyApplicant's email-failure handling in index.js.
 
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, QueryCommand, ScanCommand, GetCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
@@ -11,6 +23,7 @@ const client = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1
 const ddb = DynamoDBDocumentClient.from(client);
 
 const TABLE_NAME = process.env.ADOPTION_APPLICATIONS_TABLE || 'adoption_applications';
+const ADOPTABLE_ANIMALS_TABLE = process.env.ADOPTABLE_ANIMALS_TABLE || 'adoptable_animals';
 const STATUS_INDEX = 'status-index';
 
 const VALID_STATUSES = ['Open', 'Under Review', 'Approved', 'Denied'];
@@ -40,6 +53,35 @@ async function getById(applicationId) {
   return result.Item || null;
 }
 
+/**
+ * Marks the given animal adopted. Conditional on the animal actually
+ * existing AND not already being marked adopted -- the latter guards
+ * against a (currently impossible, since applications are terminal once
+ * Approved/Denied, but cheap to guard anyway) double-approval scenario
+ * silently overwriting an earlier adoptedAt with a later one. Returns
+ * true/false rather than throwing, since the caller treats this as
+ * strictly best-effort.
+ */
+async function markAnimalAdopted(animalId) {
+  try {
+    await ddb.send(new UpdateCommand({
+      TableName: ADOPTABLE_ANIMALS_TABLE,
+      Key: { animalId },
+      ConditionExpression: 'attribute_exists(animalId) AND attribute_not_exists(adoptedAt)',
+      UpdateExpression: 'SET adoptedAt = :adoptedAt, updatedAt = :adoptedAt',
+      ExpressionAttributeValues: { ':adoptedAt': new Date().toISOString() },
+    }));
+    return true;
+  } catch (err) {
+    if (err.name === 'ConditionalCheckFailedException') {
+      console.warn(`markAnimalAdopted: animal ${animalId} not found or already marked adopted -- skipping`);
+      return false;
+    }
+    console.error(`markAnimalAdopted: failed to mark ${animalId} adopted:`, err);
+    return false;
+  }
+}
+
 async function updateStatus(applicationId, newStatus) {
   if (!VALID_STATUSES.includes(newStatus)) {
     throw new Error(`Invalid status: ${newStatus}. Must be one of: ${VALID_STATUSES.join(', ')}`);
@@ -50,6 +92,7 @@ async function updateStatus(applicationId, newStatus) {
 
   const statusUpdatedAt = new Date().toISOString();
 
+  let updated;
   try {
     const result = await ddb.send(new UpdateCommand({
       TableName: TABLE_NAME,
@@ -68,7 +111,7 @@ async function updateStatus(applicationId, newStatus) {
       },
       ReturnValues: 'ALL_NEW',
     }));
-    return result.Attributes;
+    updated = result.Attributes;
   } catch (err) {
     if (err.name !== 'ConditionalCheckFailedException') throw err;
 
@@ -81,6 +124,18 @@ async function updateStatus(applicationId, newStatus) {
       `This application is already "${existing.status}", which is a final status and can't be changed.`
     );
   }
+
+  // Best-effort side effect, never allowed to fail or roll back the
+  // status change above -- see the file-level comment for why.
+  if (newStatus === 'Approved') {
+    if (updated.animalId) {
+      await markAnimalAdopted(updated.animalId);
+    } else {
+      console.warn(`Application ${applicationId} approved but has no animalId (likely submitted before this field existed) -- animal not auto-marked adopted.`);
+    }
+  }
+
+  return updated;
 }
 
 module.exports = { listByStatus, listAll, getById, updateStatus, VALID_STATUSES };

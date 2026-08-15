@@ -3,6 +3,14 @@
 // (adoption_applications) rather than contact_messages, so it can carry a
 // real status (Open / Under Review / Approved / Denied) and show up in the
 // admin Adoptions page instead of the general Mail inbox.
+//
+// animalId added (Session 18): the actual link back to a specific
+// adoptable_animals record, used by adminAdoptions to auto-mark that
+// animal adopted on approval. interestedIn (the animal's NAME) is kept
+// as-is for display in emails/PDF -- animalId is the new, reliable
+// machine-readable link, interestedIn is still the human-readable label.
+// Nullable: older application flows / a missing ?animalId on the apply
+// page shouldn't hard-fail a real person's submission over this.
 
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');
@@ -12,7 +20,7 @@ const ddb = DynamoDBDocumentClient.from(client);
 
 const TABLE_NAME = process.env.ADOPTION_APPLICATIONS_TABLE || 'adoption_applications';
 
-async function saveApplication({ applicationId, firstName, lastName, primaryEmail, primaryPhone, secondaryEmail, secondaryPhone, interestedIn, pdfKey, fencePhotoKeys }) {
+async function saveApplication({ applicationId, animalId, firstName, lastName, primaryEmail, primaryPhone, secondaryEmail, secondaryPhone, interestedIn, pdfKey, fencePhotoKeys }) {
   const submittedAt = new Date().toISOString();
 
   const item = {
@@ -20,6 +28,7 @@ async function saveApplication({ applicationId, firstName, lastName, primaryEmai
     status: 'Open', // every new application starts here; admin moves it through the workflow
     submittedAt,
     statusUpdatedAt: submittedAt,
+    animalId: animalId || null,
     firstName,
     lastName,
     primaryEmail: primaryEmail.trim().toLowerCase(),
