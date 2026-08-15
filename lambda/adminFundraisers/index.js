@@ -1,18 +1,21 @@
 // index.js
 // Admin routes for managing fundraisers.
-//   GET    /admin/fundraisers            — list all, with live raised-so-far totals
-//   GET    /admin/fundraisers/{id}       — one fundraiser
-//   POST   /admin/fundraisers            — create (starts as draft)
-//   PATCH  /admin/fundraisers/{id}       — edit title/description/goal/closing date
-//   POST   /admin/fundraisers/{id}/begin — make this the active fundraiser (stops any other active one)
-//   POST   /admin/fundraisers/{id}/stop  — stop this fundraiser
+//   GET    /admin/fundraisers              — list all, with live raised-so-far totals
+//   GET    /admin/fundraisers/{id}         — one fundraiser
+//   POST   /admin/fundraisers              — create (starts as draft)
+//   PATCH  /admin/fundraisers/{id}         — edit title/description/goal/closing date (blocked once archived, see dynamo.js)
+//   POST   /admin/fundraisers/{id}/begin   — make this the active fundraiser (stops any other active one); REFUSES archived fundraisers
+//   POST   /admin/fundraisers/{id}/stop    — stop this fundraiser
+//   POST   /admin/fundraisers/{id}/archive — ONE-WAY: stopped -> archived, view-only from here on
 // No DELETE -- financial-adjacent records, same reasoning as donations.
 //
 // AUTH: every route here requires a verified JWT (via the same
 // authorizer protecting /donor/* and /donate/*) AND isAdmin=true on
 // the donor record -- see requireAdmin() in adminAuth.js.
 
-const { listAll, getById, createFundraiser, updateFundraiser, beginFundraiser, stopFundraiser } = require('./dynamo');
+const {
+  listAll, getById, createFundraiser, updateFundraiser, beginFundraiser, stopFundraiser, archiveFundraiser,
+} = require('./dynamo');
 const { requireAdmin } = require('./adminAuth');
 
 const CORS_HEADERS = {
@@ -75,14 +78,26 @@ exports.handler = async (event) => {
         }
       }
       case 'POST /admin/fundraisers/{id}/begin': {
-        const started = await beginFundraiser(fundraiserId);
-        if (!started) return respond(404, { error: 'Fundraiser not found' });
-        return respond(200, started);
+        try {
+          const started = await beginFundraiser(fundraiserId);
+          if (!started) return respond(404, { error: 'Fundraiser not found' });
+          return respond(200, started);
+        } catch (err) {
+          if (err.code === 'ARCHIVED') return respond(400, { error: err.message });
+          throw err;
+        }
       }
       case 'POST /admin/fundraisers/{id}/stop': {
         const stopped = await stopFundraiser(fundraiserId);
         if (!stopped) return respond(404, { error: 'Fundraiser not found' });
         return respond(200, stopped);
+      }
+      case 'POST /admin/fundraisers/{id}/archive': {
+        const archived = await archiveFundraiser(fundraiserId);
+        if (!archived) {
+          return respond(400, { error: 'Only a stopped fundraiser can be archived (it may not exist, or may already be active, draft, or archived).' });
+        }
+        return respond(200, archived);
       }
       default:
         return respond(404, { error: `No handler for route: ${event.routeKey}` });

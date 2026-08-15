@@ -11,7 +11,7 @@ interface Fundraiser {
   description: string;
   goalAmount: number;
   closingDate: string;
-  status: "draft" | "active" | "stopped";
+  status: "draft" | "active" | "stopped" | "archived";
   raisedAmount: number;
   createdAt: string;
 }
@@ -20,6 +20,7 @@ const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   draft: { bg: "#F0EBE5", text: "#6B7280" },
   active: { bg: "#EAF7EE", text: "#1E8A4C" },
   stopped: { bg: "#FEF2F2", text: "#DC2626" },
+  archived: { bg: "#F0EBE5", text: "#9CA3AF" },
 };
 
 interface Draft {
@@ -106,6 +107,13 @@ export default function AdminFundraiserPage() {
   const [editDrafts, setEditDrafts] = useState<Record<string, Draft>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [lifecycleActionId, setLifecycleActionId] = useState<string | null>(null);
+
+  // Archived fundraisers are shown in their own read-only section, not
+  // mixed into the normal editable list -- an archived card never gets
+  // FundraiserFields, an expand-to-edit affordance, or ANY lifecycle
+  // button, since the whole point is that it's a closed, final record.
+  const liveFundraisers = fundraisers.filter((f) => f.status !== "archived");
+  const archivedFundraisers = fundraisers.filter((f) => f.status === "archived");
 
   const activeFundraiser = fundraisers.find((f) => f.status === "active");
 
@@ -220,6 +228,25 @@ export default function AdminFundraiserPage() {
     }
   };
 
+  // One-way -- the confirmation wording says exactly that, matching the
+  // Aug 14 scoping spec verbatim, so there's no ambiguity about what
+  // clicking through actually does.
+  const handleArchive = async (fundraiserId: string) => {
+    if (!confirm("Archive this fundraiser? Once archived, it can't be reopened or reused, only viewed in the archive below. This cannot be undone.")) return;
+    setLifecycleActionId(fundraiserId);
+    try {
+      const res = await authedFetch(`/admin/fundraisers/${fundraiserId}/archive`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to archive fundraiser");
+      setFundraisers((prev) => prev.map((f) => (f.fundraiserId === fundraiserId ? { ...f, ...data } : f)));
+      setExpandedId(null);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to archive fundraiser");
+    } finally {
+      setLifecycleActionId(null);
+    }
+  };
+
   return (
     <main style={{ padding: "2rem", maxWidth: "900px", margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
@@ -243,12 +270,12 @@ export default function AdminFundraiserPage() {
           {error}
         </div>
       )}
-      {!loading && !error && fundraisers.length === 0 && (
+      {!loading && !error && liveFundraisers.length === 0 && (
         <p style={{ color: "#9CA3AF", fontSize: 14 }}>No fundraisers created yet.</p>
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {fundraisers.map((f) => {
+        {liveFundraisers.map((f) => {
           const isExpanded = expandedId === f.fundraiserId;
           const draft = editDrafts[f.fundraiserId] ?? draftFromFundraiser(f);
           const colors = STATUS_COLORS[f.status];
@@ -306,6 +333,18 @@ export default function AdminFundraiserPage() {
                         {lifecycleActionId === f.fundraiserId ? "Stopping…" : "Stop"}
                       </button>
                     )}
+                    {/* Archive: only ever offered on a STOPPED fundraiser,
+                        matching the exact spec -- draft and active
+                        fundraisers never see this button at all. */}
+                    {f.status === "stopped" && (
+                      <button
+                        onClick={() => handleArchive(f.fundraiserId)}
+                        disabled={lifecycleActionId === f.fundraiserId}
+                        style={{ padding: "8px 16px", borderRadius: 8, border: "1.5px solid #9CA3AF", background: "#fff", color: "#6B7280", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: lifecycleActionId === f.fundraiserId ? 0.6 : 1 }}
+                      >
+                        {lifecycleActionId === f.fundraiserId ? "Archiving…" : "Archive"}
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -313,6 +352,43 @@ export default function AdminFundraiserPage() {
           );
         })}
       </div>
+
+      {/* Read-only archive -- separate section, visually distinct
+          (muted border/background), no expand-to-edit and no lifecycle
+          buttons of any kind. This is the "separate archive menu" from
+          the Aug 14 scoping notes, kept as a section on this same page
+          rather than a whole new route, since the dataset is small and
+          a second page for a handful of closed-out campaigns would be
+          more navigation than the content warrants. */}
+      {!loading && archivedFundraisers.length > 0 && (
+        <div style={{ marginTop: 40 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 700, color: "#6B7280", marginBottom: 4 }}>Archive</h2>
+          <p style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>Closed-out fundraisers, view-only.</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {archivedFundraisers.map((f) => {
+              const percent = f.goalAmount > 0 ? Math.min(100, (f.raisedAmount / f.goalAmount) * 100) : 0;
+              return (
+                <div key={f.fundraiserId} style={{ background: "#FAFAF8", border: "1.5px solid #E8E2DC", borderRadius: 12, padding: "14px 20px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 15, color: "#6B7280" }}>{f.title}</div>
+                      <div style={{ fontSize: 13, color: "#9CA3AF", marginTop: 2 }}>
+                        Final: ${f.raisedAmount.toFixed(2)} of ${f.goalAmount.toFixed(2)} ({percent.toFixed(0)}%) · Closed {f.closingDate}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20, background: STATUS_COLORS.archived.bg, color: STATUS_COLORS.archived.text, whiteSpace: "nowrap" }}>
+                      archived
+                    </span>
+                  </div>
+                  {f.description && (
+                    <p style={{ fontSize: 12, color: "#9CA3AF", marginTop: 8 }}>{f.description}</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {showAddModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(17,17,17,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, zIndex: 50, overflowY: "auto" }}>

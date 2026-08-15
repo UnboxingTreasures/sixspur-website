@@ -1,7 +1,7 @@
 // dynamo.js
-// Admin CRUD for fundraisers. Lifecycle is deliberately simple, matching
-// the Aug 12 scoping exactly: create (draft), begin (draft/stopped ->
-// active), stop (active -> stopped). No delete -- same reasoning as
+// Admin CRUD for fundraisers. Lifecycle: create (draft), begin
+// (draft/stopped -> active), stop (active -> stopped), archive
+// (stopped -> archived, ONE-WAY). No delete -- same reasoning as
 // donations, these are financial-adjacent records worth keeping an
 // honest history of, not silently removing.
 //
@@ -9,6 +9,15 @@
 // this by stopping any other currently-active fundraiser first, rather
 // than allowing multiple simultaneous campaigns (matches the "create,
 // begin, or stop A fundraiser" singular framing from scoping).
+//
+// ARCHIVE (added per Aug 14 2026 scoping): archiving is a terminal,
+// one-way state -- a stopped fundraiser can be archived, but an
+// archived fundraiser can NEVER be reopened or edited again, only
+// viewed. Enforced here in the Lambda, not just hidden in the admin UI
+// -- per the scoping notes, relying on the UI alone to hide the "Begin"
+// option would leave the door open to any client bypassing it (a
+// crafted API call, a stale cached page, etc.), so beginFundraiser()
+// itself refuses to ever reactivate an archived record.
 
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, ScanCommand, GetCommand, PutCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
@@ -29,7 +38,9 @@ async function listAll() {
 
   // Live raised-so-far total per fundraiser, same calculation the
   // public endpoint uses -- admin should see real numbers too, not a
-  // separately-maintained figure that could drift.
+  // separately-maintained figure that could drift. Still computed for
+  // archived fundraisers too -- an archived campaign's final total is
+  // exactly the kind of thing the read-only archive view needs to show.
   for (const item of items) {
     item.raisedAmount = await getRaisedAmount(item.fundraiserId);
   }
@@ -87,7 +98,19 @@ async function createFundraiser({ title, description, goalAmount, closingDate })
   return item;
 }
 
+/**
+ * Edits are blocked once a fundraiser is archived -- archived means
+ * read-only, full stop, not just "can't be reactivated". Checked here
+ * (not just left to the UI) for the same "don't trust the client alone"
+ * reasoning as the archive lifecycle itself.
+ */
 async function updateFundraiser(fundraiserId, fields) {
+  const existing = await getById(fundraiserId);
+  if (!existing) return null;
+  if (existing.status === 'archived') {
+    throw new Error('This fundraiser is archived and can no longer be edited');
+  }
+
   const updates = [];
   const values = { ':updatedAt': new Date().toISOString() };
   const names = {};
@@ -133,10 +156,19 @@ async function updateFundraiser(fundraiserId, fields) {
  * Starts this fundraiser (draft/stopped -> active). Stops any OTHER
  * currently-active fundraiser first -- enforces the one-at-a-time rule
  * at write time rather than just hoping the admin UI prevents it.
+ *
+ * REFUSES to reactivate an archived fundraiser -- this is the Lambda-
+ * side half of the one-way archive door (the other half is the admin
+ * UI simply never offering "Begin" on an archived card, see page.tsx).
  */
 async function beginFundraiser(fundraiserId) {
   const target = await getById(fundraiserId);
   if (!target) return null;
+  if (target.status === 'archived') {
+    const err = new Error('This fundraiser is archived and cannot be reopened');
+    err.code = 'ARCHIVED';
+    throw err;
+  }
 
   const allFundraisers = await ddb.send(new ScanCommand({ TableName: FUNDRAISERS_TABLE }));
   const now = new Date().toISOString();
@@ -182,4 +214,29 @@ async function stopFundraiser(fundraiserId) {
   return result ? result.Attributes : null;
 }
 
-module.exports = { listAll, getById, createFundraiser, updateFundraiser, beginFundraiser, stopFundraiser };
+/**
+ * Archives this fundraiser -- ONE-WAY, only allowed from 'stopped'.
+ * ConditionExpression enforces both "exists" and "is currently
+ * stopped" atomically, so this can't race with a concurrent begin/stop
+ * call landing in between a check and this write.
+ */
+async function archiveFundraiser(fundraiserId) {
+  const result = await ddb.send(new UpdateCommand({
+    TableName: FUNDRAISERS_TABLE,
+    Key: { fundraiserId },
+    ConditionExpression: 'attribute_exists(fundraiserId) AND #status = :stopped',
+    UpdateExpression: 'SET #status = :archived, updatedAt = :now',
+    ExpressionAttributeNames: { '#status': 'status' },
+    ExpressionAttributeValues: { ':stopped': 'stopped', ':archived': 'archived', ':now': new Date().toISOString() },
+    ReturnValues: 'ALL_NEW',
+  })).catch((err) => {
+    if (err.name === 'ConditionalCheckFailedException') return null;
+    throw err;
+  });
+
+  return result ? result.Attributes : null;
+}
+
+module.exports = {
+  listAll, getById, createFundraiser, updateFundraiser, beginFundraiser, stopFundraiser, archiveFundraiser,
+};
