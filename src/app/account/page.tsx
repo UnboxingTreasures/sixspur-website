@@ -82,6 +82,12 @@ export default function AccountDashboardPage() {
 
   const [savingOptIn, setSavingOptIn] = useState(false);
 
+  // NEW -- collapsible history sections, default open so nothing looks
+  // missing on first load; collapsing is purely a decluttering option
+  // once someone has enough history to want it.
+  const [donationsOpen, setDonationsOpen] = useState(true);
+  const [ordersOpen, setOrdersOpen] = useState(true);
+
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
@@ -198,34 +204,45 @@ export default function AccountDashboardPage() {
 
           {/* Donation history */}
           <div>
-            <h2 className="text-xl font-bold text-spur-black mb-4">Donation History</h2>
-            {loading ? (
-              <p className="text-gray-500 text-sm">Loading...</p>
-            ) : donations.length === 0 ? (
-              <p className="text-gray-500 text-sm">You haven&apos;t made any donations yet.</p>
-            ) : (
-              <div className="border border-spur-tan-light rounded overflow-hidden">
-                {donations.map((d) => (
-                  <div key={d.donationId} className="flex items-center justify-between px-5 py-4 border-b border-spur-tan-light last:border-b-0">
-                    <div>
-                      <div className="font-semibold text-spur-black">${d.amount.toFixed(2)} {d.currency}</div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {formatDate(d.createdAt)} · {getDonationDescriptor(d)} · {d.status}
+            <button
+              type="button"
+              onClick={() => setDonationsOpen((open) => !open)}
+              className="w-full flex items-center justify-between mb-4"
+            >
+              <h2 className="text-xl font-bold text-spur-black">
+                Donation History{donations.length > 0 ? ` (${donations.length})` : ""}
+              </h2>
+              <span className="text-gray-400 text-sm">{donationsOpen ? "▾" : "▸"}</span>
+            </button>
+            {donationsOpen && (
+              loading ? (
+                <p className="text-gray-500 text-sm">Loading...</p>
+              ) : donations.length === 0 ? (
+                <p className="text-gray-500 text-sm">You haven&apos;t made any donations yet.</p>
+              ) : (
+                <div className="border border-spur-tan-light rounded overflow-hidden">
+                  {donations.map((d) => (
+                    <div key={d.donationId} className="flex items-center justify-between px-5 py-4 border-b border-spur-tan-light last:border-b-0">
+                      <div>
+                        <div className="font-semibold text-spur-black">${d.amount.toFixed(2)} {d.currency}</div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {formatDate(d.createdAt)} · {getDonationDescriptor(d)} · {d.status}
+                        </div>
                       </div>
+                      {d.receiptUrl && (
+                        <a
+                          href={d.receiptUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-spur-orange text-sm font-semibold hover:underline whitespace-nowrap"
+                        >
+                          Download Receipt
+                        </a>
+                      )}
                     </div>
-                    {d.receiptUrl && (
-                      <a
-                        href={d.receiptUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-spur-orange text-sm font-semibold hover:underline whitespace-nowrap"
-                      >
-                        Download Receipt
-                      </a>
-                    )}
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )
             )}
           </div>
 
@@ -236,24 +253,35 @@ export default function AccountDashboardPage() {
               so they're filtered out rather than shown as confusing
               incomplete entries. */}
           <div>
-            <h2 className="text-xl font-bold text-spur-black mb-4">Order History</h2>
-            {loading ? (
-              <p className="text-gray-500 text-sm">Loading...</p>
-            ) : orders.filter((o) => o.status === "paid").length === 0 ? (
-              <p className="text-gray-500 text-sm">You haven&apos;t placed any shop orders yet.</p>
-            ) : (
-              <div className="border border-spur-tan-light rounded overflow-hidden">
-                {orders.filter((o) => o.status === "paid").map((o) => (
-                  <div key={o.orderId} className="flex items-center justify-between px-5 py-4 border-b border-spur-tan-light last:border-b-0">
-                    <div>
-                      <div className="font-semibold text-spur-black">${o.total.toFixed(2)}</div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {formatDate(o.createdAt)} · {getOrderItemsSummary(o)}
+            <button
+              type="button"
+              onClick={() => setOrdersOpen((open) => !open)}
+              className="w-full flex items-center justify-between mb-4"
+            >
+              <h2 className="text-xl font-bold text-spur-black">
+                Order History{orders.filter((o) => o.status === "paid").length > 0 ? ` (${orders.filter((o) => o.status === "paid").length})` : ""}
+              </h2>
+              <span className="text-gray-400 text-sm">{ordersOpen ? "▾" : "▸"}</span>
+            </button>
+            {ordersOpen && (
+              loading ? (
+                <p className="text-gray-500 text-sm">Loading...</p>
+              ) : orders.filter((o) => o.status === "paid").length === 0 ? (
+                <p className="text-gray-500 text-sm">You haven&apos;t placed any shop orders yet.</p>
+              ) : (
+                <div className="border border-spur-tan-light rounded overflow-hidden">
+                  {orders.filter((o) => o.status === "paid").map((o) => (
+                    <div key={o.orderId} className="flex items-center justify-between px-5 py-4 border-b border-spur-tan-light last:border-b-0">
+                      <div>
+                        <div className="font-semibold text-spur-black">${o.total.toFixed(2)}</div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {formatDate(o.createdAt)} · {getOrderItemsSummary(o)}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )
             )}
           </div>
 
