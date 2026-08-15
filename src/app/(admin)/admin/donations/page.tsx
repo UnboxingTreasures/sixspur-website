@@ -62,6 +62,11 @@ export default function AdminDonationsPage() {
   const [selectedYear, setSelectedYear] = useState<string>("all");
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
 
+  // NEW -- collapsible list, default open. Filters/summary above stay
+  // visible either way; this only hides the (potentially long) list of
+  // individual donation cards.
+  const [listOpen, setListOpen] = useState(true);
+
   const authedFetch = async (path: string, options: RequestInit = {}) => {
     const token = await getIdToken();
     if (!token) throw new Error("Not logged in");
@@ -207,6 +212,20 @@ export default function AdminDonationsPage() {
         <p style={{ color: "#9CA3AF", fontSize: 14 }}>No donations in {periodLabel.toLowerCase()}.</p>
       )}
 
+      {!loading && !error && filteredDonations.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setListOpen((open) => !open)}
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: "none", border: "none", cursor: "pointer", padding: "8px 0", marginBottom: 8 }}
+        >
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#6B7280" }}>
+            {filteredDonations.length} donation{filteredDonations.length === 1 ? "" : "s"}
+          </span>
+          <span style={{ color: "#9CA3AF", fontSize: 13 }}>{listOpen ? "▾" : "▸"}</span>
+        </button>
+      )}
+
+      {listOpen && (
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {filteredDonations.map((d) => {
           const isExpanded = expandedId === d.donationId;
@@ -278,6 +297,7 @@ export default function AdminDonationsPage() {
           );
         })}
       </div>
+      )}
     </main>
   );
 }
