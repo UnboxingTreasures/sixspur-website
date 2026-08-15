@@ -9,13 +9,13 @@ import FundraiserThermometer from "@/components/sections/FundraiserThermometer";
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
 
-// NEW -- real client-provided static outbound links, confirmed static
-// (no API/embed) per the earlier scoping discussion. AMAZON_WISHLIST_URL
-// received Aug 14 2026; Chewy's is still pending, so that card renders
-// as a "coming soon" placeholder rather than a dead/broken link until
-// the real URL is provided.
+// NEW -- real client-provided static outbound link, confirmed static
+// (no API/embed) per the earlier scoping discussion. Received Aug 14
+// 2026. Chewy deliberately left out entirely for now -- Richard isn't
+// sure yet whether that one will actually be used, so there's no
+// placeholder card for it either; add one the same way as Amazon if/
+// when he confirms.
 const AMAZON_WISHLIST_URL = "https://www.amazon.com/hz/wishlist/ls/RQ32EPLM2YJW?ref_=wl_share";
-const CHEWY_WISHLIST_URL = null; // set this to the real URL once Richard provides it
 
 const PRESET_AMOUNTS = [5, 10, 20, 50];
 
@@ -296,11 +296,10 @@ export default function WaysToGivePage() {
           <h2 className="text-2xl md:text-3xl font-bold text-spur-black mb-4">Shop Our Wish Lists</h2>
           <p className="text-gray-600 max-w-xl mx-auto leading-relaxed mb-10">
             Prefer to send supplies directly? Dog food, hay, medical supplies, and more —
-            everything on our wish lists goes straight to the animals at Six Spur.
+            everything on our wish list goes straight to the animals at Six Spur.
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-xl mx-auto">
-            {/* Amazon -- live link */}
+          <div className="max-w-xs mx-auto">
             <a
               href={AMAZON_WISHLIST_URL}
               target="_blank"
@@ -311,26 +310,6 @@ export default function WaysToGivePage() {
               <span className="font-bold text-spur-black">Amazon Wish List</span>
               <span className="text-spur-orange text-sm font-semibold">View list →</span>
             </a>
-
-            {/* Chewy -- placeholder until Richard provides the real URL */}
-            {CHEWY_WISHLIST_URL ? (
-              <a
-                href={CHEWY_WISHLIST_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex flex-col items-center justify-center gap-3 bg-white border border-spur-tan rounded p-8 hover:border-spur-orange transition-colors"
-              >
-                <span className="text-3xl">🐾</span>
-                <span className="font-bold text-spur-black">Chewy Wish List</span>
-                <span className="text-spur-orange text-sm font-semibold">View list →</span>
-              </a>
-            ) : (
-              <div className="flex flex-col items-center justify-center gap-3 bg-white border border-spur-tan rounded p-8 opacity-50">
-                <span className="text-3xl">🐾</span>
-                <span className="font-bold text-spur-black">Chewy Wish List</span>
-                <span className="text-gray-400 text-sm font-semibold">Coming soon</span>
-              </div>
-            )}
           </div>
         </div>
       </section>

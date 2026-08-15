@@ -108,6 +108,9 @@ export default function AdminFundraiserPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [lifecycleActionId, setLifecycleActionId] = useState<string | null>(null);
 
+  // NEW -- collapsible archive section, default open.
+  const [archiveOpen, setArchiveOpen] = useState(true);
+
   // Archived fundraisers are shown in their own read-only section, not
   // mixed into the normal editable list -- an archived card never gets
   // FundraiserFields, an expand-to-edit affordance, or ANY lifecycle
@@ -362,8 +365,18 @@ export default function AdminFundraiserPage() {
           more navigation than the content warrants. */}
       {!loading && archivedFundraisers.length > 0 && (
         <div style={{ marginTop: 40 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 700, color: "#6B7280", marginBottom: 4 }}>Archive</h2>
+          <button
+            type="button"
+            onClick={() => setArchiveOpen((open) => !open)}
+            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: "none", border: "none", cursor: "pointer", padding: 0, marginBottom: 4 }}
+          >
+            <h2 style={{ fontSize: 16, fontWeight: 700, color: "#6B7280", margin: 0 }}>
+              Archive ({archivedFundraisers.length})
+            </h2>
+            <span style={{ color: "#9CA3AF", fontSize: 13 }}>{archiveOpen ? "▾" : "▸"}</span>
+          </button>
           <p style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>Closed-out fundraisers, view-only.</p>
+          {archiveOpen && (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {archivedFundraisers.map((f) => {
               const percent = f.goalAmount > 0 ? Math.min(100, (f.raisedAmount / f.goalAmount) * 100) : 0;
@@ -387,6 +400,7 @@ export default function AdminFundraiserPage() {
               );
             })}
           </div>
+          )}
         </div>
       )}
 
