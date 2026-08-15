@@ -1,0 +1,10 @@
+{
+  "name": "sixspur-recurring-donations-setup",
+  "version": "1.0.0",
+  "description": "One-off setup scripts: DynamoDB table + PayPal Plans for recurring donations",
+  "private": true,
+  "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.600.0",
+    "@aws-sdk/client-lambda": "^3.600.0"
+  }
+}

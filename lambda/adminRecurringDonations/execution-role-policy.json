@@ -1,0 +1,27 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "RecurringDonationsRead",
+      "Effect": "Allow",
+      "Action": ["dynamodb:Scan", "dynamodb:GetItem"],
+      "Resource": "arn:aws:dynamodb:us-east-1:658965339779:table/recurring_donations"
+    },
+    {
+      "Sid": "AdminCheckDonorLookup",
+      "Effect": "Allow",
+      "Action": ["dynamodb:GetItem"],
+      "Resource": "arn:aws:dynamodb:us-east-1:658965339779:table/donors"
+    },
+    {
+      "Sid": "Logging",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:us-east-1:658965339779:*"
+    }
+  ]
+}

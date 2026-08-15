@@ -1,0 +1,11 @@
+{
+  "name": "sixspur-donate-recurring",
+  "version": "1.0.0",
+  "description": "Donor-facing recurring donation management via PayPal Subscriptions API, protected by Cognito JWT",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0",
+    "@aws-sdk/client-secrets-manager": "^3.600.0"
+  }
+}

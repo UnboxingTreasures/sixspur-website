@@ -1,0 +1,36 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "RecurringDonationsReadWrite",
+      "Effect": "Allow",
+      "Action": ["dynamodb:PutItem", "dynamodb:GetItem"],
+      "Resource": "arn:aws:dynamodb:us-east-1:658965339779:table/recurring_donations"
+    },
+    {
+      "Sid": "RecurringDonationsQueryByDonor",
+      "Effect": "Allow",
+      "Action": ["dynamodb:Query"],
+      "Resource": [
+        "arn:aws:dynamodb:us-east-1:658965339779:table/recurring_donations",
+        "arn:aws:dynamodb:us-east-1:658965339779:table/recurring_donations/index/donorId-index"
+      ]
+    },
+    {
+      "Sid": "PayPalSecretRead",
+      "Effect": "Allow",
+      "Action": ["secretsmanager:GetSecretValue"],
+      "Resource": "arn:aws:secretsmanager:us-east-1:658965339779:secret:sixspur/paypal-api-*"
+    },
+    {
+      "Sid": "Logging",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:us-east-1:658965339779:*"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "sixspur-admin-recurring-donations",
+  "version": "1.0.0",
+  "description": "Admin read-only view of recurring donation subscriptions",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0"
+  }
+}
