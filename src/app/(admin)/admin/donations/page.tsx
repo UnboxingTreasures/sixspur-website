@@ -73,6 +73,7 @@ function formatDate(iso: string) {
 export default function AdminDonationsPage() {
   const [donations, setDonations] = useState<Donation[]>([]);
   const [recurring, setRecurring] = useState<RecurringDonation[]>([]);
+  const [recurringFilter, setRecurringFilter] = useState<"active" | "cancelled" | "all">("active");
   const [loading, setLoading] = useState(true);
   const [recurringLoading, setRecurringLoading] = useState(true);
   const [error, setError] = useState("");
@@ -138,6 +139,17 @@ export default function AdminDonationsPage() {
   // Years that actually have donations in them, newest first -- avoids
   // showing empty years in the dropdown that would just filter to
   // nothing.
+  // "Active" bucket intentionally includes pending and suspended too --
+  // not just status:"active" -- since those are all subscriptions still
+  // in play that an admin would want visible by default. Only fully
+  // cancelled ones get tucked away, since those are done and just
+  // clutter once there's real volume.
+  const filteredRecurring = useMemo(() => {
+    if (recurringFilter === "all") return recurring;
+    if (recurringFilter === "cancelled") return recurring.filter((r) => r.status === "cancelled");
+    return recurring.filter((r) => r.status !== "cancelled");
+  }, [recurring, recurringFilter]);
+
   const availableYears = useMemo(() => {
     const years = new Set(donations.map((d) => new Date(d.createdAt).getFullYear()));
     return Array.from(years).sort((a, b) => b - a);
@@ -225,14 +237,40 @@ export default function AdminDonationsPage() {
 
       {/* Recurring subscriptions */}
       <div style={{ marginBottom: "2rem" }}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, color: "#111111", marginBottom: "0.75rem" }}>Recurring Subscriptions</h2>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+          <h2 style={{ fontSize: 16, fontWeight: 700, color: "#111111" }}>Recurring Subscriptions</h2>
+          <div style={{ display: "flex", gap: 4, background: "#F7F4F0", borderRadius: 8, padding: 3 }}>
+            {(["active", "cancelled", "all"] as const).map((option) => (
+              <button
+                key={option}
+                onClick={() => setRecurringFilter(option)}
+                style={{
+                  padding: "5px 12px",
+                  borderRadius: 6,
+                  border: "none",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  fontFamily: "inherit",
+                  cursor: "pointer",
+                  textTransform: "capitalize",
+                  background: recurringFilter === option ? "#111111" : "transparent",
+                  color: recurringFilter === option ? "#fff" : "#6B7280",
+                }}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        </div>
         {recurringLoading ? (
           <p style={{ color: "#9CA3AF", fontSize: 14 }}>Loading…</p>
-        ) : recurring.length === 0 ? (
-          <p style={{ color: "#9CA3AF", fontSize: 14 }}>No recurring donations yet.</p>
+        ) : filteredRecurring.length === 0 ? (
+          <p style={{ color: "#9CA3AF", fontSize: 14 }}>
+            {recurring.length === 0 ? "No recurring donations yet." : `No ${recurringFilter === "all" ? "" : recurringFilter} subscriptions.`}
+          </p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {recurring.map((r) => {
+            {filteredRecurring.map((r) => {
               const colors = RECURRING_STATUS_COLORS[r.status] || RECURRING_STATUS_COLORS.pending;
               return (
                 <div key={r.subscriptionId} style={{ background: "#fff", border: "1.5px solid #E8E2DC", borderRadius: 12, padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
