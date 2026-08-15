@@ -15,14 +15,24 @@ export default function FarmCard({ id, name, description, image }: FarmCardProps
   const [hovered, setHovered] = useState(false);
 
   return (
-    <Link href={`/farm-animals/${id}`} style={{ textDecoration: 'none', display: 'block' }}>
+    <Link href={`/farm-animals/${id}`} style={{ textDecoration: 'none', display: 'block', height: '100%' }}>
       <div
-        style={{ background: '#1A1A1A', border: '1px solid #2a2a2a', borderRadius: '2px', overflow: 'hidden', cursor: 'pointer' }}
+        style={{
+          background: '#1A1A1A', border: '1px solid #2a2a2a', borderRadius: '2px', overflow: 'hidden', cursor: 'pointer',
+          // Lower-risk than the other cards (just an image + one-line
+          // name, no long description in the visible layout), but added
+          // for the same reason and consistency -- a longer animal name
+          // wrapping to 2 lines would otherwise make that one card
+          // taller than its row-mates.
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
         {/* Image */}
-        <div style={{ position: 'relative', overflow: 'hidden', aspectRatio: '4/3' }}>
+        <div style={{ position: 'relative', overflow: 'hidden', aspectRatio: '4/3', flexShrink: 0 }}>
           <Image
             src={image}
             alt={name}
@@ -44,8 +54,8 @@ export default function FarmCard({ id, name, description, image }: FarmCardProps
           </div>
         </div>
         {/* Name bar */}
-        <div style={{ padding: '0.875rem 1rem' }}>
-          <div style={{ color: '#FFFFFF', fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.2rem' }}>
+        <div style={{ padding: '0.875rem 1rem', flex: 1, display: 'flex', alignItems: 'center' }}>
+          <div style={{ color: '#FFFFFF', fontSize: '0.95rem', fontWeight: 700 }}>
             {name}
           </div>
         </div>

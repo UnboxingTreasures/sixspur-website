@@ -59,10 +59,23 @@ export default function NewsGrid() {
             <Link
               key={item.slug}
               href={`/news/${item.slug}`}
-              style={{ textDecoration: 'none', display: 'block' }}
+              style={{ textDecoration: 'none', display: 'block', height: '100%' }}
             >
               <div
-                style={{ background: '#FFFFFF', border: '1px solid #E8E2DC', borderRadius: '2px', overflow: 'hidden', transition: 'transform 0.2s ease, box-shadow 0.2s ease' }}
+                style={{
+                  background: '#FFFFFF', border: '1px solid #E8E2DC', borderRadius: '2px', overflow: 'hidden',
+                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                  // Equal-height cards: the grid cell itself already
+                  // stretches to match the tallest card in the row (CSS
+                  // Grid's default align-items: stretch), but nothing
+                  // was telling THIS box to actually fill that stretched
+                  // cell -- so it just sat at its own natural content
+                  // height instead, leaving ragged bottoms across a row
+                  // whenever one excerpt ran longer than another.
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
                 onMouseEnter={(e) => {
                   (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-4px)';
                   (e.currentTarget as HTMLDivElement).style.boxShadow = '0 8px 24px rgba(0,0,0,0.08)';
@@ -72,7 +85,7 @@ export default function NewsGrid() {
                   (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
                 }}
               >
-                <div style={{ width: '100%', aspectRatio: '16/9', background: '#D1C0B0', overflow: 'hidden' }}>
+                <div style={{ width: '100%', aspectRatio: '16/9', background: '#D1C0B0', overflow: 'hidden', flexShrink: 0 }}>
                   <img
                     src={item.image}
                     alt={item.title}
@@ -81,7 +94,7 @@ export default function NewsGrid() {
                   />
                 </div>
 
-                <div style={{ padding: '1.5rem' }}>
+                <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
                     <span style={{ background: '#E77A2D', color: '#FFFFFF', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: '2px' }}>
                       {item.category}
@@ -96,7 +109,11 @@ export default function NewsGrid() {
                   <p style={{ color: '#666666', fontSize: '0.875rem', lineHeight: 1.65, margin: '0 0 1.25rem' }}>
                     {item.excerpt}
                   </p>
-                  <span style={{ color: '#E77A2D', fontSize: '0.8rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                  {/* marginTop: auto pushes this to the bottom of the
+                      card no matter how long (or short) the excerpt
+                      above it is, so "Read more" lines up across every
+                      card in the row. */}
+                  <span style={{ color: '#E77A2D', fontSize: '0.8rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 'auto' }}>
                     Read more →
                   </span>
                 </div>
