@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import SiteChrome from '@/components/layout/SiteChrome'
 import { CartProvider } from '@/context/CartContext'
+import PageTransition from '@/components/layout/PageTransition'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -21,7 +22,9 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <CartProvider>
-          <SiteChrome>{children}</SiteChrome>
+          <PageTransition>
+            <SiteChrome>{children}</SiteChrome>
+          </PageTransition>
         </CartProvider>
       </body>
     </html>
