@@ -1,0 +1,17 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "OrdersTableAccess",
+      "Effect": "Allow",
+      "Action": ["dynamodb:Scan", "dynamodb:GetItem", "dynamodb:UpdateItem"],
+      "Resource": "arn:aws:dynamodb:us-east-1:658965339779:table/orders"
+    },
+    {
+      "Sid": "DonorsTableAdminCheck",
+      "Effect": "Allow",
+      "Action": "dynamodb:GetItem",
+      "Resource": "arn:aws:dynamodb:us-east-1:658965339779:table/donors"
+    }
+  ]
+}
