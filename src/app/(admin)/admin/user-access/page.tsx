@@ -5,6 +5,14 @@ import { getIdToken } from "@/lib/cognito";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
+// Mirrors the SUPER_ADMIN_EMAILS allowlist enforced server-side in
+// lambda/adminUserAccess/index.js. This frontend copy is UI-only --
+// hiding the Revoke button for everyone else is just good UX so people
+// aren't shown a control that will fail for them. The actual security
+// boundary is the backend check; if these two lists ever drift apart,
+// the backend's list is what actually governs.
+const SUPER_ADMIN_EMAILS = new Set(["sixspurrescue@gmail.com", "jaylefler1974@gmail.com"]);
+
 interface Admin {
   donorId: string;
   email: string;
@@ -21,6 +29,12 @@ export default function AdminUserAccessPage() {
   const [grantError, setGrantError] = useState("");
 
   const [revokingId, setRevokingId] = useState<string | null>(null);
+
+  // Whether THIS logged-in admin is allowed to revoke anyone -- fetched
+  // once on mount, same /donor/profile endpoint the nav bar already
+  // uses to check isAdmin.
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+  const canRevoke = currentUserEmail !== null && SUPER_ADMIN_EMAILS.has(currentUserEmail.trim().toLowerCase());
 
   const authedFetch = async (path: string, options: RequestInit = {}) => {
     const token = await getIdToken();
@@ -46,8 +60,21 @@ export default function AdminUserAccessPage() {
     }
   };
 
+  const fetchCurrentUser = async () => {
+    try {
+      const res = await authedFetch("/donor/profile");
+      const data = await res.json();
+      if (res.ok) setCurrentUserEmail(data.email || null);
+    } catch (err) {
+      // Non-fatal -- worst case, canRevoke just stays false and every
+      // Revoke button stays hidden, which is the safe default anyway.
+      console.error("Failed to load current user profile:", err);
+    }
+  };
+
   useEffect(() => {
     fetchAdmins();
+    fetchCurrentUser();
   }, []);
 
   const handleGrant = async () => {
@@ -134,13 +161,15 @@ export default function AdminUserAccessPage() {
         {admins.map((admin) => (
           <div key={admin.donorId} style={{ background: "#fff", border: "1.5px solid #E8E2DC", borderRadius: 10, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: 14, color: "#111111", fontWeight: 600 }}>{admin.email}</span>
-            <button
-              onClick={() => handleRevoke(admin.donorId, admin.email)}
-              disabled={revokingId === admin.donorId}
-              style={{ padding: "6px 14px", borderRadius: 6, border: "1.5px solid #DC2626", background: "#fff", color: "#DC2626", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: revokingId === admin.donorId ? 0.6 : 1 }}
-            >
-              {revokingId === admin.donorId ? "Revoking…" : "Revoke"}
-            </button>
+            {canRevoke && (
+              <button
+                onClick={() => handleRevoke(admin.donorId, admin.email)}
+                disabled={revokingId === admin.donorId}
+                style={{ padding: "6px 14px", borderRadius: 6, border: "1.5px solid #DC2626", background: "#fff", color: "#DC2626", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: revokingId === admin.donorId ? 0.6 : 1 }}
+              >
+                {revokingId === admin.donorId ? "Revoking…" : "Revoke"}
+              </button>
+            )}
           </div>
         ))}
       </div>
