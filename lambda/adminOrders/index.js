@@ -9,9 +9,16 @@
 // Lambda) AND isAdmin=true on the donor record -- see requireAdmin() in
 // adminAuth.js. Same pattern as every other admin Lambda in this
 // project, not a new auth approach.
+//
+// UPDATED -- sends a shipment notification email when status moves to
+// 'shipped', mirroring how lambda/orders sends an order-confirmation
+// email on capture. Wrapped in its own try/catch: a failed email must
+// never undo or fail the shipment update itself, since the order really
+// is shipped regardless of whether the notification went out.
 
 const { listAll, getById, updateOrder } = require('./dynamo');
 const { requireAdmin } = require('./adminAuth');
+const { sendShipmentNotification } = require('./email');
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -64,6 +71,15 @@ exports.handler = async (event) => {
         try {
           const updated = await updateOrder(orderId, body);
           if (!updated) return respond(404, { error: 'Order not found' });
+
+          if (body.status === 'shipped') {
+            try {
+              await sendShipmentNotification(updated);
+            } catch (emailErr) {
+              console.error(`Order ${orderId} marked shipped but notification email failed:`, emailErr);
+            }
+          }
+
           return respond(200, updated);
         } catch (err) {
           return respond(400, { error: err.message });
