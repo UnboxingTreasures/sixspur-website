@@ -26,7 +26,7 @@ export default function NewsGrid() {
   useEffect(() => {
     fetch(`${API_URL}/news`)
       .then((res) => res.json())
-      .then((data) => setPosts(Array.isArray(data) ? data.slice(0, 3) : []))
+      .then((data) => setPosts(Array.isArray(data) ? data.slice(0, 5) : []))
       .catch((err) => console.error('Error fetching news:', err));
   }, []);
 

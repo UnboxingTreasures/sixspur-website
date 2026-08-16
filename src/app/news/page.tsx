@@ -15,6 +15,12 @@ const MONTHS = [
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR - i);
 
+// Default (unfiltered) view shows only the most recent posts, per
+// Jay's request -- the month/year filters below exist precisely so
+// someone CAN dig through the full history, but the initial page load
+// shouldn't dump every post ever published on the visitor at once.
+const DEFAULT_VISIBLE_COUNT = 5;
+
 interface Post {
   slug: string;
   title: string;
@@ -42,12 +48,20 @@ export default function NewsPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const isFiltering = selectedMonth !== "" || selectedYear !== "";
+
   const filtered = posts.filter((post) => {
     const d = new Date(post.publishedAt);
     if (selectedMonth && d.getMonth() !== parseInt(selectedMonth)) return false;
     if (selectedYear && d.getFullYear() !== parseInt(selectedYear)) return false;
     return true;
   });
+
+  // Picking a month/year is an explicit request to see more than the
+  // default -- that bypasses the cap entirely rather than compounding
+  // with it, since "show me July 2025" should show ALL of July 2025,
+  // not just the first 5 posts.
+  const displayedPosts = isFiltering ? filtered : filtered.slice(0, DEFAULT_VISIBLE_COUNT);
 
   const selectClass = "px-3 py-2 border border-spur-tan rounded text-sm text-spur-black bg-white focus:outline-none focus:border-spur-orange transition-colors";
 
@@ -65,7 +79,7 @@ export default function NewsPage() {
 
       <section className="py-16 px-6">
         <div className="max-w-5xl mx-auto">
-          <div className="flex flex-wrap gap-3 mb-10">
+          <div className="flex flex-wrap items-center gap-3 mb-3">
             <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className={selectClass}>
               <option value="">All Months</option>
               {MONTHS.map((m, i) => (
@@ -90,13 +104,19 @@ export default function NewsPage() {
             )}
           </div>
 
+          <p className="text-xs text-gray-400 mb-8 h-4">
+            {!isFiltering && filtered.length > DEFAULT_VISIBLE_COUNT
+              ? `Showing the ${DEFAULT_VISIBLE_COUNT} most recent posts — use the filters above to browse older ones.`
+              : ""}
+          </p>
+
           {loading ? (
             <p className="text-gray-500 text-sm">Loading posts...</p>
-          ) : filtered.length === 0 ? (
+          ) : displayedPosts.length === 0 ? (
             <p className="text-gray-500 text-sm">No posts found for the selected filters.</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {filtered.map((post) => (
+              {displayedPosts.map((post) => (
                 <Link key={post.slug} href={`/news/${post.slug}`} className="group flex flex-col">
                   <div className="relative aspect-[16/9] bg-spur-tan-light rounded overflow-hidden mb-4">
                     <img
