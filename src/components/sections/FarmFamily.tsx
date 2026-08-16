@@ -26,6 +26,23 @@ export default async function FarmFamily() {
 
   return (
     <section style={{ background: '#111111', padding: '6rem 1.5rem' }}>
+      {/* The grid below was hardcoded to 4 columns with no responsive
+          behavior at all -- on a narrow phone, 4 fixed-width columns
+          forced the whole grid (and the page along with it) wider than
+          the viewport, causing horizontal overflow. FarmCard's <Image>
+          sizes prop already assumed 2 columns on mobile
+          ("(max-width: 640px) 50vw"), so this brings the actual grid in
+          line with what the image sizing already expected. */}
+      <style>{`
+        .farm-animal-grid {
+          grid-template-columns: repeat(4, 1fr);
+        }
+        @media (max-width: 640px) {
+          .farm-animal-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+          }
+        }
+      `}</style>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
         {/* Header */}
         <div style={{ marginBottom: '3.5rem', maxWidth: '640px' }}>
@@ -40,9 +57,8 @@ export default async function FarmFamily() {
             Not every animal at Six Spur is here temporarily. Our farm residents are permanent members of the family that live out their lives on the ranch. Your donations keep them fed, healthy, and happy year-round.
           </p>
         </div>
-
         {/* Animal grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '3rem' }}>
+        <div className="farm-animal-grid" style={{ display: 'grid', gap: '1rem', marginBottom: '3rem' }}>
           {animals.map((animal) => (
             <FarmCard
               key={animal.animalId}
@@ -53,7 +69,6 @@ export default async function FarmFamily() {
             />
           ))}
         </div>
-
         {/* Support CTA */}
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '2rem', borderTop: '1px solid #2a2a2a', paddingTop: '3rem' }}>
           <div>
