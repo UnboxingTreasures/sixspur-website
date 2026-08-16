@@ -1,10 +1,12 @@
 {
   "name": "sixspur-admin-donations",
   "version": "1.0.0",
-  "description": "Admin view/manage donation records (view + status/notes edits only, no manual entry)",
+  "description": "Admin view/manage donation records (view + status/notes edits only, no manual entry), plus real PayPal refund automation",
   "main": "index.js",
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.600.0",
-    "@aws-sdk/lib-dynamodb": "^3.600.0"
+    "@aws-sdk/lib-dynamodb": "^3.600.0",
+    "@aws-sdk/client-secrets-manager": "^3.600.0",
+    "@aws-sdk/client-ses": "^3.600.0"
   }
 }

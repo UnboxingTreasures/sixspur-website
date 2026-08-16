@@ -26,7 +26,7 @@
 
 const { listAll, getById, updateOrder, recordRefund, buildRefundIdempotencyKey } = require('./dynamo');
 const { requireAdmin } = require('./adminAuth');
-const { sendShipmentNotification } = require('./email');
+const { sendShipmentNotification, sendRefundNotification } = require('./email');
 const { refundCapture } = require('./paypal');
 
 const CORS_HEADERS = {
@@ -160,6 +160,13 @@ exports.handler = async (event) => {
             error: 'The PayPal refund succeeded, but the order record could not be updated because it changed at the same time. Refresh and check the order before retrying.',
             paypalRefundId: paypalResult.id,
           });
+        }
+
+        try {
+          const isFullRefund = updated.status === 'refunded';
+          await sendRefundNotification(updated, requestedAmount, isFullRefund);
+        } catch (emailErr) {
+          console.error(`Order ${orderId} refunded but notification email failed:`, emailErr);
         }
 
         return respond(200, updated);

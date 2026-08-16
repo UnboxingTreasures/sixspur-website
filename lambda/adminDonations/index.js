@@ -36,6 +36,7 @@
 
 const { listAll, getById, updateDonation, recordRefund, buildRefundIdempotencyKey } = require('./dynamo');
 const { refundCapture } = require('./paypal');
+const { sendRefundNotification } = require('./email');
 const { requireAdmin } = require('./adminAuth');
 
 const CORS_HEADERS = {
@@ -165,6 +166,13 @@ exports.handler = async (event) => {
             error: 'The PayPal refund succeeded, but the donation record could not be updated because it changed at the same time. Refresh and check the donation before retrying.',
             paypalRefundId: paypalResult.id,
           });
+        }
+
+        try {
+          const isFullRefund = updated.status === 'refunded';
+          await sendRefundNotification(updated, requestedAmount, isFullRefund);
+        } catch (emailErr) {
+          console.error(`Donation ${donationId} refunded but notification email failed:`, emailErr);
         }
 
         return respond(200, updated);

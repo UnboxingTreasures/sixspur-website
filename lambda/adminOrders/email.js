@@ -86,4 +86,59 @@ Every purchase supports the animals at Six Spur Ranch and Rescue. Questions abou
   }));
 }
 
-module.exports = { sendShipmentNotification };
+/**
+ * Sent after a refund is successfully processed through PayPal (see
+ * index.js's POST /admin/orders/{id}/refund). Called AFTER recordRefund
+ * succeeds, in its own try/catch there -- same reasoning as the
+ * shipment notification above: a failed email must never undo or fail
+ * a refund that's already real money, already moved.
+ */
+async function sendRefundNotification(order, refundAmount, isFullRefund) {
+  const remaining = Math.round((order.total - (order.refundedAmount || 0)) * 100) / 100;
+  const partialNote = isFullRefund
+    ? ''
+    : `\nThis was a partial refund. $${remaining.toFixed(2)} of your original $${order.total.toFixed(2)} order remains unrefunded.\n`;
+  const partialNoteHtml = isFullRefund
+    ? ''
+    : `<p style="font-size:13px; color:#888888;">This was a partial refund. $${remaining.toFixed(2)} of your original $${order.total.toFixed(2)} order remains unrefunded.</p>`;
+
+  const textBody = `Your refund from Six Spur Ranch and Rescue has been processed.
+
+Order: ${order.orderId}
+Refund Amount: $${refundAmount.toFixed(2)}
+${partialNote}
+Please allow a few business days for this to appear back on your original payment method via PayPal.
+
+Questions? Just reply to this email.
+`;
+
+  const htmlBody = `
+<div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; color: #111111;">
+  <h2 style="color:#111111;">Your refund has been processed</h2>
+  <p style="color:#555555; font-size:13px;">Order: ${order.orderId}</p>
+
+  <p style="font-size:20px; font-weight:bold; margin: 20px 0;">$${refundAmount.toFixed(2)} refunded</p>
+
+  ${partialNoteHtml}
+
+  <p style="font-size:14px; color:#555555;">Please allow a few business days for this to appear back on your original payment method via PayPal.</p>
+
+  <p style="color:#888888; font-size:12px; margin-top:24px;">
+    Questions? Just reply to this email.
+  </p>
+</div>`;
+
+  await ses.send(new SendEmailCommand({
+    Source: FROM_ADDRESS,
+    Destination: { ToAddresses: [order.email] },
+    Message: {
+      Subject: { Data: `Your refund has been processed — Six Spur Ranch and Rescue (${order.orderId.slice(0, 8)})` },
+      Body: {
+        Text: { Data: textBody },
+        Html: { Data: htmlBody },
+      },
+    },
+  }));
+}
+
+module.exports = { sendShipmentNotification, sendRefundNotification };

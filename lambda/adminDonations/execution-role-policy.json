@@ -20,6 +20,12 @@
       "Resource": "arn:aws:secretsmanager:us-east-1:658965339779:secret:sixspur/paypal-api-*"
     },
     {
+      "Sid": "SendRefundNotification",
+      "Effect": "Allow",
+      "Action": ["ses:SendEmail", "ses:SendRawEmail"],
+      "Resource": "*"
+    },
+    {
       "Sid": "Logging",
       "Effect": "Allow",
       "Action": [

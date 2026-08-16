@@ -1,19 +1,15 @@
 #!/bin/bash
 set -e
-
 FUNCTION_NAME="sixspur-adminDonations"
 ROLE_NAME="sixspur-adminDonations-execution-role"
 REGION="us-east-1"
 PROFILE="sixspur"
 ACCOUNT_ID="658965339779"
-
 echo "Installing dependencies..."
 npm install
-
 echo "Zipping function..."
 rm -f adminDonations.zip
-zip -r adminDonations.zip index.js dynamo.js node_modules package.json
-
+zip -r adminDonations.zip index.js dynamo.js paypal.js email.js adminAuth.js node_modules package.json
 if ! aws iam get-role --role-name "$ROLE_NAME" --profile "$PROFILE" >/dev/null 2>&1; then
   echo "Creating IAM role $ROLE_NAME..."
   aws iam create-role \
@@ -27,34 +23,28 @@ if ! aws iam get-role --role-name "$ROLE_NAME" --profile "$PROFILE" >/dev/null 2
       }]
     }' \
     --profile "$PROFILE"
-
   echo "Waiting for role propagation..."
   sleep 10
 else
   echo "Role $ROLE_NAME already exists."
 fi
-
 echo "Applying current execution role policy (safe to re-run)..."
 aws iam put-role-policy \
   --role-name "$ROLE_NAME" \
   --policy-name AdminDonationsPermissions \
   --policy-document file://execution-role-policy.json \
   --profile "$PROFILE"
-
 ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME}"
 ENV_VARS="Variables={DONATIONS_TABLE=donations}"
-
 if aws lambda get-function --function-name "$FUNCTION_NAME" --profile "$PROFILE" --region "$REGION" >/dev/null 2>&1; then
   echo "Function exists, updating code..."
   aws lambda update-function-code \
     --function-name "$FUNCTION_NAME" \
     --zip-file fileb://adminDonations.zip \
     --profile "$PROFILE" --region "$REGION"
-
   aws lambda wait function-updated \
     --function-name "$FUNCTION_NAME" \
     --profile "$PROFILE" --region "$REGION"
-
   aws lambda update-function-configuration \
     --function-name "$FUNCTION_NAME" \
     --environment "$ENV_VARS" \
@@ -74,5 +64,4 @@ else
     --environment "$ENV_VARS" \
     --profile "$PROFILE" --region "$REGION"
 fi
-
 echo "Done. Function: $FUNCTION_NAME"
