@@ -8,6 +8,18 @@
       "Resource": "arn:aws:dynamodb:us-east-1:658965339779:table/donations"
     },
     {
+      "Sid": "DonorsTableAdminCheck",
+      "Effect": "Allow",
+      "Action": "dynamodb:GetItem",
+      "Resource": "arn:aws:dynamodb:us-east-1:658965339779:table/donors"
+    },
+    {
+      "Sid": "PayPalRefundSecretAccess",
+      "Effect": "Allow",
+      "Action": "secretsmanager:GetSecretValue",
+      "Resource": "arn:aws:secretsmanager:us-east-1:658965339779:secret:sixspur/paypal-api-*"
+    },
+    {
       "Sid": "Logging",
       "Effect": "Allow",
       "Action": [

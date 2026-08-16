@@ -5,6 +5,13 @@ import { getIdToken } from "@/lib/cognito";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
+interface RefundEntry {
+  refundId: string;
+  amount: number;
+  currency: string;
+  refundedAt: string;
+}
+
 interface Donation {
   donationId: string;
   donorId: string;
@@ -12,13 +19,15 @@ interface Donation {
   amount: number;
   currency: string;
   type: "one-time" | "recurring";
-  status: "completed" | "refunded" | "failed";
+  status: "completed" | "partially_refunded" | "refunded" | "failed";
   paymentMethod: "paypal";
   paypalTransactionId?: string;
   receiptUrl?: string;
   notes?: string;
   campaignId?: string;
   campaignTitle?: string;
+  refundedAmount?: number;
+  refundHistory?: RefundEntry[];
   createdAt: string;
 }
 
@@ -62,7 +71,8 @@ const RECURRING_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   completed: { bg: "#EAF7EE", text: "#1E8A4C" },
-  refunded: { bg: "#FEF9E7", text: "#B5900F" },
+  partially_refunded: { bg: "#FEF9E7", text: "#B5900F" },
+  refunded: { bg: "#F3F4F6", text: "#6B7280" },
   failed: { bg: "#FEF2F2", text: "#DC2626" },
 };
 
@@ -84,6 +94,14 @@ export default function AdminDonationsPage() {
 
   const [notesDraft, setNotesDraft] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+
+  // Refund UI state -- per-donation so the amount input, loading state,
+  // and any error message for one donation's refund never bleed into
+  // another's, even with several cards expanded/interacted with in
+  // quick succession.
+  const [refundAmountDraft, setRefundAmountDraft] = useState<Record<string, string>>({});
+  const [refundingId, setRefundingId] = useState<string | null>(null);
+  const [refundError, setRefundError] = useState<Record<string, string>>({});
 
   // NEW -- archive filter. Year defaults to "all" (full history); Month
   // is only meaningful once a specific year is chosen, since "January"
@@ -193,21 +211,54 @@ export default function AdminDonationsPage() {
     }
   };
 
-  const markRefunded = async (donationId: string) => {
-    if (!confirm("Mark this donation as refunded? This doesn't process a real refund through PayPal -- do that there first, this just updates Six Spur's own record.")) return;
-    setSavingId(donationId);
+  /**
+   * Real PayPal refund, full or partial. Defaults the input to
+   * whatever's remaining on the donation (usually the full amount, or
+   * whatever's left after an earlier partial refund) -- an admin only
+   * needs to change the number for a deliberate partial refund.
+   */
+  const processRefund = async (donationId: string) => {
+    const donation = donations.find((d) => d.donationId === donationId);
+    if (!donation) return;
+
+    const remaining = Math.round((donation.amount - (donation.refundedAmount || 0)) * 100) / 100;
+    const draft = refundAmountDraft[donationId];
+    const amount = draft !== undefined && draft !== "" ? Number(draft) : remaining;
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setRefundError((prev) => ({ ...prev, [donationId]: "Enter a valid refund amount." }));
+      return;
+    }
+    if (amount > remaining + 0.005) {
+      setRefundError((prev) => ({ ...prev, [donationId]: `Cannot exceed the $${remaining.toFixed(2)} remaining on this donation.` }));
+      return;
+    }
+
+    const isFullRefund = Math.abs(amount - remaining) < 0.005;
+    const confirmMessage = isFullRefund
+      ? `Refund $${amount.toFixed(2)} to ${donation.donorEmail} via PayPal? This processes a REAL refund and cannot be undone.`
+      : `Refund $${amount.toFixed(2)} (partial) to ${donation.donorEmail} via PayPal, leaving $${(remaining - amount).toFixed(2)} still refundable? This processes a REAL refund and cannot be undone.`;
+    if (!confirm(confirmMessage)) return;
+
+    setRefundingId(donationId);
+    setRefundError((prev) => ({ ...prev, [donationId]: "" }));
     try {
-      const res = await authedFetch(`/admin/donations/${donationId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: "refunded" }),
+      const res = await authedFetch(`/admin/donations/${donationId}/refund`, {
+        method: "POST",
+        body: JSON.stringify({ amount }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to update status");
+      if (!res.ok) throw new Error(data.error || "Refund failed");
       setDonations((prev) => prev.map((d) => (d.donationId === donationId ? data : d)));
+      setRefundAmountDraft((prev) => {
+        const next = { ...prev };
+        delete next[donationId];
+        return next;
+      });
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to update status");
+      setRefundError((prev) => ({ ...prev, [donationId]: err instanceof Error ? err.message : "Refund failed" }));
     } finally {
-      setSavingId(null);
+      setRefundingId(null);
     }
   };
 
@@ -361,6 +412,10 @@ export default function AdminDonationsPage() {
         {filteredDonations.map((d) => {
           const isExpanded = expandedId === d.donationId;
           const colors = STATUS_COLORS[d.status];
+          const alreadyRefunded = d.refundedAmount || 0;
+          const remaining = Math.round((d.amount - alreadyRefunded) * 100) / 100;
+          const canRefund = d.status !== "refunded" && d.status !== "failed" && remaining > 0 && !!d.paypalTransactionId;
+
           return (
             <div key={d.donationId} style={{ background: "#fff", border: "1.5px solid #E8E2DC", borderRadius: 12, overflow: "hidden" }}>
               <div
@@ -374,10 +429,11 @@ export default function AdminDonationsPage() {
                   <div style={{ fontWeight: 700, fontSize: 15, color: "#111111" }}>${d.amount.toFixed(2)} {d.currency}</div>
                   <div style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>
                     {d.donorEmail} · {formatDate(d.createdAt)} · {getDonationDescriptor(d)} · PayPal
+                    {alreadyRefunded > 0 && ` · $${alreadyRefunded.toFixed(2)} refunded`}
                   </div>
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20, background: colors.bg, color: colors.text, whiteSpace: "nowrap" }}>
-                  {d.status}
+                  {d.status.replace("_", " ")}
                 </span>
               </div>
 
@@ -412,15 +468,57 @@ export default function AdminDonationsPage() {
                     <p style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>No receipt on file yet.</p>
                   )}
 
-                  {d.status === "completed" && (
-                    <div style={{ paddingTop: 16, borderTop: "1px solid #F0EBE5" }}>
-                      <button
-                        onClick={() => markRefunded(d.donationId)}
-                        style={{ padding: "8px 16px", borderRadius: 8, border: "1.5px solid #B5900F", background: "#fff", color: "#B5900F", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
-                      >
-                        Mark as Refunded
-                      </button>
+                  {/* Refund history -- audit trail of every refund
+                      actually processed against this donation, oldest
+                      first. */}
+                  {d.refundHistory && d.refundHistory.length > 0 && (
+                    <div style={{ marginBottom: 16, padding: "10px 14px", background: "#F7F4F0", borderRadius: 8 }}>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.4 }}>Refund History</p>
+                      {d.refundHistory.map((r) => (
+                        <p key={r.refundId} style={{ fontSize: 12, color: "#111111", margin: "2px 0" }}>
+                          ${r.amount.toFixed(2)} refunded on {formatDate(r.refundedAt)}
+                        </p>
+                      ))}
                     </div>
+                  )}
+
+                  {canRefund && (
+                    <div style={{ paddingTop: 16, borderTop: "1px solid #F0EBE5" }}>
+                      <label style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", display: "block", marginBottom: 6 }}>
+                        Refund amount (up to ${remaining.toFixed(2)} remaining)
+                      </label>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          max={remaining}
+                          placeholder={remaining.toFixed(2)}
+                          value={refundAmountDraft[d.donationId] ?? ""}
+                          onChange={(e) => setRefundAmountDraft((prev) => ({ ...prev, [d.donationId]: e.target.value }))}
+                          style={{ width: 110, padding: "8px 10px", borderRadius: 6, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit" }}
+                        />
+                        <button
+                          onClick={() => processRefund(d.donationId)}
+                          disabled={refundingId === d.donationId}
+                          style={{ padding: "8px 16px", borderRadius: 8, border: "1.5px solid #B5900F", background: "#fff", color: "#B5900F", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: refundingId === d.donationId ? 0.6 : 1 }}
+                        >
+                          {refundingId === d.donationId ? "Processing…" : "Process Refund"}
+                        </button>
+                      </div>
+                      <p style={{ fontSize: 11, color: "#9CA3AF", marginTop: 6 }}>
+                        Leave blank to refund the full ${remaining.toFixed(2)} remaining. This calls PayPal directly and cannot be undone.
+                      </p>
+                      {refundError[d.donationId] && (
+                        <p style={{ fontSize: 12, color: "#DC2626", marginTop: 6 }}>{refundError[d.donationId]}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {!canRefund && d.status !== "refunded" && !d.paypalTransactionId && (
+                    <p style={{ fontSize: 12, color: "#9CA3AF", paddingTop: 16, borderTop: "1px solid #F0EBE5" }}>
+                      No PayPal transaction on record -- can&apos;t process an automatic refund for this donation.
+                    </p>
                   )}
                 </div>
               )}

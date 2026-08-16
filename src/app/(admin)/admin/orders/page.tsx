@@ -17,6 +17,12 @@ interface ShippingAddress {
   state: string;
   zip: string;
 }
+interface RefundEntry {
+  refundId: string;
+  amount: number;
+  currency: string;
+  refundedAt: string;
+}
 interface Order {
   orderId: string;
   email: string;
@@ -25,11 +31,13 @@ interface Order {
   subtotal: number;
   shippingCost: number;
   total: number;
-  status: "paid" | "shipped" | "refunded";
+  status: "paid" | "shipped" | "partially_refunded" | "refunded";
   shippingAddress: ShippingAddress;
   paypalTransactionId?: string;
   trackingNumber?: string;
   notes?: string;
+  refundedAmount?: number;
+  refundHistory?: RefundEntry[];
   createdAt: string;
   paidAt?: string;
 }
@@ -44,7 +52,8 @@ function getItemsSummary(o: Order): string {
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   paid: { bg: "#EAF7EE", text: "#1E8A4C" },
   shipped: { bg: "#EAF2FE", text: "#1D5FB5" },
-  refunded: { bg: "#FEF9E7", text: "#B5900F" },
+  partially_refunded: { bg: "#FEF9E7", text: "#B5900F" },
+  refunded: { bg: "#F3F4F6", text: "#6B7280" },
 };
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
@@ -58,6 +67,14 @@ export default function AdminOrdersPage() {
   const [notesDraft, setNotesDraft] = useState<Record<string, string>>({});
   const [trackingDraft, setTrackingDraft] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+
+  // Refund UI state -- per-order, same pattern as the Donations page,
+  // so the amount input/loading/error for one order's refund never
+  // bleeds into another's.
+  const [refundAmountDraft, setRefundAmountDraft] = useState<Record<string, string>>({});
+  const [refundingId, setRefundingId] = useState<string | null>(null);
+  const [refundError, setRefundError] = useState<Record<string, string>>({});
+
   // Archive filter, same pattern as the Donations page -- Month is only
   // meaningful once a specific year is chosen, and switching years or
   // back to "All Years" always resets Month to "all" so the two
@@ -118,10 +135,59 @@ export default function AdminOrdersPage() {
     const trackingNumber = trackingDraft[orderId] || "";
     saveOrder(orderId, { status: "shipped", trackingNumber });
   };
-  const markRefunded = (orderId: string) => {
-    if (!confirm("Mark this order as refunded? This doesn't process a real refund through PayPal -- do that there first, this just updates Six Spur's own record.")) return;
-    saveOrder(orderId, { status: "refunded" });
+
+  /**
+   * Real PayPal refund, full or partial. Available from paid OR shipped
+   * status -- a shipped item can still need a refund (wrong size,
+   * defective, etc.), so this is deliberately not limited to
+   * unshipped orders the way the shipping action itself is. Same
+   * pattern as the Donations page's processRefund.
+   */
+  const processRefund = async (orderId: string) => {
+    const order = orders.find((o) => o.orderId === orderId);
+    if (!order) return;
+
+    const remaining = Math.round((order.total - (order.refundedAmount || 0)) * 100) / 100;
+    const draft = refundAmountDraft[orderId];
+    const amount = draft !== undefined && draft !== "" ? Number(draft) : remaining;
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setRefundError((prev) => ({ ...prev, [orderId]: "Enter a valid refund amount." }));
+      return;
+    }
+    if (amount > remaining + 0.005) {
+      setRefundError((prev) => ({ ...prev, [orderId]: `Cannot exceed the $${remaining.toFixed(2)} remaining on this order.` }));
+      return;
+    }
+
+    const isFullRefund = Math.abs(amount - remaining) < 0.005;
+    const confirmMessage = isFullRefund
+      ? `Refund $${amount.toFixed(2)} to ${order.email} via PayPal? This processes a REAL refund and cannot be undone.`
+      : `Refund $${amount.toFixed(2)} (partial) to ${order.email} via PayPal, leaving $${(remaining - amount).toFixed(2)} still refundable? This processes a REAL refund and cannot be undone.`;
+    if (!confirm(confirmMessage)) return;
+
+    setRefundingId(orderId);
+    setRefundError((prev) => ({ ...prev, [orderId]: "" }));
+    try {
+      const res = await authedFetch(`/admin/orders/${orderId}/refund`, {
+        method: "POST",
+        body: JSON.stringify({ amount }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Refund failed");
+      setOrders((prev) => prev.map((o) => (o.orderId === orderId ? data : o)));
+      setRefundAmountDraft((prev) => {
+        const next = { ...prev };
+        delete next[orderId];
+        return next;
+      });
+    } catch (err: unknown) {
+      setRefundError((prev) => ({ ...prev, [orderId]: err instanceof Error ? err.message : "Refund failed" }));
+    } finally {
+      setRefundingId(null);
+    }
   };
+
   const availableYears = useMemo(() => {
     const years = new Set(orders.map((o) => new Date(o.createdAt).getFullYear()));
     return Array.from(years).sort((a, b) => b - a);
@@ -234,6 +300,10 @@ export default function AdminOrdersPage() {
         {filteredOrders.map((o) => {
           const isExpanded = expandedId === o.orderId;
           const colors = STATUS_COLORS[o.status];
+          const alreadyRefunded = o.refundedAmount || 0;
+          const remaining = Math.round((o.total - alreadyRefunded) * 100) / 100;
+          const canRefund = o.status !== "refunded" && remaining > 0 && !!o.paypalTransactionId;
+
           return (
             <div key={o.orderId} style={{ background: "#fff", border: "1.5px solid #E8E2DC", borderRadius: 12, overflow: "hidden" }}>
               <div
@@ -248,10 +318,11 @@ export default function AdminOrdersPage() {
                   <div style={{ fontWeight: 700, fontSize: 15, color: "#111111" }}>${o.total.toFixed(2)}</div>
                   <div style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>
                     {o.email} · {formatDate(o.createdAt)} · {getItemsSummary(o)}
+                    {alreadyRefunded > 0 && ` · $${alreadyRefunded.toFixed(2)} refunded`}
                   </div>
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20, background: colors.bg, color: colors.text, whiteSpace: "nowrap" }}>
-                  {o.status}
+                  {o.status.replace("_", " ")}
                 </span>
               </div>
               {isExpanded && (
@@ -302,8 +373,23 @@ export default function AdminOrdersPage() {
                       {savingId === o.orderId ? "Saving…" : "Save Notes"}
                     </button>
                   </div>
+
+                  {/* Refund history -- audit trail of every refund
+                      actually processed against this order, oldest
+                      first. */}
+                  {o.refundHistory && o.refundHistory.length > 0 && (
+                    <div style={{ marginBottom: 16, padding: "10px 14px", background: "#F7F4F0", borderRadius: 8 }}>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.4 }}>Refund History</p>
+                      {o.refundHistory.map((r) => (
+                        <p key={r.refundId} style={{ fontSize: 12, color: "#111111", margin: "2px 0" }}>
+                          ${r.amount.toFixed(2)} refunded on {formatDate(r.refundedAt)}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+
                   {o.status === "paid" && (
-                    <div style={{ paddingTop: 16, borderTop: "1px solid #F0EBE5" }}>
+                    <div style={{ paddingTop: 16, borderTop: "1px solid #F0EBE5", marginBottom: 16 }}>
                       <label style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", display: "block", marginBottom: 4 }}>Tracking Number (optional)</label>
                       <input
                         type="text"
@@ -312,27 +398,62 @@ export default function AdminOrdersPage() {
                         placeholder="e.g. 1Z999AA10123456784"
                         style={{ width: "100%", boxSizing: "border-box", padding: "8px 10px", borderRadius: 6, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit", marginBottom: 10 }}
                       />
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button
-                          onClick={() => markShipped(o.orderId)}
-                          disabled={savingId === o.orderId}
-                          style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#1D5FB5", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
-                        >
-                          Mark as Shipped
-                        </button>
-                        <button
-                          onClick={() => markRefunded(o.orderId)}
-                          disabled={savingId === o.orderId}
-                          style={{ padding: "8px 16px", borderRadius: 8, border: "1.5px solid #B5900F", background: "#fff", color: "#B5900F", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
-                        >
-                          Mark as Refunded
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => markShipped(o.orderId)}
+                        disabled={savingId === o.orderId}
+                        style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#1D5FB5", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+                      >
+                        Mark as Shipped
+                      </button>
                     </div>
                   )}
+
                   {o.status === "shipped" && o.trackingNumber && (
-                    <p style={{ fontSize: 13, color: "#111111", paddingTop: 16, borderTop: "1px solid #F0EBE5" }}>
+                    <p style={{ fontSize: 13, color: "#111111", marginBottom: 16 }}>
                       Tracking: <strong>{o.trackingNumber}</strong>
+                    </p>
+                  )}
+
+                  {/* Refund UI -- available from paid OR shipped, unlike
+                      the shipping action above which only makes sense
+                      for a still-unshipped order. A shipped item can
+                      still need a refund. */}
+                  {canRefund && (
+                    <div style={{ paddingTop: 16, borderTop: "1px solid #F0EBE5" }}>
+                      <label style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", display: "block", marginBottom: 6 }}>
+                        Refund amount (up to ${remaining.toFixed(2)} remaining)
+                      </label>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          max={remaining}
+                          placeholder={remaining.toFixed(2)}
+                          value={refundAmountDraft[o.orderId] ?? ""}
+                          onChange={(e) => setRefundAmountDraft((prev) => ({ ...prev, [o.orderId]: e.target.value }))}
+                          style={{ width: 110, padding: "8px 10px", borderRadius: 6, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit" }}
+                        />
+                        <button
+                          onClick={() => processRefund(o.orderId)}
+                          disabled={refundingId === o.orderId}
+                          style={{ padding: "8px 16px", borderRadius: 8, border: "1.5px solid #B5900F", background: "#fff", color: "#B5900F", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: refundingId === o.orderId ? 0.6 : 1 }}
+                        >
+                          {refundingId === o.orderId ? "Processing…" : "Process Refund"}
+                        </button>
+                      </div>
+                      <p style={{ fontSize: 11, color: "#9CA3AF", marginTop: 6 }}>
+                        Leave blank to refund the full ${remaining.toFixed(2)} remaining. This calls PayPal directly and cannot be undone.
+                      </p>
+                      {refundError[o.orderId] && (
+                        <p style={{ fontSize: 12, color: "#DC2626", marginTop: 6 }}>{refundError[o.orderId]}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {!canRefund && o.status !== "refunded" && !o.paypalTransactionId && (
+                    <p style={{ fontSize: 12, color: "#9CA3AF", paddingTop: 16, borderTop: "1px solid #F0EBE5" }}>
+                      No PayPal transaction on record -- can&apos;t process an automatic refund for this order.
                     </p>
                   )}
                 </div>
