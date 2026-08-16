@@ -9,6 +9,11 @@
 // separate check: does this specific person have isAdmin=true on their
 // donor record. A JWT alone can't answer that -- it's a database lookup,
 // not something encoded in the token itself.
+//
+// UPDATED -- now also returns the caller's email alongside donorId,
+// since the isAdmin lookup already reads the full donor record. Needed
+// so index.js can check the caller's email against the super-admin
+// allowlist for revoking access, without a second DB round-trip.
 
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, GetCommand } = require('@aws-sdk/lib-dynamodb');
@@ -19,7 +24,7 @@ const DONORS_TABLE = process.env.DONORS_TABLE || 'donors';
 
 /**
  * Checks whether the verified JWT identity on this request belongs to
- * an admin. Returns { authorized: true, donorId } on success, or
+ * an admin. Returns { authorized: true, donorId, email } on success, or
  * { authorized: false, statusCode, error } on failure -- callers should
  * short-circuit and return that response directly (via their own
  * respond() helper) when authorized is false, rather than proceeding.
@@ -35,7 +40,7 @@ async function requireAdmin(event) {
     return { authorized: false, statusCode: 403, error: 'Admin access required' };
   }
 
-  return { authorized: true, donorId: claims.sub };
+  return { authorized: true, donorId: claims.sub, email: result.Item.email };
 }
 
 module.exports = { requireAdmin };
