@@ -26,9 +26,11 @@ function slugify(title) {
 
 /**
  * Public: lists published posts, newest first, optionally filtered by
- * category. Archived posts are excluded even if isPublished is still
- * "true" -- archiving is meant to pull a post off the public site
- * regardless of its publish state, not just a variant of unpublishing.
+ * category. Archived is purely an admin-side organizational status --
+ * it does NOT affect what's visible on the public site, since the
+ * public news pages already have their own year/date filtering to
+ * manage clutter. A post stays publicly visible exactly as long as
+ * isPublished says so, regardless of isArchived.
  */
 async function listPublishedPosts({ category } = {}) {
   const result = await ddb.send(
@@ -42,10 +44,6 @@ async function listPublishedPosts({ category } = {}) {
   );
 
   let items = result.Items || [];
-  // isArchived may not exist on older records -- undefined !== 'true'
-  // correctly treats those as not-archived rather than requiring a
-  // backfill/migration.
-  items = items.filter((p) => p.isArchived !== 'true');
   if (category) {
     items = items.filter((p) => p.category === category);
   }
@@ -68,13 +66,13 @@ async function listAllPosts() {
 }
 
 /**
- * Public: gets a single post by slug, but only if published AND not
- * archived (prevents leaking drafts or archived posts via a guessed or
- * previously-bookmarked URL).
+ * Public: gets a single post by slug, but only if published (same
+ * isPublished-only rule as the list above -- isArchived doesn't affect
+ * public visibility).
  */
 async function getPublishedPost(slug) {
   const { Item } = await ddb.send(new GetCommand({ TableName: TABLE_NAME, Key: { slug } }));
-  if (!Item || Item.isPublished !== 'true' || Item.isArchived === 'true') return null;
+  if (!Item || Item.isPublished !== 'true') return null;
   return Item;
 }
 

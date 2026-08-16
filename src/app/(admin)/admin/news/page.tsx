@@ -98,7 +98,7 @@ export default function AdminNewsPage() {
   // that wasn't asked for; if a post needs to come back, that's a
   // manual re-publish + un-archive via a direct data edit for now.
   const archivePost = async (slug: string) => {
-    if (!confirm("Archive this post? It will be removed from the public news pages and moved to the archive below.")) return;
+    if (!confirm("Archive this post? It'll move to the archive below for admin organization — it stays visible on the public news pages exactly as it does now.")) return;
     setArchivingSlug(slug);
     try {
       const res = await authedFetch(`/admin/news/${slug}`, {
@@ -117,19 +117,34 @@ export default function AdminNewsPage() {
   };
 
   const activePosts = useMemo(() => posts.filter((p) => p.isArchived !== "true"), [posts]);
-  const archivedPosts = useMemo(() => posts.filter((p) => p.isArchived === "true"), [posts]);
+  // Sorted by when each post was actually archived (falling back to
+  // publishedAt for anything archived before archivedAt existed) --
+  // "most recent" here means most recently archived, not most recently
+  // published, since those can differ for an old post archived just now.
+  const archivedPosts = useMemo(
+    () =>
+      posts
+        .filter((p) => p.isArchived === "true")
+        .sort((a, b) => new Date(b.archivedAt || b.publishedAt).getTime() - new Date(a.archivedAt || a.publishedAt).getTime()),
+    [posts]
+  );
 
   const availableYears = useMemo(() => {
     const years = new Set(archivedPosts.map((p) => new Date(p.archivedAt || p.publishedAt).getFullYear()));
     return Array.from(years).sort((a, b) => b - a);
   }, [archivedPosts]);
 
+  const RECENT_ARCHIVE_LIMIT = 5;
+
   const filteredArchivedPosts = useMemo(() => {
-    if (selectedYear === "all") return archivedPosts;
-    const year = Number(selectedYear);
+    // Default (no year picked) -- cap at the 5 most recent so this
+    // section doesn't grow unbounded as more posts get archived over
+    // time. Picking a specific year/month is an explicit request to see
+    // more, so that bypasses the cap entirely.
+    if (selectedYear === "all") return archivedPosts.slice(0, RECENT_ARCHIVE_LIMIT);
     return archivedPosts.filter((p) => {
       const date = new Date(p.archivedAt || p.publishedAt);
-      if (date.getFullYear() !== year) return false;
+      if (date.getFullYear() !== Number(selectedYear)) return false;
       if (selectedMonth !== "all" && date.getMonth() !== Number(selectedMonth)) return false;
       return true;
     });
@@ -242,7 +257,12 @@ export default function AdminNewsPage() {
                 <h2 className="text-sm font-bold text-gray-500">Archive ({archivedPosts.length})</h2>
                 <span className="text-gray-400 text-xs">{archiveOpen ? "▾" : "▸"}</span>
               </button>
-              <p className="text-xs text-gray-400 mb-4">Archived posts, removed from the public news pages, view-only.</p>
+              <p className="text-xs text-gray-400 mb-4">
+                Admin-only organization — these stay visible on the public news pages, view-only here.
+                {selectedYear === "all" && archivedPosts.length > RECENT_ARCHIVE_LIMIT && (
+                  <> Showing the {RECENT_ARCHIVE_LIMIT} most recent — pick a year to see the rest.</>
+                )}
+              </p>
 
               {archiveOpen && (
                 <>
