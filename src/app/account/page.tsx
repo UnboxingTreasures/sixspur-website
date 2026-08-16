@@ -279,7 +279,7 @@ function AccountDashboardContent() {
           )}
 
           {/* Recurring donations */}
-          <div>
+          <div className="border-4 border-spur-orange rounded-lg p-6">
             <button
               type="button"
               onClick={() => setRecurringOpen((open) => !open)}
@@ -328,7 +328,7 @@ function AccountDashboardContent() {
           </div>
 
           {/* Donation history */}
-          <div>
+          <div className="border-4 border-spur-orange rounded-lg p-6">
             <button
               type="button"
               onClick={() => setDonationsOpen((open) => !open)}
@@ -377,7 +377,7 @@ function AccountDashboardContent() {
               checkout aren't real orders from the donor's perspective,
               so they're filtered out rather than shown as confusing
               incomplete entries. */}
-          <div>
+          <div className="border-4 border-spur-orange rounded-lg p-6">
             <button
               type="button"
               onClick={() => setOrdersOpen((open) => !open)}
@@ -412,7 +412,7 @@ function AccountDashboardContent() {
 
           {/* Mailing list */}
           {profile && (
-            <div>
+            <div className="border-4 border-spur-orange rounded-lg p-6">
               <h2 className="text-xl font-bold text-spur-black mb-4">Preferences</h2>
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
@@ -428,7 +428,7 @@ function AccountDashboardContent() {
           )}
 
           {/* Change password */}
-          <div>
+          <div className="border-4 border-spur-orange rounded-lg p-6">
             <h2 className="text-xl font-bold text-spur-black mb-4">Change Password</h2>
             <form onSubmit={handleChangePassword} className="max-w-sm space-y-4">
               {passwordError && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">{passwordError}</div>}
