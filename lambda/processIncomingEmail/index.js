@@ -68,9 +68,6 @@ const IGNORED_SENDER_ADDRESSES = new Set(
 );
 
 /**
- * Reads and parses the raw email object from S3.
- */
-/**
  * Strips the quoted-previous-message block that email clients automatically
  * append when someone replies -- e.g. Apple Mail / Outlook's plain-text
  * "From: / Date: / To: / Subject:" header block, Gmail's "On <date>, <name>
@@ -83,6 +80,18 @@ const IGNORED_SENDER_ADDRESSES = new Set(
  * stripping would leave nothing behind (e.g. someone forwarded a whole
  * email with no new text of their own), the original text is returned
  * unchanged rather than risk hiding real content.
+ *
+ * UPDATED -- the "On ... wrote:" pattern previously required NO characters
+ * before "On" other than whitespace, which is correct for Gmail's web
+ * client but wrong for Apple Mail's plain-text replies (iPhone/iPad/Mac):
+ * Apple Mail quote-prefixes that specific line with "> " too, the same as
+ * every other quoted line below it. That leading ">" isn't whitespace, so
+ * the old regex silently failed to match at all on any reply sent from an
+ * iPhone -- nothing got stripped, and the raw "> On ... wrote:" plus every
+ * quoted line under it went straight into bodyText. Also added a pattern
+ * for "Sent from my iPhone"-style mobile signatures, which sit between the
+ * person's real typed reply and the quoted block and were previously left
+ * in untouched even on the rare reply that DID match the old pattern.
  */
 function stripQuotedReply(bodyText) {
   if (!bodyText) return bodyText;
@@ -90,12 +99,21 @@ function stripQuotedReply(bodyText) {
   const patterns = [
     // Apple Mail / Outlook desktop plain-text quote header block
     /\n\s*From:\s*.+\n\s*Date:\s*.+\n\s*To:\s*.+\n\s*Subject:\s*.+/i,
-    // Gmail-style: "On Mon, Aug 10, 2026 at 12:35 PM Richard <...> wrote:"
-    /\n\s*On\s.+\swrote:\s*\n/i,
+    // Gmail-style / Apple Mail plain-text: "On Mon, Aug 10, 2026 at 12:35 PM
+    // Richard <...> wrote:" -- the (?:>\s*)* allows for zero or more ">"
+    // blockquote markers immediately before "On", since Apple Mail
+    // prefixes this exact line with "> " (Gmail's web client doesn't).
+    /\n\s*(?:>\s*)*On\s.+\swrote:\s*\n/i,
     // Classic Outlook
     /\n\s*-{2,}\s*Original Message\s*-{2,}/i,
     // Some clients insert a long underscore divider before quoted content
     /\n\s*_{10,}\s*\n/,
+    // Mobile client auto-signatures. These always sit between the
+    // person's actual typed reply and the quoted block below it, so
+    // stripping from here also removes everything after it -- which is
+    // exactly the quoted content we don't want anyway, not just the
+    // signature line itself.
+    /\n\s*Sent from my (?:iPhone|iPad|Android|Samsung(?:\s\w+)*|Mobile)\s*\n/i,
   ];
 
   let earliestIndex = -1;
