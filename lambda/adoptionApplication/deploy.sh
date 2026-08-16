@@ -42,7 +42,20 @@ aws iam put-role-policy \
   --profile "$PROFILE"
 
 ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME}"
-ENV_VARS="Variables={ADOPTION_APPLICATIONS_TABLE=adoption_applications,ADOPTION_PDF_BUCKET=sixspurranch-adoption-pdfs,ADOPTION_UPLOADS_BUCKET=sixspurranch-adoption-uploads,SES_NOREPLY_ADDRESS=noreply@sixspurranch.org,SES_ADMIN_ADDRESS=richard@sixspurranch.org,RICHARD_PHONE_NUMBER=+18137866333}"
+
+# SMS_RECIPIENTS is pulled fresh from SNS's list of VERIFIED sandbox
+# numbers on every deploy -- add/verify a new number once via SNS, and
+# the next deploy picks it up automatically with no code or script edit
+# needed. Falls back to Richard's number alone if the lookup somehow
+# returns nothing, so a deploy never accidentally ships with zero
+# recipients.
+VERIFIED_NUMBERS=$(aws sns list-sms-sandbox-phone-numbers \
+  --profile "$PROFILE" --region "$REGION" \
+  --query "PhoneNumbers[?Status=='Verified'].PhoneNumber" --output text | tr '\t' ',')
+SMS_RECIPIENTS="${VERIFIED_NUMBERS:-+18137866333}"
+echo "SMS recipients for this deploy: $SMS_RECIPIENTS"
+
+ENV_VARS="Variables={ADOPTION_APPLICATIONS_TABLE=adoption_applications,ADOPTION_PDF_BUCKET=sixspurranch-adoption-pdfs,ADOPTION_UPLOADS_BUCKET=sixspurranch-adoption-uploads,SES_NOREPLY_ADDRESS=noreply@sixspurranch.org,SES_ADMIN_ADDRESS=richard@sixspurranch.org,RICHARD_PHONE_NUMBER=+18137866333,SMS_RECIPIENTS=${SMS_RECIPIENTS}}"
 
 if aws lambda get-function --function-name "$FUNCTION_NAME" --profile "$PROFILE" --region "$REGION" >/dev/null 2>&1; then
   echo "Function exists, updating code..."
