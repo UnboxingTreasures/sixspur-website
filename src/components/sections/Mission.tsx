@@ -1,4 +1,13 @@
+import farmAnimals from '@/data/farmAnimals.json';
+
 export default function Mission() {
+  // Driven directly off farmAnimals.json's actual length -- as species
+  // get added or removed from the farm-animals pages, this number
+  // updates itself automatically instead of needing a manual edit here
+  // every time. It's an exact count now rather than a "+" estimate,
+  // since there's no reason to hedge on a number we're computing live.
+  const speciesCount = farmAnimals.length;
+
   return (
     <section style={{ background: '#FFFFFF', padding: '6rem 1.5rem' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '4rem', alignItems: 'center' }}>
@@ -65,9 +74,9 @@ export default function Mission() {
         {/* Right — stat cards */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
           {[
-            { stat: '100+', label: 'Animals rescued', bg: '#111111', statColor: '#E77A2D', labelColor: '#D1C0B0' },
+            { stat: '24/7', label: 'Animal care & support', bg: '#111111', statColor: '#E77A2D', labelColor: '#D1C0B0' },
             { stat: '501(c)(3)', label: 'Registered nonprofit', bg: '#E77A2D', statColor: '#FFFFFF', labelColor: 'rgba(255,255,255,0.8)' },
-            { stat: '7+', label: 'Species in our care', bg: '#D1C0B0', statColor: '#111111', labelColor: '#555555' },
+            { stat: String(speciesCount), label: 'Species in our care', bg: '#D1C0B0', statColor: '#111111', labelColor: '#555555' },
             { stat: 'Maud, TX', label: 'Home base', bg: '#111111', statColor: '#FFFFFF', labelColor: '#D1C0B0' },
           ].map(({ stat, label, bg, statColor, labelColor }) => (
             <div
