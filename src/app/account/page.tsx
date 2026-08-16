@@ -279,15 +279,18 @@ function AccountDashboardContent() {
           )}
 
           {/* Recurring donations */}
-          <div className="border-4 border-spur-orange rounded-lg p-6">
+          <div className="border-4 border-spur-tan-light rounded-lg p-6">
             <button
               type="button"
               onClick={() => setRecurringOpen((open) => !open)}
               className="w-full flex items-center justify-between mb-4"
             >
-              <h2 className="text-xl font-bold text-spur-black">
-                Recurring Donations{recurring.length > 0 ? ` (${recurring.length})` : ""}
-              </h2>
+              <div>
+                <h2 className="text-xl font-bold text-spur-black">
+                  Recurring Donations{recurring.length > 0 ? ` (${recurring.length})` : ""}
+                </h2>
+                <div className="w-10 h-[3px] bg-spur-orange rounded mt-1" />
+              </div>
               <span className="text-gray-400 text-sm">{recurringOpen ? "▾" : "▸"}</span>
             </button>
             {recurringOpen && (
@@ -328,15 +331,18 @@ function AccountDashboardContent() {
           </div>
 
           {/* Donation history */}
-          <div className="border-4 border-spur-orange rounded-lg p-6">
+          <div className="border-4 border-spur-tan-light rounded-lg p-6">
             <button
               type="button"
               onClick={() => setDonationsOpen((open) => !open)}
               className="w-full flex items-center justify-between mb-4"
             >
-              <h2 className="text-xl font-bold text-spur-black">
-                Donation History{donations.length > 0 ? ` (${donations.length})` : ""}
-              </h2>
+              <div>
+                <h2 className="text-xl font-bold text-spur-black">
+                  Donation History{donations.length > 0 ? ` (${donations.length})` : ""}
+                </h2>
+                <div className="w-10 h-[3px] bg-spur-orange rounded mt-1" />
+              </div>
               <span className="text-gray-400 text-sm">{donationsOpen ? "▾" : "▸"}</span>
             </button>
             {donationsOpen && (
@@ -377,15 +383,18 @@ function AccountDashboardContent() {
               checkout aren't real orders from the donor's perspective,
               so they're filtered out rather than shown as confusing
               incomplete entries. */}
-          <div className="border-4 border-spur-orange rounded-lg p-6">
+          <div className="border-4 border-spur-tan-light rounded-lg p-6">
             <button
               type="button"
               onClick={() => setOrdersOpen((open) => !open)}
               className="w-full flex items-center justify-between mb-4"
             >
-              <h2 className="text-xl font-bold text-spur-black">
-                Order History{orders.filter((o) => o.status === "paid").length > 0 ? ` (${orders.filter((o) => o.status === "paid").length})` : ""}
-              </h2>
+              <div>
+                <h2 className="text-xl font-bold text-spur-black">
+                  Order History{orders.filter((o) => o.status === "paid").length > 0 ? ` (${orders.filter((o) => o.status === "paid").length})` : ""}
+                </h2>
+                <div className="w-10 h-[3px] bg-spur-orange rounded mt-1" />
+              </div>
               <span className="text-gray-400 text-sm">{ordersOpen ? "▾" : "▸"}</span>
             </button>
             {ordersOpen && (
@@ -412,8 +421,9 @@ function AccountDashboardContent() {
 
           {/* Mailing list */}
           {profile && (
-            <div className="border-4 border-spur-orange rounded-lg p-6">
-              <h2 className="text-xl font-bold text-spur-black mb-4">Preferences</h2>
+            <div className="border-4 border-spur-tan-light rounded-lg p-6">
+              <h2 className="text-xl font-bold text-spur-black mb-1">Preferences</h2>
+              <div className="w-10 h-[3px] bg-spur-orange rounded mb-4" />
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -428,8 +438,9 @@ function AccountDashboardContent() {
           )}
 
           {/* Change password */}
-          <div className="border-4 border-spur-orange rounded-lg p-6">
-            <h2 className="text-xl font-bold text-spur-black mb-4">Change Password</h2>
+          <div className="border-4 border-spur-tan-light rounded-lg p-6">
+            <h2 className="text-xl font-bold text-spur-black mb-1">Change Password</h2>
+            <div className="w-10 h-[3px] bg-spur-orange rounded mb-4" />
             <form onSubmit={handleChangePassword} className="max-w-sm space-y-4">
               {passwordError && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">{passwordError}</div>}
               {passwordSuccess && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded text-sm">Password updated.</div>}
