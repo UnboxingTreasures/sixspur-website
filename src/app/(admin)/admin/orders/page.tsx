@@ -64,6 +64,10 @@ export default function AdminOrdersPage() {
   // controls never land in a contradictory state.
   const [selectedYear, setSelectedYear] = useState<string>("all");
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
+  // "Unshipped" means paid-but-not-yet-shipped -- refunded orders only
+  // show under "All", since shipped/unshipped isn't a meaningful
+  // distinction for something that was refunded either way.
+  const [shipmentFilter, setShipmentFilter] = useState<"all" | "unshipped" | "shipped">("all");
   const authedFetch = async (path: string, options: RequestInit = {}) => {
     const token = await getIdToken();
     if (!token) throw new Error("Not logged in");
@@ -124,15 +128,20 @@ export default function AdminOrdersPage() {
   }, [orders]);
 
   const filteredOrders = useMemo(() => {
-    if (selectedYear === "all") return orders;
-    const year = Number(selectedYear);
-    return orders.filter((o) => {
-      const date = new Date(o.createdAt);
-      if (date.getFullYear() !== year) return false;
-      if (selectedMonth !== "all" && date.getMonth() !== Number(selectedMonth)) return false;
-      return true;
-    });
-  }, [orders, selectedYear, selectedMonth]);
+    let result = orders;
+    if (selectedYear !== "all") {
+      const year = Number(selectedYear);
+      result = result.filter((o) => {
+        const date = new Date(o.createdAt);
+        if (date.getFullYear() !== year) return false;
+        if (selectedMonth !== "all" && date.getMonth() !== Number(selectedMonth)) return false;
+        return true;
+      });
+    }
+    if (shipmentFilter === "unshipped") result = result.filter((o) => o.status === "paid");
+    if (shipmentFilter === "shipped") result = result.filter((o) => o.status === "shipped");
+    return result;
+  }, [orders, selectedYear, selectedMonth, shipmentFilter]);
 
   const handleYearChange = (year: string) => {
     setSelectedYear(year);
@@ -161,7 +170,7 @@ export default function AdminOrdersPage() {
       </p>
 
       {/* Archive filter */}
-      <div style={{ display: "flex", gap: 10, marginBottom: "1.5rem" }}>
+      <div style={{ display: "flex", gap: 10, marginBottom: "1.5rem", flexWrap: "wrap", alignItems: "center" }}>
         <select
           value={selectedYear}
           onChange={(e) => handleYearChange(e.target.value)}
@@ -184,6 +193,29 @@ export default function AdminOrdersPage() {
             <option key={name} value={i}>{name}</option>
           ))}
         </select>
+
+        <div style={{ display: "flex", gap: 4, background: "#F7F4F0", borderRadius: 8, padding: 3 }}>
+          {(["all", "unshipped", "shipped"] as const).map((option) => (
+            <button
+              key={option}
+              onClick={() => setShipmentFilter(option)}
+              style={{
+                padding: "5px 12px",
+                borderRadius: 6,
+                border: "none",
+                fontSize: 12,
+                fontWeight: 700,
+                fontFamily: "inherit",
+                cursor: "pointer",
+                textTransform: "capitalize",
+                background: shipmentFilter === option ? "#111111" : "transparent",
+                color: shipmentFilter === option ? "#fff" : "#6B7280",
+              }}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
       </div>
 
       {loading && <p style={{ color: "#9CA3AF", fontSize: 14 }}>Loading…</p>}

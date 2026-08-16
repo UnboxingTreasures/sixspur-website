@@ -117,7 +117,8 @@ export default function AdminUserAccessPage() {
       </div>
 
       {/* Current admins list */}
-      <h2 style={{ fontSize: 14, fontWeight: 700, color: "#111111", marginBottom: 12 }}>Current Admins</h2>
+      <h2 style={{ fontSize: 14, fontWeight: 700, color: "#111111", marginBottom: 8 }}>Current Admins</h2>
+      <div style={{ width: 40, height: 3, background: "#E77A2D", borderRadius: 2, marginBottom: 12 }} />
 
       {loading && <p style={{ color: "#9CA3AF", fontSize: 14 }}>Loading…</p>}
       {error && (

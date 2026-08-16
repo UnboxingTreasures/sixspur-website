@@ -25,7 +25,10 @@ function slugify(title) {
 }
 
 /**
- * Public: lists published posts, newest first, optionally filtered by category.
+ * Public: lists published posts, newest first, optionally filtered by
+ * category. Archived posts are excluded even if isPublished is still
+ * "true" -- archiving is meant to pull a post off the public site
+ * regardless of its publish state, not just a variant of unpublishing.
  */
 async function listPublishedPosts({ category } = {}) {
   const result = await ddb.send(
@@ -39,6 +42,10 @@ async function listPublishedPosts({ category } = {}) {
   );
 
   let items = result.Items || [];
+  // isArchived may not exist on older records -- undefined !== 'true'
+  // correctly treats those as not-archived rather than requiring a
+  // backfill/migration.
+  items = items.filter((p) => p.isArchived !== 'true');
   if (category) {
     items = items.filter((p) => p.category === category);
   }
@@ -46,7 +53,11 @@ async function listPublishedPosts({ category } = {}) {
 }
 
 /**
- * Admin: lists ALL posts regardless of status, newest first.
+ * Admin: lists ALL posts regardless of status (published, draft, AND
+ * archived), newest first. The admin page itself splits this into the
+ * active list and the archived table -- this stays a single unfiltered
+ * list so that split can happen client-side rather than needing two
+ * separate Lambda routes for what's really one dataset.
  * Small table, scan + in-memory sort is fine at this volume.
  */
 async function listAllPosts() {
@@ -57,12 +68,13 @@ async function listAllPosts() {
 }
 
 /**
- * Public: gets a single post by slug, but only if published (prevents
- * leaking drafts via a guessed URL).
+ * Public: gets a single post by slug, but only if published AND not
+ * archived (prevents leaking drafts or archived posts via a guessed or
+ * previously-bookmarked URL).
  */
 async function getPublishedPost(slug) {
   const { Item } = await ddb.send(new GetCommand({ TableName: TABLE_NAME, Key: { slug } }));
-  if (!Item || Item.isPublished !== 'true') return null;
+  if (!Item || Item.isPublished !== 'true' || Item.isArchived === 'true') return null;
   return Item;
 }
 
@@ -97,6 +109,7 @@ async function createPost({ title, slug, category, excerpt, content, image, auth
     image: image || '',
     author: author || 'Richard McGuire',
     isPublished: published ? 'true' : 'false',
+    isArchived: 'false',
     publishedAt: new Date().toISOString(),
   };
 
@@ -106,6 +119,9 @@ async function createPost({ title, slug, category, excerpt, content, image, auth
 
 /**
  * Updates an existing post. Only provided fields are changed.
+ * `archived` follows the exact same pattern as `published` below --
+ * a boolean in the request body that maps to a string field plus a
+ * timestamp, not a separate route.
  */
 async function updatePost(slug, updates) {
   const fields = ['title', 'category', 'excerpt', 'content', 'image', 'author'];
@@ -125,6 +141,16 @@ async function updatePost(slug, updates) {
     setClauses.push('#isPublished = :isPublished');
     names['#isPublished'] = 'isPublished';
     values[':isPublished'] = updates.published ? 'true' : 'false';
+  }
+
+  if (updates.archived !== undefined) {
+    setClauses.push('#isArchived = :isArchived');
+    names['#isArchived'] = 'isArchived';
+    values[':isArchived'] = updates.archived ? 'true' : 'false';
+    if (updates.archived) {
+      setClauses.push('archivedAt = :archivedAt');
+      values[':archivedAt'] = new Date().toISOString();
+    }
   }
 
   if (setClauses.length === 0) {

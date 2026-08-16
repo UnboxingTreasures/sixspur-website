@@ -231,7 +231,6 @@ export default function AdminDonationsPage() {
   return (
     <main style={{ padding: "2rem", maxWidth: "900px", margin: "0 auto" }}>
       <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#111111", marginBottom: "0.5rem" }}>Donations</h1>
-      <div style={{ width: 40, height: 3, background: "#E77A2D", borderRadius: 2, marginBottom: "0.75rem" }} />
       <p style={{ fontSize: 13, color: "#6B7280", marginBottom: "1.25rem" }}>
         {periodLabel}: <strong style={{ color: "#111111" }}>${totalForPeriod.toFixed(2)}</strong>
         {!recurringLoading && recurring.some((r) => r.status === "active") && (

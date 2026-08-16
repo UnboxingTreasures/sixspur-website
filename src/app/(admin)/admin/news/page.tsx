@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { getIdToken } from "@/lib/cognito";
 
@@ -15,7 +15,11 @@ interface Post {
   publishedAt: string;
   category: string;
   isPublished: string; // "true" | "false"
+  isArchived?: string; // "true" | "false" -- may be absent on older records, treated as not-archived
+  archivedAt?: string;
 }
+
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -34,6 +38,13 @@ export default function AdminNewsPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [archivingSlug, setArchivingSlug] = useState<string | null>(null);
+
+  // Archive table filter -- same pattern as Donations/Orders: Month
+  // only enables once a specific Year is chosen.
+  const [archiveOpen, setArchiveOpen] = useState(true);
+  const [selectedYear, setSelectedYear] = useState<string>("all");
+  const [selectedMonth, setSelectedMonth] = useState<string>("all");
 
   useEffect(() => {
     fetchPosts();
@@ -82,12 +93,59 @@ export default function AdminNewsPage() {
     }
   };
 
+  // Archiving pulls a post off the public news pages regardless of its
+  // published state (see dynamo.js) -- there's no unarchive here since
+  // that wasn't asked for; if a post needs to come back, that's a
+  // manual re-publish + un-archive via a direct data edit for now.
+  const archivePost = async (slug: string) => {
+    if (!confirm("Archive this post? It will be removed from the public news pages and moved to the archive below.")) return;
+    setArchivingSlug(slug);
+    try {
+      const res = await authedFetch(`/admin/news/${slug}`, {
+        method: "PATCH",
+        body: JSON.stringify({ archived: true }),
+      });
+      if (!res.ok) throw new Error("Failed to archive post");
+      const updated = await res.json();
+      setPosts((prev) => prev.map((p) => (p.slug === slug ? updated : p)));
+    } catch (err) {
+      console.error("Error archiving post:", err);
+      alert(err instanceof Error ? err.message : "Failed to archive post. Please try again.");
+    } finally {
+      setArchivingSlug(null);
+    }
+  };
+
+  const activePosts = useMemo(() => posts.filter((p) => p.isArchived !== "true"), [posts]);
+  const archivedPosts = useMemo(() => posts.filter((p) => p.isArchived === "true"), [posts]);
+
+  const availableYears = useMemo(() => {
+    const years = new Set(archivedPosts.map((p) => new Date(p.archivedAt || p.publishedAt).getFullYear()));
+    return Array.from(years).sort((a, b) => b - a);
+  }, [archivedPosts]);
+
+  const filteredArchivedPosts = useMemo(() => {
+    if (selectedYear === "all") return archivedPosts;
+    const year = Number(selectedYear);
+    return archivedPosts.filter((p) => {
+      const date = new Date(p.archivedAt || p.publishedAt);
+      if (date.getFullYear() !== year) return false;
+      if (selectedMonth !== "all" && date.getMonth() !== Number(selectedMonth)) return false;
+      return true;
+    });
+  }, [archivedPosts, selectedYear, selectedMonth]);
+
+  const handleYearChange = (year: string) => {
+    setSelectedYear(year);
+    setSelectedMonth("all");
+  };
+
   return (
     <>
       <div className="bg-spur-black px-7 py-4 flex items-center justify-between">
         <div>
           <div className="text-white font-bold text-base">News & Updates</div>
-          <div className="text-white/50 text-xs">{posts.length} post{posts.length !== 1 ? "s" : ""}</div>
+          <div className="text-white/50 text-xs">{activePosts.length} post{activePosts.length !== 1 ? "s" : ""}</div>
         </div>
         <Link
           href="/admin/news/new"
@@ -105,7 +163,7 @@ export default function AdminNewsPage() {
 
           {loading ? (
             <div className="bg-white rounded shadow p-8 text-center text-gray-500 text-sm">Loading posts...</div>
-          ) : posts.length === 0 ? (
+          ) : activePosts.length === 0 ? (
             <div className="bg-white rounded shadow p-8 text-center text-gray-500 text-sm">
               No posts yet. Create your first post to get started.
             </div>
@@ -122,7 +180,7 @@ export default function AdminNewsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {posts.map((post) => {
+                  {activePosts.map((post) => {
                     const isPublished = post.isPublished === "true";
                     return (
                       <tr key={post.slug} className="hover:bg-gray-50 transition-colors">
@@ -151,6 +209,13 @@ export default function AdminNewsPage() {
                           <Link href={`/admin/news/${post.slug}`} className="text-spur-orange text-xs font-semibold hover:underline mr-4">
                             Edit
                           </Link>
+                          <button
+                            onClick={() => archivePost(post.slug)}
+                            disabled={archivingSlug === post.slug}
+                            className="text-gray-400 text-xs font-semibold hover:underline mr-4 disabled:opacity-50"
+                          >
+                            {archivingSlug === post.slug ? "Archiving…" : "Archive"}
+                          </button>
                           <button onClick={() => deletePost(post.slug)} className="text-red-400 text-xs font-semibold hover:underline">
                             Delete
                           </button>
@@ -160,6 +225,83 @@ export default function AdminNewsPage() {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Archived posts -- separate, read-only table, same "closed
+              record" convention as the Fundraiser archive section: no
+              Edit/Delete/Archive actions here, just a filtered view of
+              what's been pulled off the public site. */}
+          {!loading && archivedPosts.length > 0 && (
+            <div className="mt-10">
+              <button
+                type="button"
+                onClick={() => setArchiveOpen((open) => !open)}
+                className="w-full flex items-center justify-between mb-1 bg-transparent border-none cursor-pointer p-0"
+              >
+                <h2 className="text-sm font-bold text-gray-500">Archive ({archivedPosts.length})</h2>
+                <span className="text-gray-400 text-xs">{archiveOpen ? "▾" : "▸"}</span>
+              </button>
+              <p className="text-xs text-gray-400 mb-4">Archived posts, removed from the public news pages, view-only.</p>
+
+              {archiveOpen && (
+                <>
+                  <div className="flex gap-2 mb-4">
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => handleYearChange(e.target.value)}
+                      className="px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white"
+                    >
+                      <option value="all">All Years</option>
+                      {availableYears.map((year) => (
+                        <option key={year} value={year}>{year}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(e.target.value)}
+                      disabled={selectedYear === "all"}
+                      className="px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white disabled:bg-gray-50 disabled:text-gray-300 disabled:cursor-not-allowed"
+                    >
+                      <option value="all">All Months</option>
+                      {MONTH_NAMES.map((name, i) => (
+                        <option key={name} value={i}>{name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {filteredArchivedPosts.length === 0 ? (
+                    <p className="text-gray-400 text-sm">No archived posts in this period.</p>
+                  ) : (
+                    <div className="bg-gray-50 rounded shadow-sm overflow-hidden border border-gray-100">
+                      <table className="min-w-full divide-y divide-gray-100">
+                        <thead>
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Title</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Category</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Archived</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {filteredArchivedPosts.map((post) => (
+                            <tr key={post.slug}>
+                              <td className="px-6 py-4 text-sm text-gray-500">{post.title}</td>
+                              <td className="px-6 py-4">
+                                <span className="px-2 py-0.5 bg-gray-200 text-gray-500 text-xs font-semibold rounded">
+                                  {post.category}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-sm text-gray-400 whitespace-nowrap">
+                                {formatDate(post.archivedAt || post.publishedAt)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
         </div>

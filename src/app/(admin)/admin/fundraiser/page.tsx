@@ -232,14 +232,13 @@ export default function AdminFundraiserPage() {
           + Create Fundraiser
         </button>
       </div>
-      <div style={{ width: 40, height: 3, background: "#E77A2D", borderRadius: 2, marginBottom: "1.5rem" }} />
 
       {/* Active -- always rendered, even with nothing running, so it's
           obvious at a glance whether a campaign is live without
           scanning the list below. This is a summary only; the same
           fundraiser stays editable via its card further down -- this
           isn't a second interactive copy of it. */}
-      <h2 style={{ fontSize: 16, fontWeight: 700, color: "#111111", marginBottom: 8 }}>Active</h2>
+      <h2 style={{ fontSize: 16, fontWeight: 700, color: "#111111", marginBottom: 8, marginTop: "1rem" }}>Active</h2>
       <div style={{ width: 40, height: 3, background: "#E77A2D", borderRadius: 2, marginBottom: "0.75rem" }} />
       {activeFundraiser ? (
         <div style={{ background: "#EAF7EE", border: "1.5px solid #B9E4C9", borderRadius: 12, padding: "14px 20px", marginBottom: "2rem" }}>
@@ -249,9 +248,13 @@ export default function AdminFundraiserPage() {
             {(activeFundraiser.goalAmount > 0 ? Math.min(100, (activeFundraiser.raisedAmount / activeFundraiser.goalAmount) * 100) : 0).toFixed(0)}%) · Closes {activeFundraiser.closingDate}
           </div>
         </div>
-      ) : (
+      ) : liveFundraisers.length > 0 ? (
+        // Only shown when other (draft/stopped) fundraisers exist but
+        // none are live -- if there's nothing at all, the "No
+        // fundraisers created yet" message below already covers it, so
+        // showing both here would just repeat the same fact twice.
         <p style={{ color: "#9CA3AF", fontSize: 14, marginBottom: "2rem" }}>No fundraiser is currently active.</p>
-      )}
+      ) : null}
       {loading && <p style={{ color: "#9CA3AF", fontSize: 14 }}>Loading…</p>}
       {error && (
         <div style={{ padding: "12px 16px", borderRadius: 10, background: "#FEF2F2", border: "1.5px solid #FECACA", color: "#DC2626", fontSize: 13, marginBottom: "1rem" }}>
