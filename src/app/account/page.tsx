@@ -16,6 +16,17 @@ interface Donation {
   campaignId?: string;
   campaignTitle?: string;
   createdAt: string;
+  // NEW -- PayPal's own transaction ID for this specific charge.
+  // Already present on every donation record (set at capture time in
+  // lambda/donate and lambda/donate-recurring-webhook) and already
+  // coming through in the API response -- it just wasn't surfaced on
+  // this page before. Added specifically so two same-amount,
+  // same-month donations (e.g. two $1 test charges) are visually
+  // distinguishable from one another, and so a donor/admin can cross-
+  // reference a line item against PayPal's own transaction history
+  // directly. Optional since older records predating this field may
+  // not have it.
+  paypalTransactionId?: string;
 }
 
 function getDonationDescriptor(d: Donation): string {
@@ -359,6 +370,20 @@ function AccountDashboardContent() {
                         <div className="text-xs text-gray-500 mt-1">
                           {formatDate(d.createdAt)} · {getDonationDescriptor(d)} · {d.status}
                         </div>
+                        {/* NEW -- PayPal's own transaction ID, so two
+                            same-amount/same-month donations (e.g. two
+                            $1 recurring activation charges) are
+                            distinguishable at a glance, and so this can
+                            be cross-referenced directly against
+                            PayPal's own transaction history. Monospace
+                            + slightly smaller/lighter than the line
+                            above so it reads as a technical reference
+                            rather than competing with the main details. */}
+                        {d.paypalTransactionId && (
+                          <div className="text-[11px] text-gray-400 mt-0.5 font-mono">
+                            Transaction ID: {d.paypalTransactionId}
+                          </div>
+                        )}
                       </div>
                       {d.receiptUrl && (
                         <a
