@@ -231,8 +231,12 @@ export default function AdminFundraiserPage() {
     const draft = editDrafts[f.fundraiserId] ?? draftFromFundraiser(f);
     const colors = STATUS_COLORS[f.status];
     const percent = f.goalAmount > 0 ? Math.min(100, (f.raisedAmount / f.goalAmount) * 100) : 0;
+    // Met or exceeded -- guards against goalAmount being 0 (shouldn't
+    // happen given the create/edit form requires a positive number,
+    // but a stray 0 shouldn't read as "met" by default).
+    const goalMet = f.goalAmount > 0 && f.raisedAmount >= f.goalAmount;
     return (
-      <div style={{ background: "#fff", border: "1.5px solid #E8E2DC", borderRadius: 12, overflow: "hidden" }}>
+      <div style={{ background: goalMet ? "#EAF7EE" : "#fff", border: goalMet ? "1.5px solid #B9E4C9" : "1.5px solid #E8E2DC", borderRadius: 12, overflow: "hidden" }}>
         <div
           onClick={() => {
             setExpandedId(isExpanded ? null : f.fundraiserId);
@@ -241,8 +245,15 @@ export default function AdminFundraiserPage() {
           style={{ padding: "14px 20px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}
         >
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700, fontSize: 15, color: "#111111" }}>{f.title}</div>
-            <div style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#111111" }}>{f.title}</div>
+              {goalMet && (
+                <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "#1E8A4C", color: "#fff", whiteSpace: "nowrap" }}>
+                  🎉 GOAL MET
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: 13, color: goalMet ? "#1E8A4C" : "#6B7280", marginTop: 2 }}>
               ${f.raisedAmount.toFixed(2)} of ${f.goalAmount.toFixed(2)} ({percent.toFixed(0)}%) · Closes {f.closingDate}
             </div>
           </div>
@@ -250,6 +261,7 @@ export default function AdminFundraiserPage() {
             {f.status}
           </span>
         </div>
+
         {isExpanded && (
           <div style={{ padding: "0 20px 20px", borderTop: "1px solid #F0EBE5" }}>
             <div style={{ marginTop: 16 }}>
