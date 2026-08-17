@@ -30,7 +30,7 @@ Refund Amount: $${refundAmount.toFixed(2)}
 ${partialNote}
 Please allow a few business days for this to appear back on your original payment method via PayPal.
 
-Questions? Just reply to this email.
+Have a question? Get in touch at sixspurranch.org/contact
 `;
 
   const htmlBody = `
@@ -44,7 +44,7 @@ Questions? Just reply to this email.
   <p style="font-size:14px; color:#555555;">Please allow a few business days for this to appear back on your original payment method via PayPal.</p>
 
   <p style="color:#888888; font-size:12px; margin-top:24px;">
-    Questions? Just reply to this email.
+    Have a question? <a href="https://sixspurranch.org/contact" style="color:#E77A2D;">Get in touch</a>
   </p>
 </div>`;
 

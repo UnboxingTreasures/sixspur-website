@@ -54,7 +54,7 @@ ${itemsText}
 
 ${trackingLine}
 
-Every purchase supports the animals at Six Spur Ranch and Rescue. Questions about your order? Just reply to this email.
+Every purchase supports the animals at Six Spur Ranch and Rescue. Have a question? Get in touch at sixspurranch.org/contact
 `;
 
   const htmlBody = `
@@ -69,7 +69,7 @@ Every purchase supports the animals at Six Spur Ranch and Rescue. Questions abou
   <p style="font-size:14px; ${order.trackingNumber ? 'font-weight:bold;' : 'color:#888888;'}">${trackingLine}</p>
 
   <p style="color:#888888; font-size:12px; margin-top:24px;">
-    Every purchase supports the animals at Six Spur Ranch and Rescue. Questions about your order? Just reply to this email.
+    Every purchase supports the animals at Six Spur Ranch and Rescue. Have a question? <a href="https://sixspurranch.org/contact" style="color:#E77A2D;">Get in touch</a>
   </p>
 </div>`;
 
@@ -109,7 +109,7 @@ Refund Amount: $${refundAmount.toFixed(2)}
 ${partialNote}
 Please allow a few business days for this to appear back on your original payment method via PayPal.
 
-Questions? Just reply to this email.
+Have a question? Get in touch at sixspurranch.org/contact
 `;
 
   const htmlBody = `
@@ -124,7 +124,7 @@ Questions? Just reply to this email.
   <p style="font-size:14px; color:#555555;">Please allow a few business days for this to appear back on your original payment method via PayPal.</p>
 
   <p style="color:#888888; font-size:12px; margin-top:24px;">
-    Questions? Just reply to this email.
+    Have a question? <a href="https://sixspurranch.org/contact" style="color:#E77A2D;">Get in touch</a>
   </p>
 </div>`;
 
