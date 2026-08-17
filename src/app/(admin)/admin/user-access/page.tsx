@@ -290,9 +290,8 @@ export default function AdminUserAccessPage() {
       <h2 style={{ fontSize: 14, fontWeight: 700, color: "#111111", marginBottom: 8 }}>Text Alert Recipients</h2>
       <div style={{ width: 40, height: 3, background: "#E77A2D", borderRadius: 2, marginBottom: 12 }} />
 
-      <div style={{ padding: "10px 14px", borderRadius: 8, background: "#FFFBEB", border: "1.5px solid #FDE68A", color: "#92400E", fontSize: 12.5, marginBottom: 16, lineHeight: 1.5 }}>
-        Adding and verifying a number here does not make it start receiving alerts by itself -- the notification
-        Lambdas need to be redeployed to pick up newly verified numbers. Ask Jay to redeploy after verifying a new number.
+      <div style={{ padding: "10px 14px", borderRadius: 8, background: "#F0FDF4", border: "1.5px solid #BBF7D0", color: "#166534", fontSize: 12.5, marginBottom: 16, lineHeight: 1.5 }}>
+        A number starts receiving alerts as soon as it&apos;s verified below -- no other steps needed.
       </div>
 
       {/* Add form */}

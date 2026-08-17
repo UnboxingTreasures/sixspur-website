@@ -4,7 +4,7 @@
     {
       "Sid": "SmsRecipientsTableAccess",
       "Effect": "Allow",
-      "Action": ["dynamodb:Scan", "dynamodb:PutItem", "dynamodb:DeleteItem"],
+      "Action": ["dynamodb:Scan", "dynamodb:PutItem", "dynamodb:DeleteItem", "dynamodb:UpdateItem"],
       "Resource": "arn:aws:dynamodb:us-east-1:658965339779:table/sms_recipients"
     },
     {
@@ -21,6 +21,18 @@
         "sns:VerifySMSSandboxPhoneNumber",
         "sns:ListSMSSandboxPhoneNumbers",
         "sns:DeleteSMSSandboxPhoneNumber"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SmsVoiceV2SandboxManagement",
+      "Effect": "Allow",
+      "Action": [
+        "sms-voice:DescribeVerifiedDestinationNumbers",
+        "sms-voice:CreateVerifiedDestinationNumber",
+        "sms-voice:SendDestinationNumberVerificationCode",
+        "sms-voice:VerifyDestinationNumber",
+        "sms-voice:DeleteVerifiedDestinationNumber"
       ],
       "Resource": "*"
     }
