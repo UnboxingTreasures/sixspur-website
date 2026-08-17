@@ -27,6 +27,13 @@ interface AdoptableAnimal {
   customDescriptors: Descriptor[];
   photos: string[];
   thumbnailUrl: string;
+  // Set by adminAdoptions/dynamo.js's markAnimalAdopted() the moment an
+  // application for this animal is Approved. This admin page shows ALL
+  // animals regardless (unlike the public /adoptable-animals endpoint,
+  // which filters adopted ones out entirely) -- so an admin can still
+  // find, edit, or remove an animal after it's been adopted. This field
+  // just determines which of the two sections below it shows up in.
+  adoptedAt?: string;
 }
 
 interface FarmAnimalType {
@@ -55,9 +62,6 @@ async function uploadPhoto(animalId: string, file: File): Promise<string> {
   const presignData = await presignRes.json();
   if (!presignRes.ok) throw new Error(presignData.error || "Failed to get upload URL");
 
-  // The actual S3 PUT uses the presigned URL itself as authorization --
-  // no bearer token here, and none needed; adding one would break the
-  // presigned signature.
   const uploadRes = await fetch(presignData.uploadUrl, {
     method: "PUT",
     body: file,
@@ -235,6 +239,7 @@ export default function AdminAdoptableAnimalsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [adoptedOpen, setAdoptedOpen] = useState(true);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [addDraft, setAddDraft] = useState<Draft>(emptyDraft("Dog"));
@@ -253,6 +258,13 @@ export default function AdminAdoptableAnimalsPage() {
   const [deleting, setDeleting] = useState(false);
   const [pendingRemovePhoto, setPendingRemovePhoto] = useState<{ animalId: string; photoUrl: string } | null>(null);
 
+  // Split by adoptedAt so the admin can see at a glance which animals
+  // are still up for adoption vs already placed -- previously these
+  // were all mixed together in one flat list with no visual
+  // distinction at all.
+  const availableAnimals = animals.filter((a) => !a.adoptedAt);
+  const adoptedAnimals = animals.filter((a) => a.adoptedAt);
+
   const fetchAnimals = async () => {
     setLoading(true);
     setError("");
@@ -269,17 +281,12 @@ export default function AdminAdoptableAnimalsPage() {
   };
 
   const fetchTypes = async () => {
-    // Public route -- deliberately NOT authedFetch. /farm-animals has no
-    // admin gate and never needs one; this just reads the public type list.
     try {
       const res = await fetch(`${API_URL}/farm-animals`);
       const data = await res.json();
       const farmTypeNames: string[] = (data.animals || [])
         .map((a: FarmAnimalType) => a.name)
-        .filter((name: string) => name !== "Ranch Dogs"); // permanent residents, not adoptable
-      // "Dog" is a fixed extra option, distinct from "Ranch Dogs" (the
-      // permanent-resident farm type) -- adoptable dogs are a different
-      // population entirely.
+        .filter((name: string) => name !== "Ranch Dogs");
       setTypes([...farmTypeNames, "Dog"].sort((a, b) => a.localeCompare(b)));
     } catch (err) {
       console.error("Failed to load farm animal types:", err);
@@ -413,6 +420,143 @@ export default function AdminAdoptableAnimalsPage() {
     }
   };
 
+  // Extracted so Available and Adopted animals render identically --
+  // same expand-to-edit card, same photo management, same delete
+  // action. Being adopted doesn't lock the record; an admin might still
+  // need to fix a typo or remove a duplicate after the fact.
+  function AnimalCard({ animal }: { animal: AdoptableAnimal }) {
+    const isExpanded = expandedId === animal.animalId;
+    const draft = editDrafts[animal.animalId] ?? draftFromAnimal(animal);
+
+    return (
+      <div style={{ background: "#fff", border: "1.5px solid #E8E2DC", borderRadius: 12, overflow: "hidden" }}>
+        <div
+          onClick={() => {
+            setExpandedId(isExpanded ? null : animal.animalId);
+            setEditDrafts((prev) => ({ ...prev, [animal.animalId]: draftFromAnimal(animal) }));
+          }}
+          style={{ padding: "14px 20px", cursor: "pointer", display: "flex", alignItems: "center", gap: 14 }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={animal.thumbnailUrl}
+            alt={animal.name}
+            style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8, border: "1.5px solid #E8E2DC", flexShrink: 0, opacity: animal.adoptedAt ? 0.7 : 1 }}
+          />
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#111111" }}>{animal.name}</div>
+              {animal.adoptedAt && (
+                <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "#F0EBE5", color: "#9CA3AF", whiteSpace: "nowrap" }}>
+                  ADOPTED
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>
+              {animal.type} · {animal.sex}
+              {animal.age && ` · ${animal.age.value} ${animal.age.unit}`}
+            </div>
+          </div>
+        </div>
+
+        {isExpanded && (
+          <div style={{ padding: "0 20px 20px", borderTop: "1px solid #F0EBE5" }}>
+            <div style={{ marginTop: 16 }}>
+              <AnimalFields draft={draft} setDraft={(d) => setEditDrafts((prev) => ({ ...prev, [animal.animalId]: d }))} types={types} />
+            </div>
+
+            <div style={{ marginTop: 24 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                Photos
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
+                {(animal.photos || []).map((photo) => {
+                  const isThumbnail = photo === animal.thumbnailUrl;
+                  return (
+                    <div key={photo} style={{ position: "relative", width: 80, height: 80 }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={photo}
+                        alt=""
+                        onClick={() => !isThumbnail && handleSetThumbnail(animal.animalId, photo)}
+                        style={{
+                          width: "100%", height: "100%", objectFit: "cover", borderRadius: 8,
+                          border: isThumbnail ? "2px solid #E77A2D" : "1.5px solid #E8E2DC",
+                          cursor: isThumbnail ? "default" : "pointer",
+                          opacity: settingThumbnail === photo ? 0.5 : 1,
+                        }}
+                        title={isThumbnail ? "Main photo" : "Click to set as main photo"}
+                      />
+                      {isThumbnail && (
+                        <span style={{ position: "absolute", top: -6, left: -6, background: "#E77A2D", color: "#fff", fontSize: 10, fontWeight: 700, padding: "2px 5px", borderRadius: 4 }}>
+                          ★
+                        </span>
+                      )}
+                      <button
+                        onClick={() => setPendingRemovePhoto({ animalId: animal.animalId, photoUrl: photo })}
+                        disabled={removingPhoto === photo}
+                        style={{
+                          position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%",
+                          border: "none", background: "#DC2626", color: "#fff", fontSize: 12, fontWeight: 700,
+                          cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
+                        }}
+                        title="Remove photo"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <label style={{
+                display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 8,
+                border: "1.5px solid #E8D5C4", cursor: uploadingPhotoFor === animal.animalId ? "default" : "pointer",
+                background: "#FAFAF8", fontSize: 13, color: "#E77A2D", fontWeight: 700,
+              }}>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  style={{ display: "none" }}
+                  disabled={uploadingPhotoFor === animal.animalId}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleAddPhoto(animal.animalId, file);
+                    e.target.value = "";
+                  }}
+                />
+                {uploadingPhotoFor === animal.animalId ? "Uploading…" : "Add Photo"}
+              </label>
+            </div>
+
+            <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid #F0EBE5" }}>
+              <button
+                onClick={() => saveEdit(animal.animalId)}
+                disabled={savingId === animal.animalId}
+                style={{
+                  padding: "8px 16px", borderRadius: 8, border: "none",
+                  background: savedId === animal.animalId ? "#1E8A4C" : "#111111", color: "#fff",
+                  fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                  opacity: savingId === animal.animalId ? 0.6 : 1, transition: "background 0.2s ease",
+                }}
+              >
+                {savingId === animal.animalId ? "Saving…" : savedId === animal.animalId ? "✓ Saved" : "Save"}
+              </button>
+            </div>
+
+            <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid #F0EBE5" }}>
+              <button
+                onClick={() => setPendingDelete(animal)}
+                style={{ padding: "8px 16px", borderRadius: 8, border: "1.5px solid #DC2626", background: "#fff", color: "#DC2626", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+              >
+                Remove this animal
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <main style={{ padding: "2rem", maxWidth: "900px", margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
@@ -432,133 +576,48 @@ export default function AdminAdoptableAnimalsPage() {
         </div>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {animals.map((animal) => {
-          const isExpanded = expandedId === animal.animalId;
-          const draft = editDrafts[animal.animalId] ?? draftFromAnimal(animal);
+      {!loading && !error && (
+        <>
+          <h2 style={{ fontSize: 16, fontWeight: 700, color: "#111111", marginBottom: 8 }}>
+            Available{availableAnimals.length > 0 ? ` (${availableAnimals.length})` : ""}
+          </h2>
+          <div style={{ width: 40, height: 3, background: "#E77A2D", borderRadius: 2, marginBottom: "0.75rem" }} />
 
-          return (
-            <div key={animal.animalId} style={{ background: "#fff", border: "1.5px solid #E8E2DC", borderRadius: 12, overflow: "hidden" }}>
-              <div
-                onClick={() => {
-                  setExpandedId(isExpanded ? null : animal.animalId);
-                  setEditDrafts((prev) => ({ ...prev, [animal.animalId]: draftFromAnimal(animal) }));
-                }}
-                style={{ padding: "14px 20px", cursor: "pointer", display: "flex", alignItems: "center", gap: 14 }}
+          {availableAnimals.length === 0 ? (
+            <p style={{ color: "#9CA3AF", fontSize: 14, marginBottom: "2rem" }}>No animals currently available.</p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: "2rem" }}>
+              {availableAnimals.map((animal) => (
+                <AnimalCard key={animal.animalId} animal={animal} />
+              ))}
+            </div>
+          )}
+
+          {adoptedAnimals.length > 0 && (
+            <div>
+              <button
+                type="button"
+                onClick={() => setAdoptedOpen((open) => !open)}
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: "none", border: "none", cursor: "pointer", padding: 0, marginBottom: 8 }}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={animal.thumbnailUrl}
-                  alt={animal.name}
-                  style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8, border: "1.5px solid #E8E2DC", flexShrink: 0 }}
-                />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 15, color: "#111111" }}>{animal.name}</div>
-                  <div style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>
-                    {animal.type} · {animal.sex}
-                    {animal.age && ` · ${animal.age.value} ${animal.age.unit}`}
-                  </div>
-                </div>
-              </div>
+                <h2 style={{ fontSize: 16, fontWeight: 700, color: "#111111", margin: 0 }}>
+                  Adopted ({adoptedAnimals.length})
+                </h2>
+                <span style={{ color: "#9CA3AF", fontSize: 13 }}>{adoptedOpen ? "▾" : "▸"}</span>
+              </button>
+              <div style={{ width: 40, height: 3, background: "#E77A2D", borderRadius: 2, marginBottom: "0.75rem" }} />
 
-              {isExpanded && (
-                <div style={{ padding: "0 20px 20px", borderTop: "1px solid #F0EBE5" }}>
-                  <div style={{ marginTop: 16 }}>
-                    <AnimalFields draft={draft} setDraft={(d) => setEditDrafts((prev) => ({ ...prev, [animal.animalId]: d }))} types={types} />
-                  </div>
-
-                  <div style={{ marginTop: 24 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                      Photos
-                    </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
-                      {(animal.photos || []).map((photo) => {
-                        const isThumbnail = photo === animal.thumbnailUrl;
-                        return (
-                          <div key={photo} style={{ position: "relative", width: 80, height: 80 }}>
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={photo}
-                              alt=""
-                              onClick={() => !isThumbnail && handleSetThumbnail(animal.animalId, photo)}
-                              style={{
-                                width: "100%", height: "100%", objectFit: "cover", borderRadius: 8,
-                                border: isThumbnail ? "2px solid #E77A2D" : "1.5px solid #E8E2DC",
-                                cursor: isThumbnail ? "default" : "pointer",
-                                opacity: settingThumbnail === photo ? 0.5 : 1,
-                              }}
-                              title={isThumbnail ? "Main photo" : "Click to set as main photo"}
-                            />
-                            {isThumbnail && (
-                              <span style={{ position: "absolute", top: -6, left: -6, background: "#E77A2D", color: "#fff", fontSize: 10, fontWeight: 700, padding: "2px 5px", borderRadius: 4 }}>
-                                ★
-                              </span>
-                            )}
-                            <button
-                              onClick={() => setPendingRemovePhoto({ animalId: animal.animalId, photoUrl: photo })}
-                              disabled={removingPhoto === photo}
-                              style={{
-                                position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%",
-                                border: "none", background: "#DC2626", color: "#fff", fontSize: 12, fontWeight: 700,
-                                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
-                              }}
-                              title="Remove photo"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <label style={{
-                      display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 8,
-                      border: "1.5px solid #E8D5C4", cursor: uploadingPhotoFor === animal.animalId ? "default" : "pointer",
-                      background: "#FAFAF8", fontSize: 13, color: "#E77A2D", fontWeight: 700,
-                    }}>
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp,image/gif"
-                        style={{ display: "none" }}
-                        disabled={uploadingPhotoFor === animal.animalId}
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleAddPhoto(animal.animalId, file);
-                          e.target.value = "";
-                        }}
-                      />
-                      {uploadingPhotoFor === animal.animalId ? "Uploading…" : "Add Photo"}
-                    </label>
-                  </div>
-
-                  <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid #F0EBE5" }}>
-                    <button
-                      onClick={() => saveEdit(animal.animalId)}
-                      disabled={savingId === animal.animalId}
-                      style={{
-                        padding: "8px 16px", borderRadius: 8, border: "none",
-                        background: savedId === animal.animalId ? "#1E8A4C" : "#111111", color: "#fff",
-                        fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-                        opacity: savingId === animal.animalId ? 0.6 : 1, transition: "background 0.2s ease",
-                      }}
-                    >
-                      {savingId === animal.animalId ? "Saving…" : savedId === animal.animalId ? "✓ Saved" : "Save"}
-                    </button>
-                  </div>
-
-                  <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid #F0EBE5" }}>
-                    <button
-                      onClick={() => setPendingDelete(animal)}
-                      style={{ padding: "8px 16px", borderRadius: 8, border: "1.5px solid #DC2626", background: "#fff", color: "#DC2626", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
-                    >
-                      Remove this animal
-                    </button>
-                  </div>
+              {adoptedOpen && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {adoptedAnimals.map((animal) => (
+                    <AnimalCard key={animal.animalId} animal={animal} />
+                  ))}
                 </div>
               )}
             </div>
-          );
-        })}
-      </div>
+          )}
+        </>
+      )}
 
       {showAddModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(17,17,17,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, zIndex: 50, overflowY: "auto" }}>
