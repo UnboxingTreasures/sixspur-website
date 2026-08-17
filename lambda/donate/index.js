@@ -13,10 +13,14 @@
 //
 // Recurring/monthly donations are NOT handled by this Lambda -- separate,
 // not-yet-built work, see the recurring donations design doc.
+//
+// UPDATED -- texts admin staff (see notify.js) when a donation
+// completes, same SMS_RECIPIENTS pattern used across the project.
 
 const { createOrder, captureOrder } = require('./paypal');
 const { createDonationFromCapture, updateDonationReceipt } = require('./dynamo');
 const { generateAndSendReceipt } = require('./receipt');
+const { notifyAdminOfDonation } = require('./notify');
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -99,6 +103,17 @@ exports.handler = async (event) => {
           await updateDonationReceipt(donation.donationId, receiptUrl);
         } catch (receiptErr) {
           console.error(`Donation ${donation.donationId} captured but receipt generation failed:`, receiptErr);
+        }
+
+        try {
+          await notifyAdminOfDonation({
+            amount: donation.amount,
+            currency: donation.currency,
+            donorEmail: donation.donorEmail,
+            campaignTitle: donation.campaignTitle,
+          });
+        } catch (smsErr) {
+          console.error(`Donation ${donation.donationId} captured but SMS notification failed:`, smsErr);
         }
 
         return respond(200, donation);

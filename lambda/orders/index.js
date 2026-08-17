@@ -32,6 +32,9 @@
 // present-but-invalid/expired token degrades to guest rather than
 // blocking the purchase over a stale token.
 //
+// UPDATED -- texts admin staff (see notify.js) when an order is placed,
+// same SMS_RECIPIENTS pattern used across the project.
+//
 // NEEDS (not yet in place, see deployment notes):
 //   - `aws-jwt-verify` added to package.json
 //   - COGNITO_USER_POOL_ID / COGNITO_CLIENT_ID env vars
@@ -48,6 +51,7 @@ const {
   buildReservationPlan, reserveCartAndCreateOrder, getOrder, getOrdersByDonor, markOrderPaid, getShippingRate,
 } = require('./dynamo');
 const { sendOrderConfirmation } = require('./email');
+const { notifyAdminOfOrder } = require('./notify');
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -184,6 +188,12 @@ async function handleCaptureOrder(body) {
     await sendOrderConfirmation(updated);
   } catch (emailErr) {
     console.error(`Order ${orderId} captured successfully but confirmation email failed to send:`, emailErr);
+  }
+
+  try {
+    await notifyAdminOfOrder(updated);
+  } catch (smsErr) {
+    console.error(`Order ${orderId} captured successfully but SMS notification failed:`, smsErr);
   }
 
   return respond(200, updated);

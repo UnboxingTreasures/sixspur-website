@@ -32,6 +32,12 @@
       "Resource": "*"
     },
     {
+      "Sid": "SendDonationSms",
+      "Effect": "Allow",
+      "Action": "sns:Publish",
+      "Resource": "*"
+    },
+    {
       "Sid": "Logging",
       "Effect": "Allow",
       "Action": [

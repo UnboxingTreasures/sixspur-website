@@ -17,6 +17,12 @@
       ]
     },
     {
+      "Sid": "SendIncomingEmailSms",
+      "Effect": "Allow",
+      "Action": "sns:Publish",
+      "Resource": "*"
+    },
+    {
       "Sid": "Logging",
       "Effect": "Allow",
       "Action": [

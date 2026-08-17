@@ -12,6 +12,7 @@ const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, PutCommand, QueryCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
 const { simpleParser } = require('mailparser');
 const { randomUUID } = require('crypto');
+const { notifyAdminOfEmail } = require('./notify');
 
 /**
  * Strips reply/forward prefixes and normalizes whitespace/case so
@@ -349,6 +350,12 @@ exports.handler = async (event) => {
         `Saved inbound message ${messageId} to thread ${threadId} ` +
           `(${isNewThread ? 'new thread' : 'existing thread'})`
       );
+
+      try {
+        await notifyAdminOfEmail({ fromName, fromEmail: fromAddress, subject });
+      } catch (smsErr) {
+        console.error(`Message ${messageId} saved but SMS notification failed:`, smsErr);
+      }
     } catch (err) {
       console.error(`Failed to process SES message ${sesMessageId}:`, err);
       // Don't rethrow — one malformed email shouldn't fail the whole batch,
