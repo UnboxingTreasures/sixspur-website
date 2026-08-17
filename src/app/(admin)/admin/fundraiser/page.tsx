@@ -94,15 +94,17 @@ export default function AdminFundraiserPage() {
   const [editDrafts, setEditDrafts] = useState<Record<string, Draft>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [lifecycleActionId, setLifecycleActionId] = useState<string | null>(null);
-  // NEW -- collapsible archive section, default open.
   const [archiveOpen, setArchiveOpen] = useState(true);
-  // Archived fundraisers are shown in their own read-only section, not
-  // mixed into the normal editable list -- an archived card never gets
-  // FundraiserFields, an expand-to-edit affordance, or ANY lifecycle
-  // button, since the whole point is that it's a closed, final record.
   const liveFundraisers = fundraisers.filter((f) => f.status !== "archived");
   const archivedFundraisers = fundraisers.filter((f) => f.status === "archived");
   const activeFundraiser = fundraisers.find((f) => f.status === "active");
+  // The active fundraiser (if any) is rendered ONCE, as the interactive
+  // card inside the "Active" section below -- it's deliberately
+  // excluded here so it doesn't also show up a second time in the
+  // plain list underneath. Previously it appeared in both places (a
+  // read-only summary card up top AND the full editable card below),
+  // which just looked like a duplicate entry rather than two things.
+  const otherLiveFundraisers = liveFundraisers.filter((f) => f.status !== "active");
   const authedFetch = async (path: string, options: RequestInit = {}) => {
     const token = await getIdToken();
     if (!token) throw new Error("Not logged in");
@@ -203,9 +205,6 @@ export default function AdminFundraiserPage() {
       setLifecycleActionId(null);
     }
   };
-  // One-way -- the confirmation wording says exactly that, matching the
-  // Aug 14 scoping spec verbatim, so there's no ambiguity about what
-  // clicking through actually does.
   const handleArchive = async (fundraiserId: string) => {
     if (!confirm("Archive this fundraiser? Once archived, it can't be reopened or reused, only viewed in the archive below. This cannot be undone.")) return;
     setLifecycleActionId(fundraiserId);
@@ -221,6 +220,83 @@ export default function AdminFundraiserPage() {
       setLifecycleActionId(null);
     }
   };
+
+  // Extracted so the active fundraiser (rendered once, in the Active
+  // section) and every other live fundraiser (rendered in the list
+  // below) share the exact same interactive card -- expand-to-edit,
+  // Begin/Stop/Archive buttons, all of it -- rather than the Active one
+  // getting a separate, non-interactive, visually-duplicate summary.
+  function FundraiserCard({ f }: { f: Fundraiser }) {
+    const isExpanded = expandedId === f.fundraiserId;
+    const draft = editDrafts[f.fundraiserId] ?? draftFromFundraiser(f);
+    const colors = STATUS_COLORS[f.status];
+    const percent = f.goalAmount > 0 ? Math.min(100, (f.raisedAmount / f.goalAmount) * 100) : 0;
+    return (
+      <div style={{ background: "#fff", border: "1.5px solid #E8E2DC", borderRadius: 12, overflow: "hidden" }}>
+        <div
+          onClick={() => {
+            setExpandedId(isExpanded ? null : f.fundraiserId);
+            setEditDrafts((prev) => ({ ...prev, [f.fundraiserId]: draftFromFundraiser(f) }));
+          }}
+          style={{ padding: "14px 20px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}
+        >
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "#111111" }}>{f.title}</div>
+            <div style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>
+              ${f.raisedAmount.toFixed(2)} of ${f.goalAmount.toFixed(2)} ({percent.toFixed(0)}%) · Closes {f.closingDate}
+            </div>
+          </div>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20, background: colors.bg, color: colors.text, whiteSpace: "nowrap" }}>
+            {f.status}
+          </span>
+        </div>
+        {isExpanded && (
+          <div style={{ padding: "0 20px 20px", borderTop: "1px solid #F0EBE5" }}>
+            <div style={{ marginTop: 16 }}>
+              <FundraiserFields draft={draft} setDraft={(d) => setEditDrafts((prev) => ({ ...prev, [f.fundraiserId]: d }))} />
+              <button
+                onClick={() => saveEdit(f.fundraiserId)}
+                disabled={savingId === f.fundraiserId}
+                style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#111111", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: savingId === f.fundraiserId ? 0.6 : 1 }}
+              >
+                {savingId === f.fundraiserId ? "Saving…" : "Save"}
+              </button>
+            </div>
+            <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid #F0EBE5", display: "flex", gap: 8 }}>
+              {f.status !== "active" && (
+                <button
+                  onClick={() => handleBegin(f.fundraiserId)}
+                  disabled={lifecycleActionId === f.fundraiserId}
+                  style={{ padding: "8px 16px", borderRadius: 8, border: "1.5px solid #1E8A4C", background: "#fff", color: "#1E8A4C", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: lifecycleActionId === f.fundraiserId ? 0.6 : 1 }}
+                >
+                  {lifecycleActionId === f.fundraiserId ? "Starting…" : "Begin"}
+                </button>
+              )}
+              {f.status === "active" && (
+                <button
+                  onClick={() => handleStop(f.fundraiserId)}
+                  disabled={lifecycleActionId === f.fundraiserId}
+                  style={{ padding: "8px 16px", borderRadius: 8, border: "1.5px solid #DC2626", background: "#fff", color: "#DC2626", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: lifecycleActionId === f.fundraiserId ? 0.6 : 1 }}
+                >
+                  {lifecycleActionId === f.fundraiserId ? "Stopping…" : "Stop"}
+                </button>
+              )}
+              {f.status === "stopped" && (
+                <button
+                  onClick={() => handleArchive(f.fundraiserId)}
+                  disabled={lifecycleActionId === f.fundraiserId}
+                  style={{ padding: "8px 16px", borderRadius: 8, border: "1.5px solid #9CA3AF", background: "#fff", color: "#6B7280", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: lifecycleActionId === f.fundraiserId ? 0.6 : 1 }}
+                >
+                  {lifecycleActionId === f.fundraiserId ? "Archiving…" : "Archive"}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <main style={{ padding: "2rem", maxWidth: "900px", margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
@@ -233,26 +309,13 @@ export default function AdminFundraiserPage() {
         </button>
       </div>
 
-      {/* Active -- always rendered, even with nothing running, so it's
-          obvious at a glance whether a campaign is live without
-          scanning the list below. This is a summary only; the same
-          fundraiser stays editable via its card further down -- this
-          isn't a second interactive copy of it. */}
       <h2 style={{ fontSize: 16, fontWeight: 700, color: "#111111", marginBottom: 8, marginTop: "1rem" }}>Active</h2>
       <div style={{ width: 40, height: 3, background: "#E77A2D", borderRadius: 2, marginBottom: "0.75rem" }} />
       {activeFundraiser ? (
-        <div style={{ background: "#EAF7EE", border: "1.5px solid #B9E4C9", borderRadius: 12, padding: "14px 20px", marginBottom: "2rem" }}>
-          <div style={{ fontWeight: 700, fontSize: 15, color: "#111111" }}>{activeFundraiser.title}</div>
-          <div style={{ fontSize: 13, color: "#1E8A4C", marginTop: 2 }}>
-            ${activeFundraiser.raisedAmount.toFixed(2)} of ${activeFundraiser.goalAmount.toFixed(2)} (
-            {(activeFundraiser.goalAmount > 0 ? Math.min(100, (activeFundraiser.raisedAmount / activeFundraiser.goalAmount) * 100) : 0).toFixed(0)}%) · Closes {activeFundraiser.closingDate}
-          </div>
+        <div style={{ marginBottom: "2rem" }}>
+          <FundraiserCard f={activeFundraiser} />
         </div>
       ) : liveFundraisers.length > 0 ? (
-        // Only shown when other (draft/stopped) fundraisers exist but
-        // none are live -- if there's nothing at all, the "No
-        // fundraisers created yet" message below already covers it, so
-        // showing both here would just repeat the same fact twice.
         <p style={{ color: "#9CA3AF", fontSize: 14, marginBottom: "2rem" }}>No fundraiser is currently active.</p>
       ) : null}
       {loading && <p style={{ color: "#9CA3AF", fontSize: 14 }}>Loading…</p>}
@@ -265,87 +328,10 @@ export default function AdminFundraiserPage() {
         <p style={{ color: "#9CA3AF", fontSize: 14 }}>No fundraisers created yet.</p>
       )}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {liveFundraisers.map((f) => {
-          const isExpanded = expandedId === f.fundraiserId;
-          const draft = editDrafts[f.fundraiserId] ?? draftFromFundraiser(f);
-          const colors = STATUS_COLORS[f.status];
-          const percent = f.goalAmount > 0 ? Math.min(100, (f.raisedAmount / f.goalAmount) * 100) : 0;
-          return (
-            <div key={f.fundraiserId} style={{ background: "#fff", border: "1.5px solid #E8E2DC", borderRadius: 12, overflow: "hidden" }}>
-              <div
-                onClick={() => {
-                  setExpandedId(isExpanded ? null : f.fundraiserId);
-                  setEditDrafts((prev) => ({ ...prev, [f.fundraiserId]: draftFromFundraiser(f) }));
-                }}
-                style={{ padding: "14px 20px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}
-              >
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 15, color: "#111111" }}>{f.title}</div>
-                  <div style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>
-                    ${f.raisedAmount.toFixed(2)} of ${f.goalAmount.toFixed(2)} ({percent.toFixed(0)}%) · Closes {f.closingDate}
-                  </div>
-                </div>
-                <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20, background: colors.bg, color: colors.text, whiteSpace: "nowrap" }}>
-                  {f.status}
-                </span>
-              </div>
-              {isExpanded && (
-                <div style={{ padding: "0 20px 20px", borderTop: "1px solid #F0EBE5" }}>
-                  <div style={{ marginTop: 16 }}>
-                    <FundraiserFields draft={draft} setDraft={(d) => setEditDrafts((prev) => ({ ...prev, [f.fundraiserId]: d }))} />
-                    <button
-                      onClick={() => saveEdit(f.fundraiserId)}
-                      disabled={savingId === f.fundraiserId}
-                      style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#111111", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: savingId === f.fundraiserId ? 0.6 : 1 }}
-                    >
-                      {savingId === f.fundraiserId ? "Saving…" : "Save"}
-                    </button>
-                  </div>
-                  <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid #F0EBE5", display: "flex", gap: 8 }}>
-                    {f.status !== "active" && (
-                      <button
-                        onClick={() => handleBegin(f.fundraiserId)}
-                        disabled={lifecycleActionId === f.fundraiserId}
-                        style={{ padding: "8px 16px", borderRadius: 8, border: "1.5px solid #1E8A4C", background: "#fff", color: "#1E8A4C", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: lifecycleActionId === f.fundraiserId ? 0.6 : 1 }}
-                      >
-                        {lifecycleActionId === f.fundraiserId ? "Starting…" : "Begin"}
-                      </button>
-                    )}
-                    {f.status === "active" && (
-                      <button
-                        onClick={() => handleStop(f.fundraiserId)}
-                        disabled={lifecycleActionId === f.fundraiserId}
-                        style={{ padding: "8px 16px", borderRadius: 8, border: "1.5px solid #DC2626", background: "#fff", color: "#DC2626", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: lifecycleActionId === f.fundraiserId ? 0.6 : 1 }}
-                      >
-                        {lifecycleActionId === f.fundraiserId ? "Stopping…" : "Stop"}
-                      </button>
-                    )}
-                    {/* Archive: only ever offered on a STOPPED fundraiser,
-                        matching the exact spec -- draft and active
-                        fundraisers never see this button at all. */}
-                    {f.status === "stopped" && (
-                      <button
-                        onClick={() => handleArchive(f.fundraiserId)}
-                        disabled={lifecycleActionId === f.fundraiserId}
-                        style={{ padding: "8px 16px", borderRadius: 8, border: "1.5px solid #9CA3AF", background: "#fff", color: "#6B7280", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: lifecycleActionId === f.fundraiserId ? 0.6 : 1 }}
-                      >
-                        {lifecycleActionId === f.fundraiserId ? "Archiving…" : "Archive"}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
+        {otherLiveFundraisers.map((f) => (
+          <FundraiserCard key={f.fundraiserId} f={f} />
+        ))}
       </div>
-      {/* Read-only archive -- separate section, visually distinct
-          (muted border/background), no expand-to-edit and no lifecycle
-          buttons of any kind. This is the "separate archive menu" from
-          the Aug 14 scoping notes, kept as a section on this same page
-          rather than a whole new route, since the dataset is small and
-          a second page for a handful of closed-out campaigns would be
-          more navigation than the content warrants. */}
       {!loading && archivedFundraisers.length > 0 && (
         <div style={{ marginTop: 40 }}>
           <button
