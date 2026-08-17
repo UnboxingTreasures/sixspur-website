@@ -10,7 +10,7 @@ npm install
 
 echo "Zipping function..."
 rm -f adminOrders.zip
-zip -r adminOrders.zip index.js dynamo.js adminAuth.js email.js node_modules package.json
+zip -r adminOrders.zip index.js dynamo.js adminAuth.js email.js paypal.js node_modules package.json
 
 # This Lambda already exists and predates this project's deploy.sh
 # convention -- rather than guess at its execution role's name (which

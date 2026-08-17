@@ -8,6 +8,12 @@
       "Resource": "arn:aws:dynamodb:us-east-1:658965339779:table/contact_messages"
     },
     {
+      "Sid": "SmsRecipientsRead",
+      "Effect": "Allow",
+      "Action": ["dynamodb:Scan"],
+      "Resource": "arn:aws:dynamodb:us-east-1:658965339779:table/sms_recipients"
+    },
+    {
       "Sid": "SESSend",
       "Effect": "Allow",
       "Action": ["ses:SendEmail", "ses:SendRawEmail"],

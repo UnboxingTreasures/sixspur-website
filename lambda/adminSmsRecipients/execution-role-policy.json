@@ -1,0 +1,28 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "SmsRecipientsTableAccess",
+      "Effect": "Allow",
+      "Action": ["dynamodb:Scan", "dynamodb:PutItem", "dynamodb:DeleteItem"],
+      "Resource": "arn:aws:dynamodb:us-east-1:658965339779:table/sms_recipients"
+    },
+    {
+      "Sid": "DonorsTableAdminCheck",
+      "Effect": "Allow",
+      "Action": "dynamodb:GetItem",
+      "Resource": "arn:aws:dynamodb:us-east-1:658965339779:table/donors"
+    },
+    {
+      "Sid": "SnsSandboxManagement",
+      "Effect": "Allow",
+      "Action": [
+        "sns:CreateSMSSandboxPhoneNumber",
+        "sns:VerifySMSSandboxPhoneNumber",
+        "sns:ListSMSSandboxPhoneNumbers",
+        "sns:DeleteSMSSandboxPhoneNumber"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

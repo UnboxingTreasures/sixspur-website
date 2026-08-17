@@ -15,7 +15,7 @@ npm install
 
 echo "Zipping function..."
 rm -f contactForm.zip
-zip -r contactForm.zip index.js saveContactMessage.js sendContactEmail.js node_modules package.json
+zip -r contactForm.zip index.js saveContactMessage.js sendContactEmail.js getRecipients.js node_modules package.json
 
 # --- Create the execution role if it doesn't already exist ---
 if ! aws iam get-role --role-name "$ROLE_NAME" --profile "$PROFILE" >/dev/null 2>&1; then

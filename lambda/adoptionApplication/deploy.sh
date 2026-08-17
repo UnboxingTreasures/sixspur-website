@@ -1,19 +1,15 @@
 #!/bin/bash
 set -e
-
 FUNCTION_NAME="sixspur-adoptionApplication"
 ROLE_NAME="sixspur-adoptionApplication-execution-role"
 REGION="us-east-1"
 PROFILE="sixspur"
 ACCOUNT_ID="658965339779"
-
 echo "Installing dependencies..."
 npm install
-
 echo "Zipping function..."
 rm -f adoptionApplication.zip
-zip -r adoptionApplication.zip index.js pdf.js s3.js dynamo.js notify.js node_modules package.json
-
+zip -r adoptionApplication.zip index.js pdf.js s3.js dynamo.js notify.js getRecipients.js node_modules package.json
 if ! aws iam get-role --role-name "$ROLE_NAME" --profile "$PROFILE" >/dev/null 2>&1; then
   echo "Creating IAM role $ROLE_NAME..."
   aws iam create-role \
@@ -27,35 +23,27 @@ if ! aws iam get-role --role-name "$ROLE_NAME" --profile "$PROFILE" >/dev/null 2
       }]
     }' \
     --profile "$PROFILE"
-
   echo "Waiting for role propagation..."
   sleep 10
 else
   echo "Role $ROLE_NAME already exists."
 fi
-
 echo "Applying current execution role policy (safe to re-run)..."
 aws iam put-role-policy \
   --role-name "$ROLE_NAME" \
   --policy-name AdoptionApplicationPermissions \
   --policy-document file://execution-role-policy.json \
   --profile "$PROFILE"
-
 ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME}"
 
-# SMS_RECIPIENTS is pulled fresh from SNS's list of VERIFIED sandbox
-# numbers on every deploy -- add/verify a new number once via SNS, and
-# the next deploy picks it up automatically with no code or script edit
-# needed. Falls back to Richard's number alone if the lookup somehow
-# returns nothing, so a deploy never accidentally ships with zero
-# recipients.
-VERIFIED_NUMBERS=$(aws sns list-sms-sandbox-phone-numbers \
-  --profile "$PROFILE" --region "$REGION" \
-  --query "PhoneNumbers[?Status=='Verified'].PhoneNumber" --output text | tr '\t' ',')
-SMS_RECIPIENTS="${VERIFIED_NUMBERS:-+18137866333}"
-echo "SMS recipients for this deploy: $SMS_RECIPIENTS"
-
-ENV_VARS="Variables={ADOPTION_APPLICATIONS_TABLE=adoption_applications,ADOPTION_PDF_BUCKET=sixspurranch-adoption-pdfs,ADOPTION_UPLOADS_BUCKET=sixspurranch-adoption-uploads,SES_NOREPLY_ADDRESS=noreply@sixspurranch.org,SES_ADMIN_ADDRESS=richard@sixspurranch.org,RICHARD_PHONE_NUMBER=+18137866333,SMS_RECIPIENTS=${SMS_RECIPIENTS}}"
+# SMS_RECIPIENTS/RICHARD_PHONE_NUMBER env vars removed -- notify.js now
+# reads verified recipients dynamically from the sms_recipients table
+# at invocation time (see getRecipients.js), so there's nothing for a
+# deploy-time SNS lookup to inject anymore. Using real JSON here
+# instead of the CLI's Variables={...} shorthand, since that shorthand
+# breaks on '+' characters (bit us on this exact function tonight) and
+# on commas (bit us elsewhere previously).
+ENV_JSON='{"Variables":{"ADOPTION_APPLICATIONS_TABLE":"adoption_applications","ADOPTION_PDF_BUCKET":"sixspurranch-adoption-pdfs","ADOPTION_UPLOADS_BUCKET":"sixspurranch-adoption-uploads","SES_NOREPLY_ADDRESS":"noreply@sixspurranch.org","SES_ADMIN_ADDRESS":"richard@sixspurranch.org"}}'
 
 if aws lambda get-function --function-name "$FUNCTION_NAME" --profile "$PROFILE" --region "$REGION" >/dev/null 2>&1; then
   echo "Function exists, updating code..."
@@ -63,14 +51,12 @@ if aws lambda get-function --function-name "$FUNCTION_NAME" --profile "$PROFILE"
     --function-name "$FUNCTION_NAME" \
     --zip-file fileb://adoptionApplication.zip \
     --profile "$PROFILE" --region "$REGION"
-
   aws lambda wait function-updated \
     --function-name "$FUNCTION_NAME" \
     --profile "$PROFILE" --region "$REGION"
-
   aws lambda update-function-configuration \
     --function-name "$FUNCTION_NAME" \
-    --environment "$ENV_VARS" \
+    --environment "$ENV_JSON" \
     --timeout 30 \
     --memory-size 512 \
     --profile "$PROFILE" --region "$REGION"
@@ -84,8 +70,7 @@ else
     --zip-file fileb://adoptionApplication.zip \
     --timeout 30 \
     --memory-size 512 \
-    --environment "$ENV_VARS" \
+    --environment "$ENV_JSON" \
     --profile "$PROFILE" --region "$REGION"
 fi
-
 echo "Done. Function: $FUNCTION_NAME"

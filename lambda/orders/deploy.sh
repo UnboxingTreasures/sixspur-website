@@ -24,7 +24,7 @@ npm install
 
 echo "Zipping function..."
 rm -f orders.zip
-zip -r orders.zip index.js dynamo.js paypal.js email.js notify.js node_modules package.json
+zip -r orders.zip index.js dynamo.js paypal.js email.js notify.js getRecipients.js node_modules package.json
 
 echo "Applying current execution role policy (safe to re-run)..."
 aws iam put-role-policy \

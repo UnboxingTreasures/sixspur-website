@@ -35,7 +35,7 @@ aws iam put-role-policy \
   --policy-document file://execution-role-policy.json \
   --profile "$PROFILE"
 ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME}"
-ENV_VARS="Variables={DONATIONS_TABLE=donations}"
+
 if aws lambda get-function --function-name "$FUNCTION_NAME" --profile "$PROFILE" --region "$REGION" >/dev/null 2>&1; then
   echo "Function exists, updating code..."
   aws lambda update-function-code \
@@ -45,9 +45,22 @@ if aws lambda get-function --function-name "$FUNCTION_NAME" --profile "$PROFILE"
   aws lambda wait function-updated \
     --function-name "$FUNCTION_NAME" \
     --profile "$PROFILE" --region "$REGION"
+
+  echo "Merging env vars (preserving any set outside this script)..."
+  CURRENT_ENV=$(aws lambda get-function-configuration \
+    --function-name "$FUNCTION_NAME" \
+    --profile "$PROFILE" --region "$REGION" \
+    --query 'Environment.Variables' --output json)
+  MERGED_ENV=$(echo "$CURRENT_ENV" | python3 -c "
+import json, sys
+env = json.load(sys.stdin) or {}
+env['DONATIONS_TABLE'] = 'donations'
+print(json.dumps({'Variables': env}))
+")
+
   aws lambda update-function-configuration \
     --function-name "$FUNCTION_NAME" \
-    --environment "$ENV_VARS" \
+    --environment "$MERGED_ENV" \
     --timeout 10 \
     --memory-size 256 \
     --profile "$PROFILE" --region "$REGION"
@@ -61,7 +74,7 @@ else
     --zip-file fileb://adminDonations.zip \
     --timeout 10 \
     --memory-size 256 \
-    --environment "$ENV_VARS" \
+    --environment "Variables={DONATIONS_TABLE=donations}" \
     --profile "$PROFILE" --region "$REGION"
 fi
 echo "Done. Function: $FUNCTION_NAME"

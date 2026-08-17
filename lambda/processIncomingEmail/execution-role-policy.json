@@ -17,6 +17,12 @@
       ]
     },
     {
+      "Sid": "SmsRecipientsRead",
+      "Effect": "Allow",
+      "Action": ["dynamodb:Scan"],
+      "Resource": "arn:aws:dynamodb:us-east-1:658965339779:table/sms_recipients"
+    },
+    {
       "Sid": "SendIncomingEmailSms",
       "Effect": "Allow",
       "Action": "sns:Publish",

@@ -1,27 +1,23 @@
 // notify.js
-// Notifies Richard (and anyone else on the list) of a new adoption
-// application, same pattern as the general contact form: SES email +
-// SNS SMS. Failures here don't block the application from being saved
-// — the DynamoDB write already succeeded by the time this runs.
+// Notifies Richard (and everyone else currently verified) of a new
+// adoption application: SES email + SNS SMS. Failures here don't block
+// the application from being saved -- the DynamoDB write already
+// succeeded by the time this runs.
 //
-// UPDATED -- SMS now goes to every number in SMS_RECIPIENTS (comma-
-// separated), not just one hardcoded number. Falls back to the old
-// single RICHARD_PHONE_NUMBER var if SMS_RECIPIENTS isn't set, so this
-// doesn't require every deploy target to be updated in lockstep.
+// SMS recipients are looked up dynamically from the sms_recipients
+// table at invocation time (see getRecipients.js) -- a number verified
+// through the admin "Text Alert Recipients" UI starts receiving texts
+// immediately, no redeploy required.
 
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
+const { getVerifiedRecipients } = require('./getRecipients');
 
 const ses = new SESClient({ region: process.env.AWS_REGION || 'us-east-1' });
 const sns = new SNSClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
 const NOREPLY_ADDRESS = process.env.SES_NOREPLY_ADDRESS || 'noreply@sixspurranch.org';
 const ADMIN_ADDRESS = process.env.SES_ADMIN_ADDRESS || 'richard@sixspurranch.org';
-
-const SMS_RECIPIENTS = (process.env.SMS_RECIPIENTS || process.env.RICHARD_PHONE_NUMBER || '+18137866333')
-  .split(',')
-  .map((n) => n.trim())
-  .filter(Boolean);
 
 async function notifyAdminByEmail({ firstName, lastName, interestedIn, applicationId }) {
   const params = {
@@ -44,7 +40,7 @@ async function notifyAdminByEmail({ firstName, lastName, interestedIn, applicati
 }
 
 /**
- * Texts every number in SMS_RECIPIENTS. Each send is independent --
+ * Texts every currently-verified recipient. Each send is independent --
  * one bad/unverified number failing doesn't stop the others from going
  * out, matching the existing "notifications never block the real work"
  * philosophy already used for the email/SMS split above this.
@@ -52,13 +48,14 @@ async function notifyAdminByEmail({ firstName, lastName, interestedIn, applicati
 async function notifyAdminBySms({ firstName, lastName, interestedIn }) {
   const message = `New adoption application from ${firstName} ${lastName} for: ${interestedIn}. Check the admin Adoptions page for the full PDF.`;
 
+  const recipients = await getVerifiedRecipients();
   const results = await Promise.allSettled(
-    SMS_RECIPIENTS.map((phone) => sns.send(new PublishCommand({ Message: message, PhoneNumber: phone })))
+    recipients.map((phone) => sns.send(new PublishCommand({ Message: message, PhoneNumber: phone })))
   );
 
   const failures = results.filter((r) => r.status === 'rejected');
   if (failures.length > 0) {
-    console.error(`notifyAdminBySms: failed for ${failures.length}/${SMS_RECIPIENTS.length} recipient(s)`, failures);
+    console.error(`notifyAdminBySms: failed for ${failures.length}/${recipients.length} recipient(s)`, failures);
   }
 }
 

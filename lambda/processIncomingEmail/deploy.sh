@@ -12,7 +12,7 @@ npm install
 
 echo "Zipping function..."
 rm -f processIncomingEmail.zip
-zip -r processIncomingEmail.zip index.js notify.js node_modules package.json
+zip -r processIncomingEmail.zip index.js notify.js getRecipients.js node_modules package.json
 
 if ! aws iam get-role --role-name "$ROLE_NAME" --profile "$PROFILE" >/dev/null 2>&1; then
   echo "Creating IAM role $ROLE_NAME..."
