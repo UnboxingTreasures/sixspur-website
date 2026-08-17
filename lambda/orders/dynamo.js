@@ -49,6 +49,16 @@ const RESERVATION_MINUTES = 15;
 // can change it from the admin Shop page without a code deploy.
 const DEFAULT_SHIPPING_FLAT_RATE = Number(process.env.SHIPPING_FLAT_RATE || 7.5);
 
+// Fallback ONLY, same reasoning as DEFAULT_SHIPPING_FLAT_RATE above --
+// matches Richard's current PO Box (confirmed Aug 12 2026), NOT the
+// old 692 County Road 1103 address being phased out. See
+// lambda/adminShop/dynamo.js for the admin-editable source of truth.
+const DEFAULT_MAILING_ADDRESS = {
+  line1: 'Six Spur Ranch and Rescue',
+  line2: 'PO Box 333',
+  line3: 'Nash, TX 75569',
+};
+
 /**
  * Live shipping rate, read fresh on every call rather than cached --
  * this Lambda is invoked per-request anyway (no long-lived warm state
@@ -59,6 +69,26 @@ async function getShippingRate() {
   const result = await ddb.send(new GetCommand({ TableName: SHOP_SETTINGS_TABLE, Key: { settingId: 'shipping' } }));
   const rate = result.Item?.flatRate;
   return typeof rate === 'number' && rate >= 0 ? rate : DEFAULT_SHIPPING_FLAT_RATE;
+}
+
+/**
+ * NEW (Session 20) -- the admin-editable mailing address, read fresh
+ * same as getShippingRate() above. Kept as its OWN function rather than
+ * folded into getShippingRate() or a combined "getShopSettings", since
+ * this Lambda's checkout pricing math only ever needs the numeric rate
+ * -- changing that function's return shape would mean touching every
+ * call site in buildReservationPlan() for no reason. This is only used
+ * by the public GET /shop-settings route (handleGetShopSettings in
+ * index.js), which combines both into one response for the frontend.
+ */
+async function getMailingAddress() {
+  const result = await ddb.send(new GetCommand({ TableName: SHOP_SETTINGS_TABLE, Key: { settingId: 'shipping' } }));
+  const item = result.Item || {};
+  return {
+    line1: item.mailingLine1 || DEFAULT_MAILING_ADDRESS.line1,
+    line2: item.mailingLine2 || DEFAULT_MAILING_ADDRESS.line2,
+    line3: item.mailingLine3 || DEFAULT_MAILING_ADDRESS.line3,
+  };
 }
 
 /**
@@ -270,11 +300,6 @@ async function reserveCartAndCreateOrder({ cartItems, donorId, email, shippingAd
     await ddb.send(new TransactWriteCommand({ TransactItems: transactItems }));
   } catch (err) {
     if (err.name === 'TransactionCanceledException') {
-      // CancellationReasons is positional, same order as transactItems.
-      // Since transactItems is now grouped PER PRODUCT (see
-      // buildReservationPlan), reasons[i] corresponds to productOrder[i]
-      // -- one entry per distinct product in the cart, not one per cart
-      // line. The last entry is always the order Put.
       const reasons = err.CancellationReasons || [];
       const failedItemIds = [];
       productOrder.forEach((itemId, i) => {
@@ -302,14 +327,6 @@ async function getOrder(orderId) {
   return result.Item || null;
 }
 
-/**
- * Order history for the account page -- queries the donorId-index GSI
- * rather than scanning the whole table. Guest orders (donorId stored as
- * a real NULL type, not a string) are automatically excluded from this
- * index by DynamoDB itself, so this can never accidentally leak a
- * guest's order into someone else's history. Sorted newest-first for
- * display, same convention as donation history.
- */
 async function getOrdersByDonor(donorId) {
   const result = await ddb.send(new QueryCommand({
     TableName: ORDERS_TABLE,
@@ -320,12 +337,6 @@ async function getOrdersByDonor(donorId) {
   return (result.Items || []).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
-/**
- * Flips a reserved order to paid after successful PayPal capture.
- * Conditional on still being 'pending' -- guards against a double
- * capture call (e.g. a retried request) re-processing the same order,
- * and against capturing an order the expiry Lambda already reclaimed.
- */
 async function markOrderPaid(orderId, { paypalTransactionId }) {
   const now = new Date().toISOString();
   const result = await ddb.send(new UpdateCommand({
@@ -345,5 +356,5 @@ async function markOrderPaid(orderId, { paypalTransactionId }) {
 }
 
 module.exports = {
-  buildReservationPlan, reserveCartAndCreateOrder, getOrder, getOrdersByDonor, markOrderPaid, getShippingRate,
+  buildReservationPlan, reserveCartAndCreateOrder, getOrder, getOrdersByDonor, markOrderPaid, getShippingRate, getMailingAddress,
 };

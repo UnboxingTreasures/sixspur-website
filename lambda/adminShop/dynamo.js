@@ -15,11 +15,20 @@
 // whenever dimensions/values change; this backend just validates that
 // what it's given is actually a complete, valid Cartesian product.
 //
-// SHOP SETTINGS (added Session 18): a second, unrelated table --
-// shop_settings, one row, settingId="shipping" -- for the admin-
-// editable flat shipping rate. Kept as its own table rather than a
-// field bolted onto shop_items, since it isn't a product and doesn't
-// belong in listAll()'s product scan/sort.
+// SHOP SETTINGS (added Session 18, extended Session 20): a second,
+// unrelated table -- shop_settings, one row, settingId="shipping" --
+// for admin-editable shop-wide settings. Kept as its own table rather
+// than a field bolted onto shop_items, since it isn't a product and
+// doesn't belong in listAll()'s product scan/sort. Originally just the
+// flat shipping rate; Session 20 added the mailing address (used on
+// /ways-to-give for people who want to ship supplies directly) onto
+// the SAME row rather than a second row -- it's the same "shop-wide
+// settings" concept, and a second settingId would need its own
+// get/update plumbing for no real benefit. getShopSettings() always
+// returns sensible defaults for any field never explicitly saved, so
+// the row can be created piecemeal (shipping rate saved first, address
+// added later, or vice versa) without ever having a partially-missing
+// response.
 
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, ScanCommand, GetCommand, PutCommand, UpdateCommand, DeleteCommand } = require('@aws-sdk/lib-dynamodb');
@@ -29,6 +38,17 @@ const ddb = DynamoDBDocumentClient.from(client);
 
 const TABLE_NAME = process.env.SHOP_ITEMS_TABLE || 'shop_items';
 const SHOP_SETTINGS_TABLE = process.env.SHOP_SETTINGS_TABLE || 'shop_settings';
+
+// Fallback defaults ONLY -- used until an admin explicitly saves a real
+// value for the first time. The mailing address default here matches
+// Richard's current PO Box (confirmed Aug 12 2026), NOT the old 692
+// County Road 1103 address that's being phased out.
+const DEFAULT_MAILING_ADDRESS = {
+  mailingLine1: 'Six Spur Ranch and Rescue',
+  mailingLine2: 'PO Box 333',
+  mailingLine3: 'Nash, TX 75569',
+};
+const DEFAULT_FLAT_RATE = 7.5;
 
 /**
  * Validates variantDimensions + combinations together. Rather than
@@ -314,24 +334,56 @@ async function setThumbnail(itemId, photoUrl) {
   return result.Attributes;
 }
 
-// ── Shop settings (NEW Session 18) ──────────────────────────────────────
-// One-row table, always fixed key settingId="shipping". PutCommand
-// (not UpdateCommand) is intentional -- this is a singleton setting the
-// admin is always intending to fully set, not incrementally patch, so
-// a plain overwrite is simpler and avoids ConditionExpression games for
-// a row that's expected to be created the very first time it's saved.
+// ── Shop settings (NEW Session 18, extended Session 20) ─────────────────
+// One-row table, always fixed key settingId="shipping" (name predates
+// the mailing address fields -- kept as-is rather than renamed/
+// migrated, since it's just an internal DynamoDB key with no user-
+// facing meaning).
+//
+// getShopSettings() fetches the current row FIRST, then applies
+// per-field updates on top of it -- this is what lets the shipping
+// rate and mailing address be saved completely independently (two
+// separate cards, two separate Save buttons on the admin page) without
+// either one's save ever wiping the other's most recent value. A plain
+// unconditional PutCommand of only-the-changed-fields would silently
+// erase whatever wasn't included in that particular save.
 
 async function getShopSettings() {
   const result = await ddb.send(new GetCommand({ TableName: SHOP_SETTINGS_TABLE, Key: { settingId: 'shipping' } }));
-  return { flatRate: typeof result.Item?.flatRate === 'number' ? result.Item.flatRate : 7.5 };
+  const item = result.Item || {};
+  return {
+    flatRate: typeof item.flatRate === 'number' ? item.flatRate : DEFAULT_FLAT_RATE,
+    mailingLine1: item.mailingLine1 || DEFAULT_MAILING_ADDRESS.mailingLine1,
+    mailingLine2: item.mailingLine2 || DEFAULT_MAILING_ADDRESS.mailingLine2,
+    mailingLine3: item.mailingLine3 || DEFAULT_MAILING_ADDRESS.mailingLine3,
+  };
 }
 
-async function updateShopSettings({ flatRate }) {
-  const numericRate = Number(flatRate);
-  if (!Number.isFinite(numericRate) || numericRate < 0) {
-    throw new Error('Shipping rate must be a non-negative number');
+async function updateShopSettings(fields) {
+  const current = await getShopSettings();
+  const next = { ...current };
+
+  if (fields.flatRate !== undefined) {
+    const numericRate = Number(fields.flatRate);
+    if (!Number.isFinite(numericRate) || numericRate < 0) {
+      throw new Error('Shipping rate must be a non-negative number');
+    }
+    next.flatRate = numericRate;
   }
-  const item = { settingId: 'shipping', flatRate: numericRate, updatedAt: new Date().toISOString() };
+  if (fields.mailingLine1 !== undefined) {
+    if (!fields.mailingLine1.trim()) throw new Error('Mailing address line 1 cannot be empty');
+    next.mailingLine1 = fields.mailingLine1.trim();
+  }
+  if (fields.mailingLine2 !== undefined) {
+    if (!fields.mailingLine2.trim()) throw new Error('Mailing address line 2 cannot be empty');
+    next.mailingLine2 = fields.mailingLine2.trim();
+  }
+  if (fields.mailingLine3 !== undefined) {
+    if (!fields.mailingLine3.trim()) throw new Error('Mailing address line 3 cannot be empty');
+    next.mailingLine3 = fields.mailingLine3.trim();
+  }
+
+  const item = { settingId: 'shipping', ...next, updatedAt: new Date().toISOString() };
   await ddb.send(new PutCommand({ TableName: SHOP_SETTINGS_TABLE, Item: item }));
   return item;
 }

@@ -51,9 +51,6 @@ async function uploadPhoto(itemId: string, file: File): Promise<string> {
   const presignData = await presignRes.json();
   if (!presignRes.ok) throw new Error(presignData.error || "Failed to get upload URL");
 
-  // The actual S3 PUT uses the presigned URL itself as authorization --
-  // no bearer token here, and none needed; adding one would break the
-  // presigned signature.
   const uploadRes = await fetch(presignData.uploadUrl, {
     method: "PUT",
     body: file,
@@ -83,11 +80,6 @@ function cartesianKeys(dimensions: DimensionDraft[]): string[] {
   }, []);
 }
 
-// Regenerates the combo-stock map whenever dimensions/values change,
-// preserving stock numbers for combinations that still exist and
-// defaulting new ones to "0". This is what makes "add a new size" or
-// "add a new color" automatically create the right new stock rows
-// without the admin having to manually re-enter everything.
 function syncComboStocks(dimensions: DimensionDraft[], oldStocks: Record<string, string>): Record<string, string> {
   const keys = cartesianKeys(dimensions);
   const next: Record<string, string> = {};
@@ -95,7 +87,6 @@ function syncComboStocks(dimensions: DimensionDraft[], oldStocks: Record<string,
   return next;
 }
 
-// Editable draft shape used for both the Add modal and inline edit forms.
 interface Draft {
   name: string;
   description: string;
@@ -103,9 +94,9 @@ interface Draft {
   category: string;
   hasVariants: boolean;
   dimensions: DimensionDraft[];
-  comboStocks: Record<string, string>; // key = dimension values joined by "|" in dimension order
-  variantPhotos: Record<string, string[]>; // keyed by dimensions[0]'s values only
-  stock: string; // used when !hasVariants
+  comboStocks: Record<string, string>;
+  variantPhotos: Record<string, string[]>;
+  stock: string;
 }
 
 function emptyDraft(): Draft {
@@ -160,12 +151,6 @@ function draftToPayload(draft: Draft) {
   return payload;
 }
 
-// Manages one or more variant dimensions (Size, Color, etc.) and the
-// auto-generated stock grid for every combination across all of them.
-// Photos are only assignable on the FIRST dimension's values -- matches
-// how most real stores work (picking a color changes the photo, picking
-// a size usually doesn't), and keeps the photo UI from getting
-// unmanageable as more dimensions get added.
 function VariantEditor({ draft, setDraft, availablePhotos }: { draft: Draft; setDraft: (d: Draft) => void; availablePhotos?: string[] }) {
   const [newDimLabel, setNewDimLabel] = useState("");
   const [newValueInputs, setNewValueInputs] = useState<Record<number, string>>({});
@@ -186,8 +171,6 @@ function VariantEditor({ draft, setDraft, availablePhotos }: { draft: Draft; set
   const removeDimension = (index: number) => {
     const nextDimensions = draft.dimensions.filter((_, i) => i !== index);
     const nextComboStocks = syncComboStocks(nextDimensions, draft.comboStocks);
-    // If the FIRST dimension (the photo dimension) was removed, its
-    // photo assignments no longer mean anything -- clear them.
     const nextVariantPhotos = index === 0 ? {} : draft.variantPhotos;
     setDraft({ ...draft, dimensions: nextDimensions, comboStocks: nextComboStocks, variantPhotos: nextVariantPhotos });
   };
@@ -222,7 +205,6 @@ function VariantEditor({ draft, setDraft, availablePhotos }: { draft: Draft; set
 
   return (
     <div>
-      {/* Dimensions */}
       <label style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", display: "block", marginBottom: 6 }}>
         Variant Dimensions
       </label>
@@ -280,7 +262,6 @@ function VariantEditor({ draft, setDraft, availablePhotos }: { draft: Draft; set
         </button>
       </div>
 
-      {/* Combination stock + photos */}
       {comboKeys.length > 0 && (
         <>
           <label style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", display: "block", marginBottom: 6 }}>
@@ -290,7 +271,7 @@ function VariantEditor({ draft, setDraft, availablePhotos }: { draft: Draft; set
             {comboKeys.map((key) => {
               const parts = key.split("|");
               const displayLabel = parts.join(" / ");
-              const photoDimValue = parts[0]; // first dimension's value for this combo
+              const photoDimValue = parts[0];
               const photoCount = (draft.variantPhotos[photoDimValue] || []).length;
               const showPhotoControl = draft.dimensions.length > 0 && availablePhotos && availablePhotos.length > 0;
               return (
@@ -446,14 +427,25 @@ export default function AdminShopPage() {
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // NEW Session 18 -- admin-editable shipping rate. Kept separate from
-  // the product items state below since it's a different kind of data
-  // (one shop-wide setting, not a product), fetched/saved independently.
+  // NEW Session 18 -- admin-editable shipping rate.
   const [shippingRate, setShippingRate] = useState("");
   const [shippingLoading, setShippingLoading] = useState(true);
   const [shippingSaving, setShippingSaving] = useState(false);
   const [shippingSaved, setShippingSaved] = useState(false);
   const [shippingError, setShippingError] = useState("");
+
+  // NEW Session 20 -- admin-editable mailing address, for donors who
+  // want to ship supplies directly (shown on /ways-to-give). Same
+  // underlying shop_settings row as the shipping rate above, fetched
+  // together in one call, but saved completely independently -- see
+  // adminShop/dynamo.js's updateShopSettings() for how the merge keeps
+  // the two from ever clobbering each other.
+  const [mailingLine1, setMailingLine1] = useState("");
+  const [mailingLine2, setMailingLine2] = useState("");
+  const [mailingLine3, setMailingLine3] = useState("");
+  const [mailingSaving, setMailingSaving] = useState(false);
+  const [mailingSaved, setMailingSaved] = useState(false);
+  const [mailingError, setMailingError] = useState("");
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [addDraft, setAddDraft] = useState<Draft>(emptyDraft());
@@ -488,19 +480,26 @@ export default function AdminShopPage() {
 
   useEffect(() => {
     fetchItems();
-    fetchShippingSettings();
+    fetchShopSettings();
   }, []);
 
-  const fetchShippingSettings = async () => {
+  // RENAMED from fetchShippingSettings -- now populates both the
+  // shipping rate AND the mailing address fields from the same
+  // GET /admin/shop-settings response, since they live on the same
+  // backend row.
+  const fetchShopSettings = async () => {
     setShippingLoading(true);
     setShippingError("");
     try {
       const res = await authedFetch("/admin/shop-settings");
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to load shipping settings");
+      if (!res.ok) throw new Error(data.error || "Failed to load shop settings");
       setShippingRate(String(data.flatRate));
+      setMailingLine1(data.mailingLine1 || "");
+      setMailingLine2(data.mailingLine2 || "");
+      setMailingLine3(data.mailingLine3 || "");
     } catch (err: unknown) {
-      setShippingError(err instanceof Error ? err.message : "Failed to load shipping settings");
+      setShippingError(err instanceof Error ? err.message : "Failed to load shop settings");
     } finally {
       setShippingLoading(false);
     }
@@ -529,6 +528,37 @@ export default function AdminShopPage() {
       setShippingError(err instanceof Error ? err.message : "Failed to save shipping rate");
     } finally {
       setShippingSaving(false);
+    }
+  };
+
+  // NEW Session 20 -- saves only the mailing address fields. Sending
+  // just these three keys (not flatRate) relies on updateShopSettings'
+  // merge behavior server-side, so this can never accidentally revert
+  // the shipping rate to some stale value still sitting in this form.
+  const saveMailingAddress = async () => {
+    if (!mailingLine1.trim() || !mailingLine2.trim() || !mailingLine3.trim()) {
+      setMailingError("All three address lines are required");
+      return;
+    }
+    setMailingSaving(true);
+    setMailingError("");
+    setMailingSaved(false);
+    try {
+      const res = await authedFetch("/admin/shop-settings", {
+        method: "PATCH",
+        body: JSON.stringify({ mailingLine1, mailingLine2, mailingLine3 }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to save mailing address");
+      setMailingLine1(data.mailingLine1);
+      setMailingLine2(data.mailingLine2);
+      setMailingLine3(data.mailingLine3);
+      setMailingSaved(true);
+      setTimeout(() => setMailingSaved(false), 2000);
+    } catch (err: unknown) {
+      setMailingError(err instanceof Error ? err.message : "Failed to save mailing address");
+    } finally {
+      setMailingSaving(false);
     }
   };
 
@@ -709,6 +739,55 @@ export default function AdminShopPage() {
         )}
         {shippingError && (
           <p style={{ fontSize: 12, color: "#DC2626", marginTop: 8 }}>{shippingError}</p>
+        )}
+      </div>
+
+      {/* Mailing address -- NEW Session 20. Same shop_settings row as
+          Shipping above, saved independently via its own PATCH call
+          (only sends the three address fields, never flatRate) so this
+          card and the one above genuinely can't clobber each other.
+          Shown on /ways-to-give for donors who want to ship supplies
+          directly rather than through the Amazon wishlist. */}
+      <div style={{ background: "#fff", border: "1.5px solid #E8E2DC", borderRadius: 12, padding: "20px 24px", marginBottom: "1.5rem" }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#111111", marginBottom: 4 }}>Mailing Address</div>
+        <p style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 12 }}>
+          Shown on the public Ways to Give page for anyone who wants to ship supplies directly. Takes effect immediately on the live site.
+        </p>
+        {shippingLoading ? (
+          <p style={{ color: "#9CA3AF", fontSize: 13 }}>Loading…</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 340 }}>
+            <input
+              value={mailingLine1}
+              onChange={(e) => { setMailingLine1(e.target.value); setMailingSaved(false); }}
+              placeholder="Organization name"
+              style={{ padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit" }}
+            />
+            <input
+              value={mailingLine2}
+              onChange={(e) => { setMailingLine2(e.target.value); setMailingSaved(false); }}
+              placeholder="Street address or PO Box"
+              style={{ padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit" }}
+            />
+            <input
+              value={mailingLine3}
+              onChange={(e) => { setMailingLine3(e.target.value); setMailingSaved(false); }}
+              placeholder="City, State ZIP"
+              style={{ padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit" }}
+            />
+            <div>
+              <button
+                onClick={saveMailingAddress}
+                disabled={mailingSaving}
+                style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#111111", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: mailingSaving ? 0.6 : 1 }}
+              >
+                {mailingSaving ? "Saving…" : mailingSaved ? "Saved ✓" : "Save"}
+              </button>
+            </div>
+          </div>
+        )}
+        {mailingError && (
+          <p style={{ fontSize: 12, color: "#DC2626", marginTop: 8 }}>{mailingError}</p>
         )}
       </div>
 

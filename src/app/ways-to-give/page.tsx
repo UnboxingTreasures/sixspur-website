@@ -17,6 +17,19 @@ const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
 // when he confirms.
 const AMAZON_WISHLIST_URL = "https://www.amazon.com/hz/wishlist/ls/RQ32EPLM2YJW?ref_=wl_share";
 
+// NEW (Session 20) -- fallback ONLY, shown while the real address
+// loads from GET /shop-settings (public, admin-editable via
+// /admin/shop -- see adminShop/dynamo.js) or if that fetch ever fails.
+// Deliberately the PO Box, NOT the old 692 County Road 1103 address --
+// Richard confirmed Aug 12 he's phasing that one out. The REAL source
+// of truth is now the admin panel, not this constant -- if Richard
+// moves again, Jay/Richard update it there, no code deploy needed.
+const FALLBACK_MAILING_ADDRESS = {
+  line1: "Six Spur Ranch and Rescue",
+  line2: "PO Box 333",
+  line3: "Nash, TX 75569",
+};
+
 const PRESET_AMOUNTS = [5, 10, 20, 50];
 
 // NEW -- monthly preset tiers, each mapped to a real pre-created
@@ -51,16 +64,34 @@ export default function WaysToGivePage() {
   const [donationResult, setDonationResult] = useState<"success" | "error" | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
 
-  // NEW -- monthly giving state, separate from the one-time amount
-  // state above since the two flows are genuinely different (Orders v2
-  // capture vs. a Subscriptions approval redirect), not just a
-  // different number.
   const [recurringTier, setRecurringTier] = useState<number | null>(null);
   const [recurringCustom, setRecurringCustom] = useState("");
   const [recurringLoading, setRecurringLoading] = useState(false);
   const [recurringError, setRecurringError] = useState("");
 
   const activeRecurringAmount = recurringCustom ? parseFloat(recurringCustom) : recurringTier;
+
+  // NEW (Session 20) -- real, admin-editable mailing address, fetched
+  // from the same public GET /shop-settings route checkout already
+  // uses for the shipping rate. Starts as the fallback constant so the
+  // section never renders empty while this loads (loads fast anyway --
+  // one unauthenticated GET, no donor login required).
+  const [mailingAddress, setMailingAddress] = useState(FALLBACK_MAILING_ADDRESS);
+
+  useEffect(() => {
+    fetch(`${API_URL}/shop-settings`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.mailingAddress?.line1 && data.mailingAddress?.line2 && data.mailingAddress?.line3) {
+          setMailingAddress(data.mailingAddress);
+        }
+      })
+      .catch(() => {
+        // Silent -- FALLBACK_MAILING_ADDRESS is already showing, and a
+        // failed fetch here shouldn't surface an error banner on a
+        // donation page over a non-critical address display.
+      });
+  }, []);
 
   const paypalContainerRef = useRef<HTMLDivElement>(null);
   const scriptLoadedRef = useRef(false);
@@ -159,15 +190,6 @@ export default function WaysToGivePage() {
     }
   };
 
-  // NEW -- starts a monthly subscription. Unlike one-time giving, this
-  // is a REDIRECT flow, not a PayPal Buttons popup: the backend
-  // (donate-recurring Lambda) creates the subscription server-side via
-  // PayPal's REST API and hands back an approval URL, so the browser
-  // just navigates there. PayPal redirects back to /account?recurring=
-  // confirmed after approval, but the subscription isn't truly ACTIVE
-  // until the webhook confirms it -- the account page's Recurring
-  // Donations section reflects real status from there, not this
-  // redirect alone.
   const handleSubscribe = async () => {
     if (!activeRecurringAmount || activeRecurringAmount < 1) return;
     setRecurringError("");
@@ -179,9 +201,6 @@ export default function WaysToGivePage() {
       return;
     }
 
-    // Preset tier and custom amount are mutually exclusive on the
-    // backend (POST /donate/recurring/create-subscription) -- send
-    // whichever one is actually active, not both.
     const requestBody = recurringCustom
       ? { amount: activeRecurringAmount }
       : { tier: recurringTier };
@@ -390,16 +409,11 @@ export default function WaysToGivePage() {
 
       </section>
 
-      {/* Wish Lists -- NEW. Placed directly under the donation portion
-          per Jay's request Aug 14 2026, with id="wish-list" so the
-          homepage WaysToGive card and Footer's "Wish lists" link can
-          both jump straight here via /ways-to-give#wish-list instead of
-          landing at the top of the page. Background is light tan
-          (bg-spur-tan-light), deliberately NOT white or black --
-          matches the site's established rule that no two adjacent
-          sections share a background (this sits between the white
-          donation section above and the black "Other Ways to Help"
-          section below). */}
+      {/* Wish Lists -- id="wish-list" so the homepage WaysToGive card
+          and Footer's "Wish lists" link can both jump straight here.
+          Background is light tan (bg-spur-tan-light), deliberately NOT
+          white or black -- matches the site's established rule that no
+          two adjacent sections share a background. */}
       <section id="wish-list" className="bg-spur-tan-light py-16 px-6 scroll-mt-16">
         <div className="max-w-4xl mx-auto text-center">
           <p className="eyebrow mb-3">Send Supplies</p>
@@ -420,6 +434,26 @@ export default function WaysToGivePage() {
               <span className="font-bold text-spur-black">Amazon Wish List</span>
               <span className="text-spur-orange text-sm font-semibold">View list →</span>
             </a>
+          </div>
+
+          {/* NEW (Session 20) -- mailing address, for anyone who wants
+              to ship supplies directly rather than through the Amazon
+              wishlist above (which already ships to Richard
+              automatically and doesn't need this shown). Placed right
+              below the wishlist card since it answers the natural next
+              question -- "where do I send something not on the list?"
+              -- without needing its own separate section. */}
+          <div className="mt-8 max-w-xs mx-auto">
+            <p className="text-xs font-bold text-spur-black uppercase tracking-wide mb-2">
+              Mailing Address
+            </p>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              {mailingAddress.line1}
+              <br />
+              {mailingAddress.line2}
+              <br />
+              {mailingAddress.line3}
+            </p>
           </div>
         </div>
       </section>

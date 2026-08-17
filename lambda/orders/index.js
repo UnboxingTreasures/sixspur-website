@@ -23,32 +23,18 @@
 //      order to 'paid'.
 //
 // UNLIKE /donate/* and /admin/*, these two routes are NOT gated by the
-// Cognito JWT authorizer at API Gateway -- guest checkout means an
-// Authorization header is optional here, and HTTP API JWT authorizers
-// can't be made optional at the gateway level (all-or-nothing per
-// route). So this Lambda verifies the token itself, ONLY if one is
-// present, using aws-jwt-verify against the same Cognito user pool the
-// donor/admin routes already use. No header -> guest checkout. A
-// present-but-invalid/expired token degrades to guest rather than
-// blocking the purchase over a stale token.
+// Cognito JWT authorizer at API Gateway (all-or-nothing per route). So
+// this Lambda verifies the token itself, ONLY if one is present, using
+// aws-jwt-verify against the same Cognito user pool the donor/admin
+// routes already use. No header -> guest checkout.
 //
 // UPDATED -- texts admin staff (see notify.js) when an order is placed,
 // same SMS_RECIPIENTS pattern used across the project.
-//
-// NEEDS (not yet in place, see deployment notes):
-//   - `aws-jwt-verify` added to package.json
-//   - COGNITO_USER_POOL_ID / COGNITO_CLIENT_ID env vars
-//   - API Gateway routes created WITHOUT the JWT authorizer attached
-//   - ORDERS_TABLE created, SHIPPING_FLAT_RATE env var set (defaults to 7.5)
-//   - Execution role: dynamodb Get/Put/Update on orders table,
-//     dynamodb Update on shop_items table, secretsmanager:GetSecretValue
-//     on sixspur/paypal-api, cognito-idp:GetUser or equivalent for the
-//     JWKS fetch aws-jwt-verify performs on cold start
 
 const { CognitoJwtVerifier } = require('aws-jwt-verify');
 const { createOrder: createPaypalOrder, captureOrder: capturePaypalOrder } = require('./paypal');
 const {
-  buildReservationPlan, reserveCartAndCreateOrder, getOrder, getOrdersByDonor, markOrderPaid, getShippingRate,
+  buildReservationPlan, reserveCartAndCreateOrder, getOrder, getOrdersByDonor, markOrderPaid, getShippingRate, getMailingAddress,
 } = require('./dynamo');
 const { sendOrderConfirmation } = require('./email');
 const { notifyAdminOfOrder } = require('./notify');
@@ -107,9 +93,6 @@ async function handleCreateOrder(event, body) {
     return respond(400, { error: 'An email address is required' });
   }
 
-  // Step 1: price the cart from live product data. Read-only -- if this
-  // throws (bad product id, bad variant selection), nothing has been
-  // touched anywhere yet.
   let plan;
   try {
     plan = await buildReservationPlan(cartItems);
@@ -117,7 +100,6 @@ async function handleCreateOrder(event, body) {
     return respond(400, { error: err.message });
   }
 
-  // Step 2: quote with PayPal. Still no money moved, nothing reserved.
   let paypalOrder;
   try {
     paypalOrder = await createPaypalOrder(plan.total);
@@ -126,9 +108,6 @@ async function handleCreateOrder(event, body) {
     return respond(502, { error: 'Could not start checkout with PayPal. Please try again.' });
   }
 
-  // Step 3: atomically reserve stock + create the pending order. If
-  // this fails because something sold out, the PayPal order above is
-  // simply abandoned -- it was never captured, so nothing was charged.
   let order;
   try {
     order = await reserveCartAndCreateOrder({
@@ -157,7 +136,6 @@ async function handleCaptureOrder(body) {
   if (!order) return respond(404, { error: 'Order not found' });
 
   if (order.status !== 'pending') {
-    // Already captured (retry) or already expired by the cleanup Lambda.
     return respond(409, { error: `This order is no longer pending (status: ${order.status}). If your cart reservation expired, please check out again.` });
   }
   if (new Date(order.reservationExpiresAt) < new Date()) {
@@ -173,17 +151,10 @@ async function handleCaptureOrder(body) {
 
   const updated = await markOrderPaid(orderId, { paypalTransactionId: capture.id });
   if (!updated) {
-    // Lost a race with the expiry Lambda between our checks above and
-    // this write -- extremely unlikely given the reservation window,
-    // but flagged loudly since a real charge just happened with no
-    // order to attach it to.
     console.error(`CRITICAL: PayPal capture ${capture.id} succeeded for order ${orderId} but the order could not be marked paid (already expired?). Manual reconciliation needed.`);
     return respond(500, { error: 'Payment was received but we could not finalize your order. Please contact us so we can sort this out.' });
   }
 
-  // Confirmation email, same "never undo a successful payment over an
-  // email hiccup" reasoning as donate/index.js's receipt generation --
-  // failure here is logged but the order response still succeeds.
   try {
     await sendOrderConfirmation(updated);
   } catch (emailErr) {
@@ -199,13 +170,6 @@ async function handleCaptureOrder(body) {
   return respond(200, updated);
 }
 
-/**
- * Order history for the account page. UNLIKE create-order/capture-order,
- * this route DOES have the standard JWT authorizer attached at API
- * Gateway (see deployment notes) -- there's no guest equivalent of "my
- * order history", so this can rely on the gateway having already
- * verified the token, same as donate/index.js's getVerifiedDonor.
- */
 async function handleGetMyOrders(event) {
   const claims = event.requestContext?.authorizer?.jwt?.claims;
   if (!claims?.sub) return respond(401, { error: 'Not authenticated' });
@@ -215,15 +179,16 @@ async function handleGetMyOrders(event) {
 }
 
 /**
- * Public, unauthenticated -- same reasoning as create-order/capture-order,
- * this needs to be readable by anyone browsing the cart/checkout pages,
- * not just logged-in donors. Lets the frontend display the REAL live
- * rate instead of a hardcoded guess that could drift from what
- * checkout actually charges once this became admin-editable.
+ * Public, unauthenticated -- needs to be readable by anyone browsing
+ * checkout, not just logged-in donors. UPDATED (Session 20): now also
+ * returns the admin-editable mailing address alongside the shipping
+ * rate, so /ways-to-give can display Richard's real current address
+ * (e.g. after he moves again) without a code deploy, same reasoning
+ * as the shipping rate itself.
  */
 async function handleGetShopSettings() {
-  const flatRate = await getShippingRate();
-  return respond(200, { flatRate });
+  const [flatRate, mailingAddress] = await Promise.all([getShippingRate(), getMailingAddress()]);
+  return respond(200, { flatRate, mailingAddress });
 }
 
 exports.handler = async (event) => {
