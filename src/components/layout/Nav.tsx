@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
+import { usePathname } from 'next/navigation'
 import { getIdToken } from '@/lib/cognito'
 import { useCart } from '@/context/CartContext'
 
@@ -18,12 +19,25 @@ export default function Nav() {
   })
 
   const { cartCount } = useCart()
+  const pathname = usePathname()
 
+  // Re-runs on every route change, not just on first mount. This nav
+  // is mounted once when the page first loads -- if someone logs in
+  // while already on a page (submits the login form, gets redirected
+  // client-side to /account or similar), the ORIGINAL mount already
+  // ran this check with no token present, and nothing was telling it
+  // to check again. Only a full hard refresh remounted the component
+  // and re-ran the check from scratch, which is exactly the bug
+  // reported: the admin badge needed a hard refresh to show up.
+  // Login always navigates somewhere afterward, so keying this off
+  // pathname changes catches that transition without needing a
+  // separate global auth-state listener.
   useEffect(() => {
     getIdToken().then(async (token) => {
       setIsLoggedIn(Boolean(token))
       if (!token) {
         window.localStorage.removeItem('sixspur_isAdmin')
+        setIsAdmin(false)
         return
       }
       try {
@@ -38,7 +52,7 @@ export default function Nav() {
         console.error('Failed to check admin status:', err)
       }
     })
-  }, [])
+  }, [pathname])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
