@@ -47,13 +47,23 @@ function getDonationDescriptor(d: Donation): string {
 // standing record (tier, status), not an individual charge -- the
 // actual monthly charges still appear in Donations below as type:
 // "recurring" rows once the webhook records them.
+//
+// UPDATED (Session 20): status now also includes "abandoned" -- a
+// subscription record that was created (PayPal confirmed it
+// server-side) but never actually approved by the donor, e.g. because
+// they hit a PayPal error and retried, or just closed the tab. See
+// lambda/donate-recurring/dynamo.js's abandonPendingSubscriptionsForDonor
+// for how these get marked. The donor-facing account page hides these
+// entirely, but the admin view intentionally keeps them visible (for
+// support/debugging purposes) -- just no longer mixed into the "Active"
+// tab, which is what this update fixes.
 interface RecurringDonation {
   subscriptionId: string;
   donorId: string;
   donorEmail: string;
   tier: number;
   isCustom?: boolean;
-  status: "pending" | "active" | "suspended" | "cancelled";
+  status: "pending" | "active" | "suspended" | "cancelled" | "abandoned";
   failedPaymentCount?: number;
   activatedAt?: string;
   cancelledAt?: string;
@@ -67,6 +77,7 @@ const RECURRING_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   pending: { bg: "#FEF9E7", text: "#B5900F" },
   suspended: { bg: "#FEF9E7", text: "#B5900F" },
   cancelled: { bg: "#F3F4F6", text: "#6B7280" },
+  abandoned: { bg: "#F3F4F6", text: "#9CA3AF" },
 };
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
@@ -85,7 +96,7 @@ function formatDate(iso: string) {
 export default function AdminDonationsPage() {
   const [donations, setDonations] = useState<Donation[]>([]);
   const [recurring, setRecurring] = useState<RecurringDonation[]>([]);
-  const [recurringFilter, setRecurringFilter] = useState<"active" | "cancelled" | "all">("active");
+  const [recurringFilter, setRecurringFilter] = useState<"active" | "cancelled" | "abandoned" | "all">("active");
   const [donationsOpen, setDonationsOpen] = useState(true);
   const [loading, setLoading] = useState(true);
   const [recurringLoading, setRecurringLoading] = useState(true);
@@ -160,15 +171,19 @@ export default function AdminDonationsPage() {
   // Years that actually have donations in them, newest first -- avoids
   // showing empty years in the dropdown that would just filter to
   // nothing.
-  // "Active" bucket intentionally includes pending and suspended too --
-  // not just status:"active" -- since those are all subscriptions still
-  // in play that an admin would want visible by default. Only fully
-  // cancelled ones get tucked away, since those are done and just
-  // clutter once there's real volume.
+  // "Active" bucket = pending/suspended/active only -- subscriptions
+  // genuinely still in play. UPDATED (Session 20): this used to be
+  // "anything not cancelled", which silently swept "abandoned" rows
+  // (a subscription that was created but never actually approved by
+  // the donor -- see the RecurringDonation interface comment above)
+  // into this tab too, mixed in with real active subscriptions. Now
+  // explicit about which statuses belong here; abandoned gets its own
+  // tab below instead.
   const filteredRecurring = useMemo(() => {
     if (recurringFilter === "all") return recurring;
     if (recurringFilter === "cancelled") return recurring.filter((r) => r.status === "cancelled");
-    return recurring.filter((r) => r.status !== "cancelled");
+    if (recurringFilter === "abandoned") return recurring.filter((r) => r.status === "abandoned");
+    return recurring.filter((r) => r.status === "active" || r.status === "pending" || r.status === "suspended");
   }, [recurring, recurringFilter]);
 
   const availableYears = useMemo(() => {
@@ -292,10 +307,10 @@ export default function AdminDonationsPage() {
       {/* Recurring subscriptions */}
       <div style={{ marginBottom: "2rem" }}>
         <div style={{ marginBottom: "0.75rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
             <h2 style={{ fontSize: 16, fontWeight: 700, color: "#111111" }}>Recurring Subscriptions</h2>
           <div style={{ display: "flex", gap: 4, background: "#F7F4F0", borderRadius: 8, padding: 3 }}>
-            {(["active", "cancelled", "all"] as const).map((option) => (
+            {(["active", "cancelled", "abandoned", "all"] as const).map((option) => (
               <button
                 key={option}
                 onClick={() => setRecurringFilter(option)}
@@ -338,6 +353,8 @@ export default function AdminDonationsPage() {
                     <div style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>
                       {r.donorEmail} · {r.status === "cancelled" && r.cancelledAt
                         ? `Cancelled ${formatDate(r.cancelledAt)}`
+                        : r.status === "abandoned"
+                        ? `Abandoned attempt, started ${formatDate(r.createdAt)}`
                         : r.activatedAt
                         ? `Active since ${formatDate(r.activatedAt)}`
                         : `Started ${formatDate(r.createdAt)}`}
