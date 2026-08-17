@@ -43,13 +43,36 @@ aws iam put-role-policy \
 
 ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME}"
 
-# IMPORTANT: PAYPAL_WEBHOOK_ID is a placeholder -- fill in the real
-# webhook ID after registering the webhook in the PayPal dashboard
-# (Apps & Credentials > your app > Webhooks > Add Webhook, URL will be
-# the API Gateway route from setup-api-gateway.sh below). Without the
-# real ID, verifyWebhookSignature() always returns false and every
-# webhook call gets rejected with 400.
-ENV_VARS="Variables={RECURRING_DONATIONS_TABLE=recurring_donations,DONATIONS_TABLE=donations,PAYPAL_MODE=sandbox,PAYPAL_SECRET_NAME=sixspur/paypal-api,PAYPAL_WEBHOOK_ID=REPLACE_ME,ASSETS_BUCKET=sixspurranch-assets,CDN_BASE=https://d1s8s7aw8vf5zu.cloudfront.net,SES_FROM_ADDRESS=noreply@sixspurranch.org}"
+# FIXED (this version): the previous script did a full env var
+# OVERWRITE on every deploy, including a literal PAYPAL_WEBHOOK_ID=
+# REPLACE_ME placeholder. That meant any redeploy after the real
+# webhook ID was set would silently wipe it back to REPLACE_ME,
+# which makes verifyWebhookSignature() always return false and every
+# webhook call gets rejected with 400 -- effectively breaking
+# recurring-donation status sync with no obvious symptom until a
+# donor's subscription silently stops updating. Now: fetch whatever's
+# actually live on the function first, only forcibly set the values
+# this script is meant to own, and use setdefault for PAYPAL_MODE and
+# PAYPAL_WEBHOOK_ID so a real value already in place is never
+# clobbered by a routine code-only redeploy.
+CURRENT_VARS=$(aws lambda get-function-configuration \
+  --function-name "$FUNCTION_NAME" \
+  --profile "$PROFILE" --region "$REGION" \
+  --query 'Environment.Variables' --output json 2>/dev/null || echo '{}')
+
+NEW_VARS=$(echo "$CURRENT_VARS" | python3 -c "
+import json, sys
+env = json.load(sys.stdin) or {}
+env['RECURRING_DONATIONS_TABLE'] = 'recurring_donations'
+env['DONATIONS_TABLE'] = 'donations'
+env['PAYPAL_SECRET_NAME'] = 'sixspur/paypal-api'
+env['ASSETS_BUCKET'] = 'sixspurranch-assets'
+env['CDN_BASE'] = 'https://d1s8s7aw8vf5zu.cloudfront.net'
+env['SES_FROM_ADDRESS'] = 'noreply@sixspurranch.org'
+env.setdefault('PAYPAL_MODE', 'sandbox')
+env.setdefault('PAYPAL_WEBHOOK_ID', 'REPLACE_ME')
+print(json.dumps({'Variables': env}))
+")
 
 if aws lambda get-function --function-name "$FUNCTION_NAME" --profile "$PROFILE" --region "$REGION" >/dev/null 2>&1; then
   echo "Function exists, updating code..."
@@ -64,7 +87,7 @@ if aws lambda get-function --function-name "$FUNCTION_NAME" --profile "$PROFILE"
 
   aws lambda update-function-configuration \
     --function-name "$FUNCTION_NAME" \
-    --environment "$ENV_VARS" \
+    --environment "$NEW_VARS" \
     --timeout 15 \
     --memory-size 256 \
     --profile "$PROFILE" --region "$REGION"
@@ -78,11 +101,12 @@ else
     --zip-file fileb://donate-recurring-webhook.zip \
     --timeout 15 \
     --memory-size 256 \
-    --environment "$ENV_VARS" \
+    --environment "$NEW_VARS" \
     --profile "$PROFILE" --region "$REGION"
 fi
 
 echo ""
 echo "Done. Function: $FUNCTION_NAME"
-echo "REMINDER: PAYPAL_WEBHOOK_ID is a placeholder until the webhook is registered in the PayPal dashboard -- update it with:"
-echo "  aws lambda update-function-configuration --function-name $FUNCTION_NAME --environment Variables={...,PAYPAL_WEBHOOK_ID=<real>,...} --profile $PROFILE --region $REGION"
+echo "If PAYPAL_WEBHOOK_ID or PAYPAL_MODE still show REPLACE_ME/sandbox above, patch them once with:"
+echo "  aws lambda update-function-configuration --function-name $FUNCTION_NAME --environment 'Variables={...}' --profile $PROFILE --region $REGION"
+echo "That real value will now be PRESERVED on every future deploy of this script."

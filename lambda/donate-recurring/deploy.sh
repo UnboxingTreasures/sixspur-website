@@ -43,12 +43,34 @@ aws iam put-role-policy \
 
 ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME}"
 
-# IMPORTANT: PLAN_ID_5/10/20 are placeholders -- fill these in with
-# the real PayPal Plan IDs after creating the 3 preset-tier Plans (one-time
-# PayPal setup, see recreate-paypal-plans.js). Deploying with placeholders
-# means create-subscription will fail with "No PayPal plan configured for
-# tier: X" until these are set for real via update-function-configuration.
-ENV_VARS="Variables={RECURRING_DONATIONS_TABLE=recurring_donations,PAYPAL_MODE=sandbox,PAYPAL_SECRET_NAME=sixspur/paypal-api,SITE_URL=https://sixspurranch.org,PLAN_ID_5=REPLACE_ME,PLAN_ID_10=REPLACE_ME,PLAN_ID_20=REPLACE_ME}"
+# FIXED (this version): the previous script did a full env var
+# OVERWRITE on every deploy, including literal placeholders for
+# PAYPAL_MODE/PLAN_ID_5/10/20. That meant any redeploy after the real
+# live Plan IDs were set would silently wipe them back to REPLACE_ME --
+# this is the exact bug that already cost real Plan IDs twice on the
+# sandbox side. Now: fetch whatever's actually live on the function
+# first, only forcibly set the values this script is meant to own
+# (table name, secret name, site URL), and use setdefault for the
+# values that get patched in manually after a one-time PayPal setup
+# step (PAYPAL_MODE, PLAN_ID_5/10/20) so a real value already in place
+# is never clobbered by a routine code-only redeploy.
+CURRENT_VARS=$(aws lambda get-function-configuration \
+  --function-name "$FUNCTION_NAME" \
+  --profile "$PROFILE" --region "$REGION" \
+  --query 'Environment.Variables' --output json 2>/dev/null || echo '{}')
+
+NEW_VARS=$(echo "$CURRENT_VARS" | python3 -c "
+import json, sys
+env = json.load(sys.stdin) or {}
+env['RECURRING_DONATIONS_TABLE'] = 'recurring_donations'
+env['PAYPAL_SECRET_NAME'] = 'sixspur/paypal-api'
+env['SITE_URL'] = 'https://sixspurranch.org'
+env.setdefault('PAYPAL_MODE', 'sandbox')
+env.setdefault('PLAN_ID_5', 'REPLACE_ME')
+env.setdefault('PLAN_ID_10', 'REPLACE_ME')
+env.setdefault('PLAN_ID_20', 'REPLACE_ME')
+print(json.dumps({'Variables': env}))
+")
 
 if aws lambda get-function --function-name "$FUNCTION_NAME" --profile "$PROFILE" --region "$REGION" >/dev/null 2>&1; then
   echo "Function exists, updating code..."
@@ -63,7 +85,7 @@ if aws lambda get-function --function-name "$FUNCTION_NAME" --profile "$PROFILE"
 
   aws lambda update-function-configuration \
     --function-name "$FUNCTION_NAME" \
-    --environment "$ENV_VARS" \
+    --environment "$NEW_VARS" \
     --timeout 15 \
     --memory-size 256 \
     --profile "$PROFILE" --region "$REGION"
@@ -77,11 +99,12 @@ else
     --zip-file fileb://donate-recurring.zip \
     --timeout 15 \
     --memory-size 256 \
-    --environment "$ENV_VARS" \
+    --environment "$NEW_VARS" \
     --profile "$PROFILE" --region "$REGION"
 fi
 
 echo ""
 echo "Done. Function: $FUNCTION_NAME"
-echo "REMINDER: PLAN_ID_10/25/50/100 are placeholders on first deploy -- update them once the real PayPal Plans exist:"
-echo "  aws lambda update-function-configuration --function-name $FUNCTION_NAME --environment Variables={...,PLAN_ID_10=<real>,...} --profile $PROFILE --region $REGION"
+echo "If PLAN_ID_5/10/20 or PAYPAL_MODE still show REPLACE_ME/sandbox above, patch them once with:"
+echo "  aws lambda update-function-configuration --function-name $FUNCTION_NAME --environment 'Variables={...}' --profile $PROFILE --region $REGION"
+echo "That real value will now be PRESERVED on every future deploy of this script."

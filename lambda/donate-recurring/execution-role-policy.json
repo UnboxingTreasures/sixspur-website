@@ -4,7 +4,7 @@
     {
       "Sid": "RecurringDonationsReadWrite",
       "Effect": "Allow",
-      "Action": ["dynamodb:PutItem", "dynamodb:GetItem"],
+      "Action": ["dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:UpdateItem"],
       "Resource": "arn:aws:dynamodb:us-east-1:658965339779:table/recurring_donations"
     },
     {

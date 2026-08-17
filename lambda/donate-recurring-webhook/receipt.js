@@ -1,11 +1,15 @@
 // receipt.js
-// Identical to lambda/donate/receipt.js -- copied here per this
-// project's per-Lambda file pattern (no Lambda Layer). Handles PDF
-// generation, S3 upload, and SES email for a single donation record,
-// regardless of whether it came from a one-time capture or a recurring
-// webhook charge -- generateAndSendReceipt() only cares about the shape
-// of the donation object (donationId, donorEmail, amount, type, etc.),
-// not which flow produced it.
+// Shared module for generating a 501(c)(3) donation tax receipt (PDF) and
+// emailing it to the donor via SES. Not its own Lambda -- gets copied
+// into whichever Lambda needs to trigger a receipt (currently
+// lambda/donate and lambda/donate-recurring-webhook -- keep both copies
+// in sync when editing this file; manual entry's copy in adminDonations
+// was removed).
+//
+// PER-CHARGE receipt only. The annual summary letter (scoped Aug 11,
+// see project notes Section 13) is separate, not-yet-built work -- a
+// batch/scheduled job around year-end, not triggered per-donation like
+// this is.
 
 const PDFDocument = require('pdfkit');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
@@ -19,9 +23,13 @@ const BUCKET = process.env.ASSETS_BUCKET || 'sixspurranch-assets';
 const CDN_BASE = process.env.CDN_BASE || 'https://d1s8s7aw8vf5zu.cloudfront.net';
 const FROM_ADDRESS = process.env.SES_FROM_ADDRESS || 'noreply@sixspurranch.org';
 
+// Legal entity name for tax documents -- "Six Spur Ranch Company" is used
+// ONLY in legal/official contexts per established project convention;
+// "Six Spur Ranch and Rescue" is the everyday public-facing name used
+// everywhere else. A tax receipt is exactly the legal-context case.
 const ORG_LEGAL_NAME = 'Six Spur Ranch Company';
 const ORG_EIN = '41-4123317';
-const ORG_ADDRESS = 'PO Box 333, Nash, TX 75569';
+const ORG_ADDRESS = 'PO Box 333, Nash, TX 75569'; // confirmed Aug 12 -- Richard's PO Box, not the county line physical address
 
 function formatCurrency(amount) {
   return `$${Number(amount).toFixed(2)}`;
@@ -31,6 +39,30 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
+/**
+ * Builds the PDF as an in-memory buffer. Content follows standard IRS
+ * substantiation requirements for a 501(c)(3) cash contribution
+ * acknowledgment: org name + EIN, donor name, date, amount, and an
+ * explicit statement on whether goods/services were exchanged (required
+ * language whenever anything was given in return; "no goods or services"
+ * is the standard line for a pure donation, which is the only case this
+ * function currently handles -- see the goodsOrServicesDescription note
+ * below for what a future gift-with-benefit donation would need).
+ *
+ * UPDATED same session: adds a Campaign line when the donation was made
+ * toward a specific fundraiser -- Type still correctly says "One-time
+ * contribution" (that's a true, separate fact about payment mechanics,
+ * one-time vs recurring), the campaign name is additional information,
+ * not a replacement for it.
+ *
+ * UPDATED (Session 20): adds the PayPal transaction ID, when present on
+ * the donation record. Not an IRS requirement for the receipt itself,
+ * but gives the donor/admin a direct reference to cross-check this
+ * exact charge against PayPal's own transaction history -- same
+ * reasoning as adding it to the donor account page's history list.
+ * Guarded with an if-check since older donation records predating this
+ * field won't have it.
+ */
 function buildReceiptPdf(donation) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'LETTER', margin: 50 });
@@ -55,8 +87,18 @@ function buildReceiptPdf(donation) {
     if (donation.campaignTitle) {
       doc.text(`Campaign: ${donation.campaignTitle}`);
     }
+    if (donation.paypalTransactionId) {
+      doc.text(`PayPal Transaction ID: ${donation.paypalTransactionId}`);
+    }
     doc.moveDown(1.5);
 
+    // Standard IRS-required statement. NOTE: this assumes no goods or
+    // services were provided in exchange, which is the only case this
+    // function handles right now. If Six Spur ever offers something in
+    // return for a donation (e.g. a gala ticket, a thank-you gift above
+    // token value), this paragraph needs to change to describe and
+    // value what was provided instead -- flag that scenario if it comes
+    // up, don't reuse this wording as-is.
     doc.text(
       'No goods or services were provided in exchange for this contribution. ' +
       `${ORG_LEGAL_NAME} is a tax-exempt organization under Section 501(c)(3) of the Internal Revenue Code. ` +
@@ -100,6 +142,15 @@ async function emailReceipt(donation, receiptUrl) {
   }));
 }
 
+/**
+ * Main entry point -- call this after a donation record is created
+ * (PayPal capture success). Returns the receipt URL so the caller can
+ * store it on the donation record. Does NOT throw on email failure -- a
+ * failed receipt email shouldn't un-record a successful donation, but
+ * it DOES throw on PDF/S3 failure, since a donation with no receipt at
+ * all is a real problem worth surfacing loudly rather than silently
+ * swallowing.
+ */
 async function generateAndSendReceipt(donation) {
   const pdfBuffer = await buildReceiptPdf(donation);
   const receiptUrl = await uploadReceiptPdf(donation.donationId, pdfBuffer);

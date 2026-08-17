@@ -17,7 +17,9 @@
 // route in this file currently assumes a verified donor exists.
 
 const { createSubscription, cancelSubscription } = require('./paypal');
-const { createSubscriptionRecord, getSubscriptionsByDonor, getSubscriptionById } = require('./dynamo');
+const {
+  createSubscriptionRecord, abandonPendingSubscriptionsForDonor, getSubscriptionsByDonor, getSubscriptionById,
+} = require('./dynamo');
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -78,6 +80,19 @@ exports.handler = async (event) => {
             return respond(400, { error: 'amount must be a number of at least $1' });
           }
         }
+
+        // Clear out any of this donor's still-pending attempts BEFORE
+        // creating a new one. Without this, a donor who retries after
+        // an error/abandoned approval (even from a completely
+        // different browser session -- e.g. switching to incognito
+        // after a "logged into merchant account" block) ends up with
+        // multiple live "Pending approval" rows that never resolve,
+        // since only one of them will ever actually get approved and
+        // fire the ACTIVATED webhook. This does NOT call PayPal's
+        // cancel API -- these were never approved, so there's nothing
+        // real on PayPal's side to cancel; they simply expire there on
+        // their own.
+        await abandonPendingSubscriptionsForDonor(donor.donorId);
 
         const siteUrl = process.env.SITE_URL || 'https://sixspurranch.org';
         const paypalSub = await createSubscription({

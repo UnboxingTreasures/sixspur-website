@@ -57,10 +57,15 @@ echo "SMS recipients for this deploy: $SMS_RECIPIENTS"
 # IMPORTANT: real JSON, not the AWS CLI's Variables={...} shorthand --
 # that shorthand parser treats commas as key/value delimiters, which
 # breaks the instant SMS_RECIPIENTS contains more than one phone
-# number (a real bug hit and fixed earlier tonight on a sibling
-# Lambda). JSON handles commas inside a quoted string fine.
+# number (a real bug hit and fixed earlier on a sibling Lambda). JSON
+# handles commas inside a quoted string fine.
+#
+# PAYPAL_MODE=live -- flipped from sandbox as of the live-credential
+# cutover. No separately-managed real value here (unlike Plan IDs or
+# webhook ID elsewhere), so a static flip in this script is safe --
+# there's nothing for a redeploy to accidentally wipe.
 ENV_VARS_JSON=$(cat <<JSONEOF
-{"Variables":{"DONATIONS_TABLE":"donations","FUNDRAISERS_TABLE":"fundraisers","PAYPAL_MODE":"sandbox","PAYPAL_SECRET_NAME":"sixspur/paypal-api","ASSETS_BUCKET":"sixspurranch-assets","CDN_BASE":"https://d1s8s7aw8vf5zu.cloudfront.net","SES_FROM_ADDRESS":"noreply@sixspurranch.org","SMS_RECIPIENTS":"${SMS_RECIPIENTS}"}}
+{"Variables":{"DONATIONS_TABLE":"donations","FUNDRAISERS_TABLE":"fundraisers","PAYPAL_MODE":"live","PAYPAL_SECRET_NAME":"sixspur/paypal-api","ASSETS_BUCKET":"sixspurranch-assets","CDN_BASE":"https://d1s8s7aw8vf5zu.cloudfront.net","SES_FROM_ADDRESS":"noreply@sixspurranch.org","SMS_RECIPIENTS":"${SMS_RECIPIENTS}"}}
 JSONEOF
 )
 

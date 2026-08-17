@@ -1,9 +1,10 @@
 // receipt.js
 // Shared module for generating a 501(c)(3) donation tax receipt (PDF) and
 // emailing it to the donor via SES. Not its own Lambda -- gets copied
-// into whichever Lambda needs to trigger a receipt (currently just the
-// donate Lambda, since manual entry -- and its copy of this file in
-// adminDonations -- was removed).
+// into whichever Lambda needs to trigger a receipt (currently
+// lambda/donate and lambda/donate-recurring-webhook -- keep both copies
+// in sync when editing this file; manual entry's copy in adminDonations
+// was removed).
 //
 // PER-CHARGE receipt only. The annual summary letter (scoped Aug 11,
 // see project notes Section 13) is separate, not-yet-built work -- a
@@ -53,6 +54,14 @@ function formatDate(iso) {
  * contribution" (that's a true, separate fact about payment mechanics,
  * one-time vs recurring), the campaign name is additional information,
  * not a replacement for it.
+ *
+ * UPDATED (Session 20): adds the PayPal transaction ID, when present on
+ * the donation record. Not an IRS requirement for the receipt itself,
+ * but gives the donor/admin a direct reference to cross-check this
+ * exact charge against PayPal's own transaction history -- same
+ * reasoning as adding it to the donor account page's history list.
+ * Guarded with an if-check since older donation records predating this
+ * field won't have it.
  */
 function buildReceiptPdf(donation) {
   return new Promise((resolve, reject) => {
@@ -77,6 +86,9 @@ function buildReceiptPdf(donation) {
     doc.text(`Type: ${donation.type === 'recurring' ? 'Recurring (monthly) contribution' : 'One-time contribution'}`);
     if (donation.campaignTitle) {
       doc.text(`Campaign: ${donation.campaignTitle}`);
+    }
+    if (donation.paypalTransactionId) {
+      doc.text(`PayPal Transaction ID: ${donation.paypalTransactionId}`);
     }
     doc.moveDown(1.5);
 
