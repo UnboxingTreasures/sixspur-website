@@ -60,27 +60,33 @@ export default async function ShopPage() {
 
       <section className="py-16 px-6">
         <div className="max-w-5xl mx-auto">
-          {categories.map((category) => {
-            const items = shopItems.filter((item) => item.category === category);
-            return (
-              <div key={category} id={category} className="mb-16 scroll-mt-24">
-                <h2 className="text-2xl font-bold text-spur-black mb-6">{titleCase(category)}</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-                  {items.map((item) => (
-                    <a key={item.itemId} href={`/shop/${item.itemId}`} className="flex flex-col rounded overflow-hidden border border-spur-tan-light hover:shadow-md transition-shadow">
-                      <div className="relative aspect-square bg-spur-tan-light overflow-hidden">
-                        <Image src={item.thumbnailUrl} alt={item.name} fill className="object-cover" />
-                      </div>
-                      <div className="p-5">
-                        <h3 className="font-bold text-spur-black text-base mb-1">{item.name}</h3>
-                        <p className="text-spur-orange font-semibold">${item.price.toFixed(2)}</p>
-                      </div>
-                    </a>
-                  ))}
+          {shopItems.length === 0 ? (
+            <div className="text-center py-16 px-4 bg-spur-tan-light/20 rounded border border-spur-tan-light">
+              <p className="text-spur-black/60 text-base">New merch is on the way. Check back soon!</p>
+            </div>
+          ) : (
+            categories.map((category) => {
+              const items = shopItems.filter((item) => item.category === category);
+              return (
+                <div key={category} id={category} className="mb-16 scroll-mt-24">
+                  <h2 className="text-2xl font-bold text-spur-black mb-6">{titleCase(category)}</h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {items.map((item) => (
+                      <a key={item.itemId} href={`/shop/${item.itemId}`} className="flex flex-col rounded overflow-hidden border border-spur-tan-light hover:shadow-md transition-shadow">
+                        <div className="relative aspect-square bg-spur-tan-light overflow-hidden">
+                          <Image src={item.thumbnailUrl} alt={item.name} fill className="object-cover" />
+                        </div>
+                        <div className="p-5">
+                          <h3 className="font-bold text-spur-black text-base mb-1">{item.name}</h3>
+                          <p className="text-spur-orange font-semibold">${item.price.toFixed(2)}</p>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
       </section>
     </main>

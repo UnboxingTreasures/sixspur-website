@@ -52,18 +52,24 @@ export default async function ShopPreview() {
         </div>
 
         {/* Product grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1.5rem' }}>
-          {items.map((item) => (
-            <ShopProductCard
-              key={item.itemId}
-              itemId={item.itemId}
-              name={item.name}
-              category={item.category}
-              price={item.price}
-              thumbnailUrl={item.thumbnailUrl}
-            />
-          ))}
-        </div>
+        {items.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '3rem 1rem', background: 'rgba(255, 255, 255, 0.04)', borderRadius: '2px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+            <p style={{ color: '#D1C0B0', fontSize: '0.95rem', margin: 0 }}>New merch is on the way. Check back soon!</p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1.5rem' }}>
+            {items.map((item) => (
+              <ShopProductCard
+                key={item.itemId}
+                itemId={item.itemId}
+                name={item.name}
+                category={item.category}
+                price={item.price}
+                thumbnailUrl={item.thumbnailUrl}
+              />
+            ))}
+          </div>
+        )}
 
       </div>
     </section>
