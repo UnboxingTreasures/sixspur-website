@@ -10,8 +10,6 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL
 
 export default function Nav() {
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isAdmin, setIsAdmin] = useState(() => {
     if (typeof window === 'undefined') return false
@@ -53,14 +51,6 @@ export default function Nav() {
       }
     })
   }, [pathname])
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (searchQuery.trim()) {
-      setSearchOpen(false)
-      setSearchQuery('')
-    }
-  }
 
   return (
     <>
@@ -108,17 +98,6 @@ export default function Nav() {
           </div>
 
           <div className="nav-icons" style={{ display: 'flex', alignItems: 'center', gap: '16px', flexShrink: 0 }}>
-            <button
-              onClick={() => setSearchOpen(!searchOpen)}
-              aria-label='Search'
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#111111', padding: '4px', display: 'flex', alignItems: 'center' }}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8"/>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-              </svg>
-            </button>
-
             <Link href={isLoggedIn ? '/account' : '/account/login'} aria-label={isLoggedIn ? 'My Account' : 'Log In'} style={{ color: '#111111', display: 'flex', alignItems: 'center' }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
@@ -157,34 +136,6 @@ export default function Nav() {
             {mobileOpen ? '✕' : '☰'}
           </button>
         </div>
-
-        {searchOpen && (
-          <div style={{ borderTop: '1px solid #E8E2DC', background: '#FFFFFF', padding: '12px 1.5rem' }}>
-            <form onSubmit={handleSearch} style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', gap: '8px' }}>
-              <input
-                autoFocus
-                type='text'
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder='Search Six Spur...'
-                style={{ flex: 1, border: '1px solid #E8E2DC', borderRadius: '4px', padding: '8px 12px', fontSize: '13px', outline: 'none' }}
-              />
-              <button
-                type='submit'
-                style={{ background: '#E77A2D', color: '#fff', border: 'none', borderRadius: '4px', padding: '8px 16px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
-              >
-                Search
-              </button>
-              <button
-                type='button'
-                onClick={() => { setSearchOpen(false); setSearchQuery(''); }}
-                style={{ background: 'none', border: '1px solid #E8E2DC', borderRadius: '4px', padding: '8px 12px', fontSize: '13px', cursor: 'pointer', color: '#555' }}
-              >
-                Cancel
-              </button>
-            </form>
-          </div>
-        )}
       </nav>
 
       <style>{`
