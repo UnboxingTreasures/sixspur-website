@@ -449,7 +449,7 @@ export default function AdminShopPage() {
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [addDraft, setAddDraft] = useState<Draft>(emptyDraft());
-  const [addFile, setAddFile] = useState<File | null>(null);
+  const [addFiles, setAddFiles] = useState<File[]>([]);
   const [addSubmitting, setAddSubmitting] = useState(false);
   const [addError, setAddError] = useState("");
 
@@ -571,9 +571,15 @@ export default function AdminShopPage() {
     return null;
   };
 
+  // UPDATED (Session 20) -- accepts multiple photos at once instead of
+  // just one. The FIRST file becomes the required seed photo (product
+  // creation itself needs exactly one seedPhotoUrl), then any
+  // additional files are uploaded and added to the pool via the same
+  // addPhotos endpoint the existing-product "Add Photo" button already
+  // uses, right after the product is created.
   const submitAdd = async () => {
     if (!addDraft.name.trim()) return setAddError("Name is required");
-    if (!addFile) return setAddError("At least one photo is required");
+    if (addFiles.length === 0) return setAddError("At least one photo is required");
     const variantError = validateDraftVariants(addDraft);
     if (variantError) return setAddError(variantError);
 
@@ -581,19 +587,34 @@ export default function AdminShopPage() {
     setAddError("");
     try {
       const predictedId = slugify(addDraft.name);
-      const seedPhotoUrl = await uploadPhoto(predictedId, addFile);
+      const [seedFile, ...restFiles] = addFiles;
+      const seedPhotoUrl = await uploadPhoto(predictedId, seedFile);
 
       const res = await authedFetch("/admin/shop", {
         method: "POST",
         body: JSON.stringify({ ...draftToPayload(addDraft), seedPhotoUrl }),
       });
-      const data = await res.json();
+      let data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to add product");
+
+      if (restFiles.length > 0) {
+        const restUrls = await Promise.all(restFiles.map((f) => uploadPhoto(predictedId, f)));
+        const photosRes = await authedFetch(`/admin/shop/${data.itemId}/photos`, {
+          method: "POST",
+          body: JSON.stringify({ photoUrls: restUrls }),
+        });
+        const photosData = await photosRes.json();
+        if (photosRes.ok) data = photosData;
+        // If this second call fails, the product still exists with its
+        // seed photo -- not worth failing the whole creation over it,
+        // the admin can just add the rest via the normal Add Photo
+        // button afterward.
+      }
 
       setItems((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
       setShowAddModal(false);
       setAddDraft(emptyDraft());
-      setAddFile(null);
+      setAddFiles([]);
     } catch (err: unknown) {
       setAddError(err instanceof Error ? err.message : "Failed to add product");
     } finally {
@@ -623,19 +644,24 @@ export default function AdminShopPage() {
     }
   };
 
-  const handleAddPhoto = async (itemId: string, file: File) => {
+  // UPDATED (Session 20) -- accepts multiple files at once instead of
+  // just one, per Richard's request. Uploads each to S3 in parallel,
+  // then adds all resulting URLs to the pool in a single API call
+  // (the backend's addPhotos already accepted an array -- this was
+  // purely a frontend limitation forcing one-at-a-time selection).
+  const handleAddPhoto = async (itemId: string, files: File[]) => {
     setUploadingPhotoFor(itemId);
     try {
-      const cdnUrl = await uploadPhoto(itemId, file);
+      const cdnUrls = await Promise.all(files.map((f) => uploadPhoto(itemId, f)));
       const res = await authedFetch(`/admin/shop/${itemId}/photos`, {
         method: "POST",
-        body: JSON.stringify({ photoUrls: [cdnUrl] }),
+        body: JSON.stringify({ photoUrls: cdnUrls }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to add photo");
+      if (!res.ok) throw new Error(data.error || "Failed to add photos");
       setItems((prev) => prev.map((i) => (i.itemId === itemId ? data : i)));
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to add photo");
+      alert(err instanceof Error ? err.message : "Failed to add photos");
     } finally {
       setUploadingPhotoFor(null);
     }
@@ -895,11 +921,12 @@ export default function AdminShopPage() {
                       <input
                         type="file"
                         accept="image/jpeg,image/png,image/webp,image/gif"
+                        multiple
                         style={{ display: "none" }}
                         disabled={uploadingPhotoFor === item.itemId}
                         onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleAddPhoto(item.itemId, file);
+                          const files = Array.from(e.target.files || []);
+                          if (files.length > 0) handleAddPhoto(item.itemId, files);
                           e.target.value = "";
                         }}
                       />
@@ -931,29 +958,30 @@ export default function AdminShopPage() {
 
             <div style={{ marginBottom: 16, marginTop: 12 }}>
               <label style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", display: "block", marginBottom: 4 }}>
-                Photo <span style={{ color: "#DC2626" }}>*</span>
+                Photos <span style={{ color: "#DC2626" }}>*</span>
               </label>
               <label style={{
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 8, border: "2px dashed #E8D5C4",
-                borderRadius: 10, padding: "16px", cursor: "pointer", background: addFile ? "#FEF3EB" : "#FAFAF8",
+                borderRadius: 10, padding: "16px", cursor: "pointer", background: addFiles.length > 0 ? "#FEF3EB" : "#FAFAF8",
                 fontSize: 13, color: "#E77A2D", fontWeight: 700,
               }}>
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp,image/gif"
+                  multiple
                   style={{ display: "none" }}
-                  onChange={(e) => setAddFile(e.target.files?.[0] || null)}
+                  onChange={(e) => setAddFiles(Array.from(e.target.files || []))}
                 />
-                {addFile ? `✓ ${addFile.name}` : "Click to choose a photo"}
+                {addFiles.length > 0 ? `✓ ${addFiles.length} photo${addFiles.length !== 1 ? "s" : ""} selected` : "Click to choose photos"}
               </label>
-              <p style={{ fontSize: 11, color: "#9CA3AF", marginTop: 4 }}>More photos can be added after creating the product.</p>
+              <p style={{ fontSize: 11, color: "#9CA3AF", marginTop: 4 }}>Select multiple at once, or add more later from the product's own page. The first photo becomes the main image.</p>
             </div>
 
             {addError && <div style={{ fontSize: 12, color: "#DC2626", marginBottom: 12 }}>{addError}</div>}
 
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button
-                onClick={() => { setShowAddModal(false); setAddDraft(emptyDraft()); setAddFile(null); setAddError(""); }}
+                onClick={() => { setShowAddModal(false); setAddDraft(emptyDraft()); setAddFiles([]); setAddError(""); }}
                 disabled={addSubmitting}
                 style={{ padding: "10px 18px", borderRadius: 8, border: "1.5px solid #E8E2DC", background: "#fff", color: "#6B7280", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
               >
