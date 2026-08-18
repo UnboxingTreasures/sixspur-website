@@ -14,19 +14,9 @@ interface Post {
   date?: string;
   publishedAt: string;
   category: string;
-  isPublished: string;
-  isArchived?: string;
+  isPublished: string; // "true" | "false"
+  isArchived?: string; // "true" | "false" -- may be absent on older records, treated as not-archived
   archivedAt?: string;
-}
-
-interface Comment {
-  commentId: string;
-  slug: string;
-  donorName: string;
-  body: string;
-  isDeleted: boolean;
-  createdAt: string;
-  deletedAt?: string;
 }
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -54,14 +44,8 @@ export default function AdminNewsPage() {
   const [selectedYear, setSelectedYear] = useState<string>("all");
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
 
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [commentsLoading, setCommentsLoading] = useState(true);
-  const [commentsOpen, setCommentsOpen] = useState(true);
-  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
-
   useEffect(() => {
     fetchPosts();
-    fetchComments();
   }, []);
 
   const fetchPosts = async () => {
@@ -76,36 +60,6 @@ export default function AdminNewsPage() {
       setError(err instanceof Error ? err.message : "Failed to load posts");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchComments = async () => {
-    try {
-      setCommentsLoading(true);
-      const res = await authedFetch("/admin/news/comments");
-      if (!res.ok) throw new Error("Failed to load comments");
-      const data = await res.json();
-      setComments(data.comments || []);
-    } catch (err) {
-      console.error("Error fetching comments:", err);
-    } finally {
-      setCommentsLoading(false);
-    }
-  };
-
-  const deleteComment = async (commentId: string) => {
-    if (!confirm("Delete this comment? It will be hidden from the public post immediately.")) return;
-    setDeletingCommentId(commentId);
-    try {
-      const res = await authedFetch(`/admin/news/comments/${commentId}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete comment");
-      const updated = await res.json();
-      setComments((prev) => prev.map((c) => (c.commentId === commentId ? updated : c)));
-    } catch (err) {
-      console.error("Error deleting comment:", err);
-      alert(err instanceof Error ? err.message : "Failed to delete comment. Please try again.");
-    } finally {
-      setDeletingCommentId(null);
     }
   };
 
@@ -186,17 +140,6 @@ export default function AdminNewsPage() {
     setSelectedYear(year);
     setSelectedMonth("all");
   };
-
-  const postTitleBySlug = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const p of posts) map[p.slug] = p.title;
-    return map;
-  }, [posts]);
-
-  const sortedComments = useMemo(
-    () => [...comments].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    [comments]
-  );
 
   return (
     <>
@@ -360,69 +303,6 @@ export default function AdminNewsPage() {
                     </div>
                   )}
                 </>
-              )}
-            </div>
-          )}
-
-          {!commentsLoading && comments.length > 0 && (
-            <div className="mt-10">
-              <button
-                type="button"
-                onClick={() => setCommentsOpen((open) => !open)}
-                className="w-full flex items-center justify-between mb-1 bg-transparent border-none cursor-pointer p-0"
-              >
-                <h2 className="text-sm font-bold text-gray-500">
-                  Comments ({sortedComments.filter((c) => !c.isDeleted).length})
-                </h2>
-                <span className="text-gray-400 text-xs">{commentsOpen ? "▾" : "▸"}</span>
-              </button>
-              <p className="text-xs text-gray-400 mb-4">
-                Deleting a comment hides it from the public post immediately. Deleted comments stay listed here, greyed out, for reference.
-              </p>
-
-              {commentsOpen && (
-                <div className="bg-white rounded shadow-sm overflow-hidden border border-gray-100">
-                  <table className="min-w-full divide-y divide-gray-100">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Author</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Comment</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Post</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
-                        <th className="px-6 py-3" />
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {sortedComments.map((c) => (
-                        <tr key={c.commentId} className={c.isDeleted ? "bg-gray-50 opacity-50" : "hover:bg-gray-50 transition-colors"}>
-                          <td className="px-6 py-4 text-sm font-semibold text-spur-black whitespace-nowrap">{c.donorName}</td>
-                          <td className="px-6 py-4 text-sm text-gray-600 max-w-xs">
-                            <span title={c.body}>{c.body.length > 100 ? `${c.body.slice(0, 100)}…` : c.body}</span>
-                          </td>
-                          <td className="px-6 py-4 text-sm">
-                            <Link href={`/news/${c.slug}`} target="_blank" className="text-spur-orange hover:underline">
-                              {postTitleBySlug[c.slug] || c.slug}
-                            </Link>
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-400 whitespace-nowrap">{formatDate(c.createdAt)}</td>
-                          <td className="px-6 py-4 text-right whitespace-nowrap">
-                            {c.isDeleted ? (
-                              <span className="text-gray-400 text-xs font-semibold">Deleted</span>
-                            ) : (
-                              <button
-                                onClick={() => deleteComment(c.commentId)}
-                                disabled={deletingCommentId === c.commentId}
-                                className="text-red-400 text-xs font-semibold hover:underline disabled:opacity-50"
-                              >
-                                {deletingCommentId === c.commentId ? "Deleting…" : "Delete"}
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
               )}
             </div>
           )}

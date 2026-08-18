@@ -145,26 +145,26 @@ async function deletePost(slug) {
   await ddb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: { slug } }));
 }
 
-// ── Blog comments (NEW Session 20) ───────────────────────────────────────
-// Modeled on Unboxing Treasures' existing blog comment system (same
-// route shape: public read per-post, donor-gated create, admin
-// moderation) -- Jay confirmed this should work the same way. Soft-
-// delete only (isDeleted flag), never a hard DELETE -- matches the
-// "mark, don't delete" convention already established elsewhere in
-// this project (donations, orders) so there's always an audit trail.
+// ── Blog comments (NEW Session 20, revised to match Unboxing Treasures'
+//    existing comment UX per Jay's direction) ───────────────────────────
+// Soft-delete only (isDeleted flag), never a hard DELETE -- matches the
+// "mark, don't delete" convention already established elsewhere in this
+// project. No separate admin moderation TABLE VIEW anymore -- moderation
+// happens inline on the post itself (admin sees a Delete link directly
+// on each comment), so there's no listAllCommentsForAdmin() here now,
+// just the same softDeleteComment() an admin's inline click calls.
 
-const MAX_COMMENT_LENGTH = 2000;
+const MAX_COMMENT_LENGTH = 1000; // matches Unboxing Treasures' limit
 
 /**
- * Creates a comment. Requires the donor to already have a `name` set
- * on their profile (see lambda/donors/dynamo.js) -- looked up here via
- * a direct GetItem on the donors table rather than trusting anything
- * the client sends, since the display name needs to be the donor's
- * REAL current name, not whatever they might pass in the request body.
- * Throws a clear, user-facing error if no name is set yet, so the
- * frontend can point them to /account to add one.
+ * Creates a comment OR a reply (if parentCommentId is provided).
+ * Requires the donor to already have a `name` set on their profile.
+ * Also snapshots isAdmin at post time -- this is what drives the
+ * "Admin" badge shown next to the commenter's name; it reflects admin
+ * status AT THE TIME OF COMMENTING, same reasoning as snapshotting
+ * donorName rather than joining live on every read.
  */
-async function createComment({ slug, donorId, body }) {
+async function createComment({ slug, donorId, body, parentCommentId }) {
   const trimmedBody = String(body || '').trim();
   if (!trimmedBody) throw new Error('Comment cannot be empty');
   if (trimmedBody.length > MAX_COMMENT_LENGTH) {
@@ -179,13 +179,27 @@ async function createComment({ slug, donorId, body }) {
     throw err;
   }
 
+  // A reply can't itself be replied to -- one level of nesting only,
+  // matching what Unboxing Treasures' UI actually supports. Validate
+  // the parent exists and is itself a top-level comment (not already
+  // a reply) before accepting.
+  if (parentCommentId) {
+    const parentResult = await ddb.send(new GetCommand({ TableName: COMMENTS_TABLE, Key: { commentId: parentCommentId } }));
+    const parent = parentResult.Item;
+    if (!parent || parent.isDeleted) throw new Error('The comment you are replying to no longer exists');
+    if (parent.parentCommentId) throw new Error('Cannot reply to a reply');
+    if (parent.slug !== slug) throw new Error('Invalid reply target');
+  }
+
   const now = new Date().toISOString();
   const item = {
     commentId: randomUUID(),
     slug,
     donorId,
     donorName: donor.name,
+    isAdminComment: Boolean(donor.isAdmin),
     body: trimmedBody,
+    parentCommentId: parentCommentId || null,
     isDeleted: false,
     createdAt: now,
   };
@@ -195,8 +209,11 @@ async function createComment({ slug, donorId, body }) {
 }
 
 /**
- * Public: lists non-deleted comments for a post, oldest first (natural
- * reading order, matches how a comment thread is normally read).
+ * Public: lists non-deleted comments for a post, oldest first. Returns
+ * a FLAT list (both top-level comments and replies together, each
+ * tagged with parentCommentId) -- the frontend groups replies under
+ * their parent for display, keeping this function's job simple (one
+ * query, one filter).
  */
 async function listCommentsForPost(slug) {
   const result = await ddb.send(new QueryCommand({
@@ -210,25 +227,9 @@ async function listCommentsForPost(slug) {
 }
 
 /**
- * Admin: lists EVERY comment across every post, newest first,
- * INCLUDING already-deleted ones (each still tagged isDeleted so the
- * admin view can grey them out) -- useful for moderation history/audit,
- * same reasoning as adminOrders keeping refund history visible rather
- * than only showing the current state. Small table, scan is fine at
- * this volume, same assumption used for news_posts above.
- */
-async function listAllCommentsForAdmin() {
-  const result = await ddb.send(new ScanCommand({ TableName: COMMENTS_TABLE }));
-  const items = result.Items || [];
-  items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  return items;
-}
-
-/**
- * Admin: soft-deletes a comment (moderation). Does NOT physically
- * remove the row -- isDeleted:true is what the public listCommentsForPost
- * filters on, so this instantly hides it from the live post without
- * losing the record.
+ * Admin: soft-deletes a comment OR a reply (moderation), called inline
+ * from the post page itself now rather than a separate admin table.
+ * Does NOT physically remove the row.
  */
 async function softDeleteComment(commentId) {
   const result = await ddb.send(new UpdateCommand({
@@ -256,6 +257,5 @@ module.exports = {
   deletePost,
   createComment,
   listCommentsForPost,
-  listAllCommentsForAdmin,
   softDeleteComment,
 };

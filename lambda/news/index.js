@@ -9,22 +9,20 @@
 //   DELETE /admin/news/{slug}           (admin: delete)
 //   POST   /admin/news/photo/presign    (admin: presigned upload URL for the post image)
 //
-//   -- NEW Session 20, blog comments --
-//   GET    /news/{slug}/comments        (public: non-deleted comments for a post)
-//   POST   /news/{slug}/comments        (DONOR-ONLY: requires the standard Cognito
-//                                         JWT authorizer attached directly at API
-//                                         Gateway on THIS route, same as /donor/*
-//                                         routes -- NOT gated via requireAdmin())
-//   GET    /admin/news/comments         (admin: every comment, all posts, moderation)
-//   DELETE /admin/news/comments/{id}    (admin: soft-delete one comment)
+//   -- blog comments (Session 20, revised to match Unboxing Treasures) --
+//   GET    /news/{slug}/comments        (public: non-deleted comments + replies for a post)
+//   POST   /news/{slug}/comments        (DONOR-ONLY: JWT authorizer attached directly
+//                                         at API Gateway on THIS route, same as /donor/*)
+//   DELETE /admin/news/comments/{id}    (admin: soft-delete one comment/reply, called
+//                                         INLINE from the post page -- no separate
+//                                         admin moderation table/route anymore)
 //
-// AUTH: this Lambda is a MIXED public/admin/donor handler. The
-// /admin/news* routes require requireAdmin() (JWT + isAdmin=true).
-// POST /news/{slug}/comments requires a verified donor but NOT
-// isAdmin -- that verification happens via API Gateway's JWT authorizer
-// attached to that specific route (not requireAdmin(), which also
-// checks isAdmin and would wrongly block a non-admin donor from
-// commenting). Every other route stays fully public/open.
+// AUTH: mixed public/admin/donor handler. /admin/news* and
+// /admin/news/comments/{id} require requireAdmin() (JWT + isAdmin=true,
+// via the JWT authorizer attached at the gateway level PLUS the DB
+// isAdmin check). POST /news/{slug}/comments requires a verified donor
+// but NOT isAdmin -- verified via the gateway JWT authorizer alone, not
+// requireAdmin(). Every other route stays fully public/open.
 
 const {
   listPublishedPosts,
@@ -36,7 +34,6 @@ const {
   deletePost,
   createComment,
   listCommentsForPost,
-  listAllCommentsForAdmin,
   softDeleteComment,
 } = require('./dynamo');
 const { createPresignedUploadUrl, deletePhotoSafely } = require('./s3');
@@ -63,7 +60,6 @@ const ADMIN_ROUTES = new Set([
   'PATCH /admin/news/{slug}',
   'DELETE /admin/news/{slug}',
   'POST /admin/news/photo/presign',
-  'GET /admin/news/comments',
   'DELETE /admin/news/comments/{id}',
 ]);
 
@@ -151,7 +147,7 @@ exports.handler = async (event) => {
         return respond(200, { uploadUrl, cdnUrl });
       }
 
-      // ── Blog comments (NEW Session 20) ──────────────────────────────
+      // ── Blog comments ────────────────────────────────────────────────
 
       case 'GET /news/{slug}/comments': {
         const comments = await listCommentsForPost(slug);
@@ -159,15 +155,16 @@ exports.handler = async (event) => {
       }
 
       case 'POST /news/{slug}/comments': {
-        // Donor identity comes from the JWT claims that API Gateway's
-        // authorizer already verified on this route -- never from the
-        // request body. Same defense-in-depth pattern as
-        // lambda/donors/index.js's getVerifiedDonor.
         const claims = event.requestContext?.authorizer?.jwt?.claims;
         if (!claims?.sub) return respond(401, { error: 'Not authenticated' });
 
         try {
-          const comment = await createComment({ slug, donorId: claims.sub, body: body.body });
+          const comment = await createComment({
+            slug,
+            donorId: claims.sub,
+            body: body.body,
+            parentCommentId: body.parentCommentId || null,
+          });
           return respond(201, comment);
         } catch (err) {
           if (err.code === 'NO_NAME_SET') {
@@ -175,11 +172,6 @@ exports.handler = async (event) => {
           }
           return respond(400, { error: err.message });
         }
-      }
-
-      case 'GET /admin/news/comments': {
-        const comments = await listAllCommentsForAdmin();
-        return respond(200, { comments });
       }
 
       case 'DELETE /admin/news/comments/{id}': {
