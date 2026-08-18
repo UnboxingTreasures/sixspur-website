@@ -86,7 +86,8 @@ interface Order {
   subtotal: number;
   shippingCost: number;
   total: number;
-  status: "pending" | "paid" | "expired";
+  status: "pending" | "paid" | "expired" | "shipped" | "refunded" | "partially_refunded";
+  refundedAmount?: number;
   createdAt: string;
 }
 
@@ -449,11 +450,21 @@ function AccountDashboardContent() {
           </div>
 
           {/* Order history -- shop purchases, separate from donations
-              above. Only 'paid' orders are meaningful to show here;
+              above. Only genuinely-completed orders are shown here;
               'pending'/'expired' reservations that never completed
               checkout aren't real orders from the donor's perspective,
               so they're filtered out rather than shown as confusing
-              incomplete entries. */}
+              incomplete entries.
+              UPDATED (Session 20) -- FIXED a real bug: this used to
+              filter to status === "paid" ONLY, which meant a refunded
+              order (status flips to "refunded"/"partially_refunded"
+              via the admin refund automation) silently disappeared
+              from the donor's own account entirely -- inconsistent
+              with Donation History right above, which correctly shows
+              refunded donations rather than hiding them. Now shows any
+              real, completed order regardless of its current payment
+              status, with the refund amount displayed the same way
+              Donation History already does. */}
           <div className="border-4 border-spur-tan-light rounded-lg p-6">
             <button
               type="button"
@@ -462,7 +473,7 @@ function AccountDashboardContent() {
             >
               <div>
                 <h2 className="text-xl font-bold text-spur-black">
-                  Order History{orders.filter((o) => o.status === "paid").length > 0 ? ` (${orders.filter((o) => o.status === "paid").length})` : ""}
+                  Order History{orders.filter((o) => o.status !== "pending" && o.status !== "expired").length > 0 ? ` (${orders.filter((o) => o.status !== "pending" && o.status !== "expired").length})` : ""}
                 </h2>
                 <div className="w-10 h-[3px] bg-spur-orange rounded mt-1" />
               </div>
@@ -471,16 +482,18 @@ function AccountDashboardContent() {
             {ordersOpen && (
               loading ? (
                 <p className="text-gray-500 text-sm">Loading...</p>
-              ) : orders.filter((o) => o.status === "paid").length === 0 ? (
+              ) : orders.filter((o) => o.status !== "pending" && o.status !== "expired").length === 0 ? (
                 <p className="text-gray-500 text-sm">You haven&apos;t placed any shop orders yet.</p>
               ) : (
                 <div className="border border-spur-tan-light rounded overflow-hidden">
-                  {orders.filter((o) => o.status === "paid").map((o) => (
+                  {orders.filter((o) => o.status !== "pending" && o.status !== "expired").map((o) => (
                     <div key={o.orderId} className="flex items-center justify-between px-5 py-4 border-b border-spur-tan-light last:border-b-0">
                       <div>
                         <div className="font-semibold text-spur-black">${o.total.toFixed(2)}</div>
                         <div className="text-xs text-gray-500 mt-1">
                           {formatDate(o.createdAt)} · {getOrderItemsSummary(o)}
+                          {o.status === "shipped" && " · shipped"}
+                          {(o.refundedAmount ?? 0) > 0 && ` · $${(o.refundedAmount ?? 0).toFixed(2)} refunded`}
                         </div>
                       </div>
                     </div>
