@@ -102,6 +102,11 @@ function getOrderItemsSummary(order: Order): string {
 interface Profile {
   email: string;
   mailingListOptIn: boolean;
+  // NEW (Session 20) -- real display name, added specifically so blog
+  // comments have something better to show publicly than a raw email
+  // address. Optional -- older profiles predating this field won't
+  // have it until the donor sets one.
+  name?: string;
 }
 
 function formatDate(iso: string) {
@@ -126,6 +131,15 @@ function AccountDashboardContent() {
 
   const [savingOptIn, setSavingOptIn] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+
+  // NEW (Session 20) -- editable display name, shown publicly on blog
+  // comments. Separate save state from mailing list toggle above since
+  // they're saved independently (this is a text input + button, that's
+  // an instant-toggle checkbox).
+  const [nameDraft, setNameDraft] = useState("");
+  const [savingName, setSavingName] = useState(false);
+  const [nameSaved, setNameSaved] = useState(false);
+  const [nameError, setNameError] = useState("");
 
   // NEW -- collapsible history sections, default open so nothing looks
   // missing on first load; collapsing is purely a decluttering option
@@ -181,6 +195,7 @@ function AccountDashboardContent() {
         const ordersData = await ordersRes.json();
         const recurringData = await recurringRes.json();
         setProfile(profileData);
+        setNameDraft(profileData.name || "");
         setDonations(donationsData.donations || []);
         setOrders(ordersData.orders || []);
         setRecurring(recurringData.subscriptions || []);
@@ -208,6 +223,37 @@ function AccountDashboardContent() {
       console.error("Failed to update mailing list preference:", err);
     } finally {
       setSavingOptIn(false);
+    }
+  };
+
+  // NEW (Session 20) -- saves the display name shown publicly on blog
+  // comments. Requires a non-empty value -- an empty name would either
+  // fail server-side validation (see donors/dynamo.js's updateProfile)
+  // or, worse, silently post comments with a blank author name, so
+  // this is caught client-side first with a clear message.
+  const saveName = async () => {
+    if (!nameDraft.trim()) {
+      setNameError("Name cannot be empty");
+      return;
+    }
+    setSavingName(true);
+    setNameError("");
+    setNameSaved(false);
+    try {
+      const res = await authedFetch("/donor/profile", {
+        method: "PATCH",
+        body: JSON.stringify({ name: nameDraft.trim() }),
+      });
+      const updated = await res.json();
+      if (!res.ok) throw new Error(updated.error || "Failed to save name");
+      setProfile(updated);
+      setNameDraft(updated.name || "");
+      setNameSaved(true);
+      setTimeout(() => setNameSaved(false), 2000);
+    } catch (err) {
+      setNameError(err instanceof Error ? err.message : "Failed to save name");
+    } finally {
+      setSavingName(false);
     }
   };
 
@@ -443,6 +489,39 @@ function AccountDashboardContent() {
               )
             )}
           </div>
+
+          {/* Display name -- NEW (Session 20). Own card, saved
+              independently of Preferences below. Shown publicly under
+              any blog comment this donor posts (see /news/[slug]) --
+              a donor with no name set yet can't post a comment until
+              they add one here. */}
+          {profile && (
+            <div className="border-4 border-spur-tan-light rounded-lg p-6">
+              <h2 className="text-xl font-bold text-spur-black mb-1">Display Name</h2>
+              <div className="w-10 h-[3px] bg-spur-orange rounded mb-4" />
+              <p className="text-sm text-gray-500 mb-4">
+                Shown publicly if you comment on a blog post. Not shared anywhere else.
+              </p>
+              <div className="flex flex-wrap items-center gap-3 max-w-sm">
+                <input
+                  type="text"
+                  value={nameDraft}
+                  onChange={(e) => { setNameDraft(e.target.value); setNameSaved(false); setNameError(""); }}
+                  maxLength={60}
+                  placeholder="Your name"
+                  className="flex-1 px-4 py-2 border border-gray-200 rounded focus:outline-none focus:border-spur-orange transition-colors text-spur-black"
+                />
+                <button
+                  onClick={saveName}
+                  disabled={savingName}
+                  className="bg-spur-black text-white font-semibold px-5 py-2 rounded hover:bg-spur-black/90 transition-colors disabled:opacity-50 whitespace-nowrap"
+                >
+                  {savingName ? "Saving..." : nameSaved ? "Saved ✓" : "Save"}
+                </button>
+              </div>
+              {nameError && <p className="text-red-600 text-sm mt-2">{nameError}</p>}
+            </div>
+          )}
 
           {/* Mailing list */}
           {profile && (

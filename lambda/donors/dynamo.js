@@ -12,6 +12,14 @@
 // direction (seeding on first login, syncing on toggle). The reverse
 // direction (subscribers -> donor, when someone unsubscribes via the
 // email link) is owned by the newsletter Lambda's handleUnsubscribe.
+//
+// UPDATED (Session 20) -- added `name`, a real display name field on
+// the donor profile. Added specifically so blog comments (built right
+// after this) have something better to show publicly than a raw email
+// address. Optional -- a donor with no name set yet simply can't post
+// a comment until they add one (see lambda/news's comment-creation
+// route for that check); nothing else on the site currently requires
+// it.
 
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, QueryCommand } = require('@aws-sdk/lib-dynamodb');
@@ -29,23 +37,11 @@ async function getProfile(donorId) {
   return result.Item || null;
 }
 
-/**
- * Looks up this email's existing subscribers row, if any. Used to seed
- * a new donor profile's mailingListOptIn with the right initial value,
- * and to preserve an existing unsubscribeToken rather than issuing a
- * new one when syncing.
- */
 async function getSubscriberByEmail(email) {
   const result = await ddb.send(new GetCommand({ TableName: SUBSCRIBERS_TABLE, Key: { email } }));
   return result.Item || null;
 }
 
-/**
- * Creates or updates the subscribers row for this email to match the
- * donor's mailingListOptIn preference. Preserves the existing
- * unsubscribeToken if one already exists (so any previously-sent email
- * links keep working), otherwise issues a new one.
- */
 async function syncSubscriberRecord(email, isActive) {
   const existing = await getSubscriberByEmail(email);
   const unsubscribeToken = existing?.unsubscribeToken || randomUUID();
@@ -61,15 +57,6 @@ async function syncSubscriberRecord(email, isActive) {
   }));
 }
 
-/**
- * Creates the donor's profile row on first login/signup if it doesn't
- * already exist -- Cognito owns the actual credentials, this table just
- * holds the business-data extras Cognito doesn't (mailing list opt-in).
- * If this email already has an active subscribers row (e.g. they
- * subscribed via the public form before ever creating an account),
- * the new profile is seeded as already opted in, so the checkbox
- * reflects reality on first load rather than defaulting to unchecked.
- */
 async function ensureProfile(donorId, email) {
   const existing = await getProfile(donorId);
   if (existing) return existing;
@@ -95,19 +82,26 @@ async function updateProfile(donorId, fields) {
     updates.push('email = :email');
     values[':email'] = fields.email;
   }
+  if (fields.name !== undefined) {
+    const trimmed = String(fields.name).trim();
+    if (!trimmed) throw new Error('Name cannot be empty');
+    if (trimmed.length > 60) throw new Error('Name must be 60 characters or fewer');
+    updates.push('#name = :name');
+    values[':name'] = trimmed;
+  }
   updates.push('updatedAt = :updatedAt');
+
+  const names = fields.name !== undefined ? { '#name': 'name' } : undefined;
 
   const result = await ddb.send(new UpdateCommand({
     TableName: DONORS_TABLE,
     Key: { donorId },
     UpdateExpression: `SET ${updates.join(', ')}`,
+    ExpressionAttributeNames: names,
     ExpressionAttributeValues: values,
     ReturnValues: 'ALL_NEW',
   }));
 
-  // Keep the subscribers table in sync whenever the opt-in preference
-  // changes. Uses the donor's CURRENT email on file (post-update if
-  // email was also changed this call), not a stale value.
   if (fields.mailingListOptIn !== undefined) {
     await syncSubscriberRecord(result.Attributes.email, Boolean(fields.mailingListOptIn));
   }
@@ -115,18 +109,13 @@ async function updateProfile(donorId, fields) {
   return result.Attributes;
 }
 
-/**
- * Returns this donor's own donations, newest first. Uses the
- * donorId-index GSI -- never a table Scan, which would risk exposing
- * other donors' records if this function were ever called incorrectly.
- */
 async function listDonationsForDonor(donorId) {
   const result = await ddb.send(new QueryCommand({
     TableName: DONATIONS_TABLE,
     IndexName: 'donorId-index',
     KeyConditionExpression: 'donorId = :donorId',
     ExpressionAttributeValues: { ':donorId': donorId },
-    ScanIndexForward: false, // newest first
+    ScanIndexForward: false,
   }));
   return result.Items || [];
 }
@@ -134,8 +123,6 @@ async function listDonationsForDonor(donorId) {
 async function getDonationForDonor(donorId, donationId) {
   const result = await ddb.send(new GetCommand({ TableName: DONATIONS_TABLE, Key: { donationId } }));
   const donation = result.Item;
-  // Ownership check -- a donor can only ever fetch their OWN donation by ID,
-  // even if they guess/enumerate another donation's ID.
   if (!donation || donation.donorId !== donorId) return null;
   return donation;
 }
