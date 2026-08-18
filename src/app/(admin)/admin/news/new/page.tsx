@@ -8,6 +8,17 @@ const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   "https://vvabeaemg5.execute-api.us-east-1.amazonaws.com";
 
+const EXCERPT_MAX = 200;
+
+const EMPTY_FORM = {
+  title: "",
+  slug: "",
+  excerpt: "",
+  content: "",
+  image: "",
+  author: "Richard McGuire",
+};
+
 async function authedFetch(path: string, options: RequestInit = {}) {
   const token = await getIdToken();
   if (!token) throw new Error("Not logged in");
@@ -25,9 +36,6 @@ async function uploadPhoto(slugHint: string, file: File): Promise<string> {
   const presignData = await presignRes.json();
   if (!presignRes.ok) throw new Error(presignData.error || "Failed to get upload URL");
 
-  // The actual S3 PUT uses the presigned URL itself as authorization --
-  // no bearer token here, and none needed; adding one would break the
-  // presigned signature.
   const uploadRes = await fetch(presignData.uploadUrl, {
     method: "PUT",
     body: file,
@@ -40,14 +48,7 @@ async function uploadPhoto(slugHint: string, file: File): Promise<string> {
 
 export default function AdminNewsEditPage() {
   const router = useRouter();
-  const [form, setForm] = useState({
-    title: "",
-    slug: "",
-    excerpt: "",
-    content: "",
-    image: "",
-    author: "Richard McGuire",
-  });
+  const [form, setForm] = useState(EMPTY_FORM);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -77,6 +78,23 @@ export default function AdminNewsEditPage() {
     } finally {
       setUploadingPhoto(false);
     }
+  };
+
+  // NEW -- clears the featured image, distinct from re-selecting a new
+  // one. Public pages already handle a missing image gracefully.
+  const handleRemovePhoto = () => {
+    setForm((prev) => ({ ...prev, image: "" }));
+    setImageFile(null);
+  };
+
+  // NEW -- equivalent of "Reset to Original" on the edit page, but for
+  // a brand-new post there's no saved original to revert to -- this
+  // just clears everything back to blank/defaults instead.
+  const handleClearForm = () => {
+    if (!confirm("Clear everything you've entered and start over?")) return;
+    setForm(EMPTY_FORM);
+    setImageFile(null);
+    setError("");
   };
 
   const handleSave = async (published: boolean) => {
@@ -161,30 +179,46 @@ export default function AdminNewsEditPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Photo</label>
-              <label
-                className={`flex items-center justify-center gap-2 border-2 border-dashed rounded px-4 py-6 cursor-pointer transition-colors ${
-                  form.image ? "border-spur-orange bg-orange-50" : "border-gray-300 hover:border-spur-orange"
-                }`}
-              >
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/gif"
-                  className="hidden"
-                  disabled={uploadingPhoto}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handlePhotoSelect(file);
-                  }}
-                />
-                <span className="text-sm font-semibold text-spur-orange">
-                  {uploadingPhoto ? "Uploading..." : form.image ? `✓ ${imageFile?.name || "Photo uploaded"}` : "Click to upload a photo"}
+              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">
+                Featured Image
+                <span className="ml-2 normal-case font-normal text-gray-400 lowercase">
+                  shown as thumbnail on blog index and hero image at top of post — ideal size 800×500px
                 </span>
               </label>
+
               {form.image && !uploadingPhoto && (
                 /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={form.image} alt="Preview" className="mt-3 max-h-48 rounded border border-gray-200 object-cover" />
+                <img src={form.image} alt="Preview" className="mb-3 max-h-48 rounded border border-gray-200 object-cover" />
               )}
+
+              <div className="flex items-center gap-3">
+                <label
+                  className={`inline-flex items-center gap-2 border-2 rounded px-4 py-2 cursor-pointer transition-colors text-sm font-semibold ${
+                    form.image ? "border-spur-orange text-spur-orange hover:bg-orange-50" : "border-gray-300 text-gray-600 hover:border-spur-orange hover:text-spur-orange"
+                  }`}
+                >
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    disabled={uploadingPhoto}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handlePhotoSelect(file);
+                    }}
+                  />
+                  {uploadingPhoto ? "Uploading..." : form.image ? `✓ ${imageFile?.name || "Photo uploaded"}` : "Upload a photo"}
+                </label>
+                {form.image && !uploadingPhoto && (
+                  <button
+                    type="button"
+                    onClick={handleRemovePhoto}
+                    className="text-red-500 text-sm font-semibold hover:underline"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
             </div>
 
             <div>
@@ -198,11 +232,17 @@ export default function AdminNewsEditPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Excerpt</label>
+              <div className="flex items-baseline justify-between mb-1">
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide">Excerpt</label>
+                <span className="text-xs text-gray-400">
+                  {form.excerpt.length}/{EXCERPT_MAX} — teaser text shown on blog index beneath the title
+                </span>
+              </div>
               <textarea
                 name="excerpt"
                 value={form.excerpt}
                 onChange={handleChange}
+                maxLength={EXCERPT_MAX}
                 rows={2}
                 placeholder="Short summary shown on the news listing page"
                 className="w-full px-4 py-3 border border-gray-200 rounded focus:outline-none focus:border-spur-orange transition-colors text-spur-black resize-none"
@@ -210,9 +250,12 @@ export default function AdminNewsEditPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">
-                Content <span className="text-spur-orange">*</span>
-              </label>
+              <div className="flex items-baseline justify-between mb-1">
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                  Content <span className="text-spur-orange">*</span>
+                </label>
+                <span className="text-xs text-gray-400">{form.content.length} characters</span>
+              </div>
               <textarea
                 name="content"
                 value={form.content}
@@ -222,6 +265,16 @@ export default function AdminNewsEditPage() {
                 className="w-full px-4 py-3 border border-gray-200 rounded focus:outline-none focus:border-spur-orange transition-colors text-spur-black resize-none font-sans"
               />
             </div>
+          </div>
+
+          <div className="flex justify-start">
+            <button
+              type="button"
+              onClick={handleClearForm}
+              className="text-gray-400 text-xs font-semibold hover:text-gray-600 hover:underline"
+            >
+              ↺ Clear Form
+            </button>
           </div>
         </div>
       </div>
