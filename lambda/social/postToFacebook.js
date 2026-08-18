@@ -6,13 +6,10 @@
 // record -- see requireAdmin() in adminAuth.js. This is admin-only:
 // posting to the organization's Facebook page must never be reachable
 // without that check.
-
 const { SecretsManagerClient, GetSecretValueCommand } = require("@aws-sdk/client-secrets-manager");
 const https = require('https');
 const { requireAdmin } = require('./adminAuth');
-
 const secretsClient = new SecretsManagerClient({ region: "us-east-1" });
-
 function httpsRequest(options, body) {
   return new Promise((resolve, reject) => {
     const bodyStr = body ? new URLSearchParams(body).toString() : null;
@@ -33,17 +30,14 @@ function httpsRequest(options, body) {
     req.end();
   });
 }
-
 exports.handler = async (event) => {
   const headers = {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
   };
-
   if (event.requestContext?.http?.method === 'OPTIONS') {
     return { statusCode: 200, headers, body: '' };
   }
-
   const auth = await requireAdmin(event);
   if (!auth.authorized) {
     return {
@@ -52,11 +46,9 @@ exports.handler = async (event) => {
       body: JSON.stringify({ success: false, message: auth.error }),
     };
   }
-
   try {
     const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
     const { message, image_url } = body || {};
-
     if (!message) {
       return {
         statusCode: 400,
@@ -64,38 +56,45 @@ exports.handler = async (event) => {
         body: JSON.stringify({ success: false, message: 'message is required' }),
       };
     }
-
     // Fetch credentials from Secrets Manager
     const secretResp = await secretsClient.send(new GetSecretValueCommand({
       SecretId: 'sixspur/meta-api',
     }));
     const creds = JSON.parse(secretResp.SecretString);
     const { facebook_page_id, facebook_page_token } = creds;
-
     const postParams = {
       message,
       access_token: facebook_page_token,
     };
-
     const endpoint = image_url
       ? `/v19.0/${facebook_page_id}/photos`
       : `/v19.0/${facebook_page_id}/feed`;
-
     if (image_url) {
       postParams.url = image_url;
     }
-
     const res = await httpsRequest({
       hostname: 'graph.facebook.com',
       path: endpoint,
       method: 'POST',
     }, postParams);
-
     const responseData = JSON.parse(res.body);
     console.log('Facebook post response:', res.status, JSON.stringify(responseData));
-
     if (responseData.id) {
-      const postId = responseData.id;
+      // FIXED (Session 20): the /{page-id}/photos endpoint (used
+      // whenever image_url is set) returns TWO different IDs --
+      // `id` is the PHOTO object's ID, `post_id` is the actual FEED
+      // POST's ID (format: "{pageId}_{postId}"). The plain /{page-id}
+      // /feed endpoint (text-only posts, no image) only ever returns
+      // `id`, already in that same "{pageId}_{postId}" format -- there
+      // is no separate post_id field in that case. Previously this
+      // always used responseData.id, which meant every photo post
+      // logged/returned the wrong ID and a broken post_url (the split
+      // on '_' silently failed since a bare photo ID has no
+      // underscore, falling back to the raw, wrong photo ID). The real
+      // Facebook post was actually created correctly the whole time --
+      // this only affected what our own admin panel showed/linked to
+      // afterward, not whether the post itself succeeded.
+      const postId = responseData.post_id || responseData.id;
       console.log(`Posted to Facebook: post_id=${postId}`);
       return {
         statusCode: 200,
@@ -116,7 +115,6 @@ exports.handler = async (event) => {
         body: JSON.stringify({ success: false, message: 'Facebook API error', detail: responseData }),
       };
     }
-
   } catch (error) {
     console.error('postToFacebook error:', error);
     return {

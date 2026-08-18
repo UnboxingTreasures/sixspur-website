@@ -60,14 +60,29 @@ echo "Role ARN: $ROLE_ARN"
 
 echo ""
 echo "=== 2. Creating/updating the Secrets Manager secret ==="
-aws secretsmanager create-secret \
-  --name sixspur/meta-api \
-  --secret-string '{"facebook_page_id":"1109378342269269","facebook_page_token":"REPLACE_ME_NOT_YET_GENERATED","instagram_business_account_id":"17841448275162258","instagram_access_token":"IGAAVRZAdUXjDNBZAFpBZA3ljVmJXWnJLSXNJZAjJHUVg0cFlQWi1SdEtZAVDBqaFJPRmJYSEVRaEt1TFZAFejB4MkgtQTZA0MkRqc3RHZATNBb25zN0haeHJVVWtVeFN5dlVRRTdjN2xibl9vMVV0N0k1Y1I3WE5ZAU0hQN3VqTVc0ZAXZAxMAZDZD"}' \
-  --profile "$PROFILE" --region "$REGION" 2>/dev/null \
-  || aws secretsmanager put-secret-value \
-    --secret-id sixspur/meta-api \
+# FIXED (Session 20): this used to unconditionally call put-secret-value
+# with a HARDCODED PLACEHOLDER facebook_page_token on every single
+# deploy -- meaning any real token that had been set (manually, after
+# generating it in the Meta dashboard) got silently wiped back to
+# "REPLACE_ME_NOT_YET_GENERATED" the next time this script ran for any
+# reason (e.g. just to ship an unrelated code fix). This is exactly
+# what happened tonight: a real token was working (confirmed by a
+# successful live Facebook post), then got overwritten back to the
+# placeholder by this script's own secret-creation step, breaking
+# Facebook posting entirely with no obvious symptom until the next
+# attempt failed with "Malformed access token". Now: only ever CREATE
+# the secret with the placeholder if it doesn't exist yet at all. If it
+# already exists, this step does nothing -- whatever real value is
+# currently there (placeholder or real token) is left completely alone.
+if aws secretsmanager describe-secret --secret-id sixspur/meta-api --profile "$PROFILE" --region "$REGION" >/dev/null 2>&1; then
+  echo "Secret already exists -- leaving its current value untouched (use the command printed at the end of this script to update the real token)."
+else
+  aws secretsmanager create-secret \
+    --name sixspur/meta-api \
     --secret-string '{"facebook_page_id":"1109378342269269","facebook_page_token":"REPLACE_ME_NOT_YET_GENERATED","instagram_business_account_id":"17841448275162258","instagram_access_token":"IGAAVRZAdUXjDNBZAFpBZA3ljVmJXWnJLSXNJZAjJHUVg0cFlQWi1SdEtZAVDBqaFJPRmJYSEVRaEt1TFZAFejB4MkgtQTZA0MkRqc3RHZATNBb25zN0haeHJVVWtVeFN5dlVRRTdjN2xibl9vMVV0N0k1Y1I3WE5ZAU0hQN3VqTVc0ZAXZAxMAZDZD"}' \
     --profile "$PROFILE" --region "$REGION" > /dev/null
+  echo "Secret created for the first time (placeholder Facebook token -- fill in the real one before Facebook posting will work)."
+fi
 
 echo ""
 echo "=== 3. Installing dependencies ==="
@@ -122,6 +137,19 @@ aws lambda create-function \
 
 echo ""
 echo "=== 7. Wiring up API Gateway routes ==="
+# FIXED (Session 20, second pass): the first fix used JMESPath
+# "| [0]" text-output extraction for both integration and route
+# lookups, which produced a garbage, non-existent route ID
+# ("waiznj0" -- didn't match any real route on the API) when run live,
+# even though a manual equivalent query worked fine standalone. Rather
+# than keep chasing the exact CLI/JMESPath text-output quirk, this
+# switches to the same robust pattern already used successfully
+# elsewhere in this project today: fetch the full JSON with
+# --output json, parse it with python3, and pass real values through
+# explicitly. No more ambiguous single-line text extraction.
+
+ALL_INTEGRATIONS_JSON=$(aws apigatewayv2 get-integrations --api-id "$API_ID" --profile "$PROFILE" --region "$REGION" --output json)
+ALL_ROUTES_JSON=$(aws apigatewayv2 get-routes --api-id "$API_ID" --profile "$PROFILE" --region "$REGION" --output json)
 
 for FN in postToInstagram postToFacebook social-presignedUrl; do
   case $FN in
@@ -130,19 +158,55 @@ for FN in postToInstagram postToFacebook social-presignedUrl; do
     social-presignedUrl) ROUTE="POST /admin/social/presigned-url"; LAMBDA="sixspur-social-presignedUrl" ;;
   esac
 
-  INTEGRATION_ID=$(aws apigatewayv2 create-integration \
-    --api-id "$API_ID" \
-    --integration-type AWS_PROXY \
-    --integration-uri "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:${LAMBDA}" \
-    --payload-format-version "2.0" \
-    --profile "$PROFILE" --region "$REGION" \
-    --query 'IntegrationId' --output text)
+  LAMBDA_ARN="arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:${LAMBDA}"
 
-  aws apigatewayv2 create-route \
-    --api-id "$API_ID" \
-    --route-key "$ROUTE" \
-    --target "integrations/${INTEGRATION_ID}" \
-    --profile "$PROFILE" --region "$REGION" > /dev/null
+  EXISTING_INTEGRATION_ID=$(echo "$ALL_INTEGRATIONS_JSON" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+for item in data.get('Items', []):
+    if item.get('IntegrationUri') == '$LAMBDA_ARN':
+        print(item['IntegrationId'])
+        break
+")
+
+  if [ -z "$EXISTING_INTEGRATION_ID" ]; then
+    INTEGRATION_ID=$(aws apigatewayv2 create-integration \
+      --api-id "$API_ID" \
+      --integration-type AWS_PROXY \
+      --integration-uri "$LAMBDA_ARN" \
+      --payload-format-version "2.0" \
+      --profile "$PROFILE" --region "$REGION" \
+      --query 'IntegrationId' --output text)
+    echo "  Created new integration for $LAMBDA: $INTEGRATION_ID"
+  else
+    INTEGRATION_ID="$EXISTING_INTEGRATION_ID"
+    echo "  Reusing existing integration for $LAMBDA: $INTEGRATION_ID"
+  fi
+
+  EXISTING_ROUTE_ID=$(echo "$ALL_ROUTES_JSON" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+for item in data.get('Items', []):
+    if item.get('RouteKey') == '''$ROUTE''':
+        print(item['RouteId'])
+        break
+")
+
+  if [ -z "$EXISTING_ROUTE_ID" ]; then
+    aws apigatewayv2 create-route \
+      --api-id "$API_ID" \
+      --route-key "$ROUTE" \
+      --target "integrations/${INTEGRATION_ID}" \
+      --profile "$PROFILE" --region "$REGION" > /dev/null
+    echo "  Created route: $ROUTE -> $LAMBDA"
+  else
+    aws apigatewayv2 update-route \
+      --api-id "$API_ID" \
+      --route-id "$EXISTING_ROUTE_ID" \
+      --target "integrations/${INTEGRATION_ID}" \
+      --profile "$PROFILE" --region "$REGION" > /dev/null
+    echo "  Updated existing route ($EXISTING_ROUTE_ID): $ROUTE -> $LAMBDA"
+  fi
 
   aws lambda add-permission \
     --function-name "$LAMBDA" \
@@ -151,8 +215,6 @@ for FN in postToInstagram postToFacebook social-presignedUrl; do
     --principal apigateway.amazonaws.com \
     --source-arn "arn:aws:execute-api:${REGION}:${ACCOUNT_ID}:${API_ID}/*/*/admin/social/*" \
     --profile "$PROFILE" --region "$REGION" 2>/dev/null || echo "  Permission already exists for $LAMBDA"
-
-  echo "  Wired: $ROUTE -> $LAMBDA"
 done
 
 echo ""

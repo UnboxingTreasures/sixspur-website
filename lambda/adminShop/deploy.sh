@@ -12,7 +12,7 @@ npm install
 
 echo "Zipping function..."
 rm -f adminShop.zip
-zip -r adminShop.zip index.js dynamo.js s3.js node_modules package.json
+zip -r adminShop.zip index.js dynamo.js s3.js adminAuth.js node_modules package.json
 
 if ! aws iam get-role --role-name "$ROLE_NAME" --profile "$PROFILE" >/dev/null 2>&1; then
   echo "Creating IAM role $ROLE_NAME..."
