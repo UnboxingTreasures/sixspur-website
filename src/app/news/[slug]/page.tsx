@@ -87,6 +87,11 @@ export default function NewsPostPage() {
   const [commentsLoading, setCommentsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  // NEW -- whether the logged-in donor has a display name set yet.
+  // null while unknown (not logged in, or still checking) so the
+  // comment form's three states (checking / logged out / logged in but
+  // no name / ready) stay unambiguous.
+  const [hasName, setHasName] = useState<boolean | null>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [newComment, setNewComment] = useState("");
   const [posting, setPosting] = useState(false);
@@ -133,9 +138,29 @@ export default function NewsPostPage() {
     // maintains (set/cleared on every login/logout/route change) --
     // avoids a second /donor/profile fetch just to check admin status
     // on this page.
-    getIdToken().then((token) => {
+    getIdToken().then(async (token) => {
       setIsLoggedIn(Boolean(token));
       setIsAdmin(typeof window !== "undefined" && window.localStorage.getItem("sixspur_isAdmin") === "true");
+
+      // Check whether a display name is already set, so the comment
+      // form can show the right prompt BEFORE the donor even tries to
+      // type -- previously this only surfaced as an error after
+      // submitting. A profile fetch failure here isn't treated as
+      // "no name" -- leaves hasName as null (comment form just won't
+      // render until this resolves one way or the other, same as the
+      // brief checkingAuth window).
+      if (token) {
+        try {
+          const res = await fetch(`${API_URL}/donor/profile`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const data = await res.json();
+          setHasName(Boolean(data.name));
+        } catch (err) {
+          console.error("Failed to check donor profile:", err);
+        }
+      }
+
       setCheckingAuth(false);
     });
   }, [slug]);
@@ -363,6 +388,14 @@ export default function NewsPostPage() {
                   Log in
                 </Link>
                 {" "}to leave a comment.
+              </div>
+            ) : hasName === false ? (
+              <div className="bg-spur-tan-light rounded p-5 text-sm">
+                Add a display name in your{" "}
+                <Link href="/account" className="text-spur-orange font-semibold hover:underline">
+                  account settings
+                </Link>
+                {" "}before commenting.
               </div>
             ) : (
               <div>
