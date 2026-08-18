@@ -11,7 +11,7 @@ npm install
 
 echo "Zipping function..."
 rm -f adminSmsRecipients.zip
-zip -r adminSmsRecipients.zip index.js dynamo.js sns.js adminAuth.js node_modules package.json
+zip -r adminSmsRecipients.zip index.js dynamo.js adminAuth.js node_modules package.json
 
 if ! aws iam get-role --role-name "$ROLE_NAME" --profile "$PROFILE" >/dev/null 2>&1; then
   echo "Creating IAM role $ROLE_NAME..."
@@ -45,7 +45,6 @@ aws iam put-role-policy \
   --profile "$PROFILE"
 
 ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME}"
-ENV_VARS="Variables={DONORS_TABLE=donors,SMS_RECIPIENTS_TABLE=sms_recipients}"
 
 if aws lambda get-function --function-name "$FUNCTION_NAME" --profile "$PROFILE" --region "$REGION" >/dev/null 2>&1; then
   echo "Function exists, updating code..."
@@ -56,9 +55,23 @@ if aws lambda get-function --function-name "$FUNCTION_NAME" --profile "$PROFILE"
   aws lambda wait function-updated \
     --function-name "$FUNCTION_NAME" \
     --profile "$PROFILE" --region "$REGION"
+
+  echo "Merging env vars (preserving any set outside this script)..."
+  CURRENT_ENV=$(aws lambda get-function-configuration \
+    --function-name "$FUNCTION_NAME" \
+    --profile "$PROFILE" --region "$REGION" \
+    --query 'Environment.Variables' --output json)
+  MERGED_ENV=$(echo "$CURRENT_ENV" | python3 -c "
+import json, sys
+env = json.load(sys.stdin) or {}
+env['DONORS_TABLE'] = 'donors'
+env['SMS_RECIPIENTS_TABLE'] = 'sms_recipients'
+print(json.dumps({'Variables': env}))
+")
+
   aws lambda update-function-configuration \
     --function-name "$FUNCTION_NAME" \
-    --environment "$ENV_VARS" \
+    --environment "$MERGED_ENV" \
     --timeout 10 \
     --memory-size 256 \
     --profile "$PROFILE" --region "$REGION"
@@ -72,7 +85,7 @@ else
     --zip-file fileb://adminSmsRecipients.zip \
     --timeout 10 \
     --memory-size 256 \
-    --environment "$ENV_VARS" \
+    --environment "Variables={DONORS_TABLE=donors,SMS_RECIPIENTS_TABLE=sms_recipients}" \
     --profile "$PROFILE" --region "$REGION"
 fi
 

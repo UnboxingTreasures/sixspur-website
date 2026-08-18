@@ -1,19 +1,22 @@
 // index.js
 // Admin-only Lambda backing the "Text Alert Recipients" section on the
-// User Access page. Lets an admin add a phone number, walk it through
-// SNS's sandbox OTP verification, and remove numbers -- all without
-// touching the AWS console.
+// User Access page. Lets an admin add a phone number (immediately
+// active) or remove one -- all without touching the AWS console.
 //
-// A verified number here starts receiving texts IMMEDIATELY -- the 5
+// A recipient here starts receiving texts IMMEDIATELY on add -- the 5
 // notification Lambdas (donate, orders, adoptionApplication,
 // contactForm, processIncomingEmail) read the sms_recipients table's
 // status field directly at invocation time (see getRecipients.js in
-// each), rather than a static env var. This handler is what keeps that
-// status field in sync with SNS's own verification state.
+// each), rather than a static env var.
+//
+// NOTE: this used to walk each number through SNS's SMS Sandbox OTP
+// verification flow before marking it Verified. Now that the account
+// is out of SNS sandbox, that step is unnecessary -- AWS allows
+// sending to any number without per-number verification, so recipients
+// are marked Verified on add and there's no separate /verify route.
 
 const { requireAdmin } = require('./adminAuth');
-const { putRecipient, updateStatus, deleteRecipient, listRecipients } = require('./dynamo');
-const { addSandboxNumber, verifySandboxNumber, listSandboxNumbers, deleteSandboxNumber } = require('./sns');
+const { putRecipient, deleteRecipient, listRecipients } = require('./dynamo');
 
 const PHONE_RE = /^\+[1-9]\d{6,14}$/;
 
@@ -41,28 +44,20 @@ exports.handler = async (event) => {
   }
 
   try {
-    // GET /admin/sms-recipients -- our table's status field is what the
-    // 5 notification Lambdas actually read, so it's shown as primary.
-    // Live SNS status is included too, as a cross-check in case
-    // something was changed manually in the AWS console outside this UI.
+    // GET /admin/sms-recipients
     if (method === 'GET' && path.endsWith('/admin/sms-recipients')) {
-      const [labeled, sandboxNumbers] = await Promise.all([listRecipients(), listSandboxNumbers()]);
-
-      const liveSnsStatusByNumber = new Map(sandboxNumbers.map((n) => [n.PhoneNumber, n.Status]));
-
-      const recipients = labeled.map((r) => ({
+      const recipients = (await listRecipients()).map((r) => ({
         phoneNumber: r.phoneNumber,
         label: r.label || null,
         addedBy: r.addedBy || null,
         addedAt: r.addedAt || null,
-        status: r.status || 'Unknown',
-        liveSnsStatus: liveSnsStatusByNumber.get(r.phoneNumber) || 'Unknown',
+        status: r.status || 'Verified',
       }));
 
       return respond(200, { recipients });
     }
 
-    // POST /admin/sms-recipients -- add a number, triggers SNS OTP text
+    // POST /admin/sms-recipients -- adds a number, active immediately
     if (method === 'POST' && path.endsWith('/admin/sms-recipients')) {
       const phoneNumber = (body.phoneNumber || '').trim();
       const label = (body.label || '').trim();
@@ -73,35 +68,19 @@ exports.handler = async (event) => {
         return respond(400, { error: 'Label is required (whose number this is)' });
       }
 
-      await addSandboxNumber(phoneNumber);
       const recipient = await putRecipient({ phoneNumber, label, addedBy: auth.donorId });
 
-      return respond(201, { recipient, message: 'Verification code sent via text.' });
+      return respond(201, { recipient, message: 'Number added. It will now receive alerts.' });
     }
 
-    // POST /admin/sms-recipients/verify -- submit the OTP code. On
-    // success, marks status Verified in our own table -- this is the
-    // write that makes the number start receiving real alerts.
-    if (method === 'POST' && path.endsWith('/admin/sms-recipients/verify')) {
-      const phoneNumber = (body.phoneNumber || '').trim();
-      const code = (body.code || '').trim();
-      if (!PHONE_RE.test(phoneNumber) || !code) {
-        return respond(400, { error: 'phoneNumber and code are required' });
-      }
-
-      await verifySandboxNumber(phoneNumber, code);
-      await updateStatus(phoneNumber, 'Verified');
-      return respond(200, { message: 'Number verified. It will now receive alerts.' });
-    }
-
-    // POST /admin/sms-recipients/remove -- delete from SNS and our table
+    // POST /admin/sms-recipients/remove
     if (method === 'POST' && path.endsWith('/admin/sms-recipients/remove')) {
       const phoneNumber = (body.phoneNumber || '').trim();
       if (!PHONE_RE.test(phoneNumber)) {
         return respond(400, { error: 'Valid phoneNumber is required' });
       }
 
-      await Promise.allSettled([deleteSandboxNumber(phoneNumber), deleteRecipient(phoneNumber)]);
+      await deleteRecipient(phoneNumber);
       return respond(200, { message: 'Number removed.' });
     }
 

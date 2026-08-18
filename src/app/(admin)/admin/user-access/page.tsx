@@ -24,7 +24,7 @@ interface SmsRecipient {
   label: string | null;
   addedBy: string | null;
   addedAt: string | null;
-  status: "Pending" | "Verified" | "Unknown";
+  status: "Verified" | "Unknown";
 }
 
 export default function AdminUserAccessPage() {
@@ -53,12 +53,6 @@ export default function AdminUserAccessPage() {
   const [newLabel, setNewLabel] = useState("");
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState("");
-
-  // Which number is currently showing an inline "enter code" input
-  const [verifyingPhone, setVerifyingPhone] = useState<string | null>(null);
-  const [verifyCode, setVerifyCode] = useState("");
-  const [verifying, setVerifying] = useState(false);
-  const [verifyError, setVerifyError] = useState("");
 
   const [removingPhone, setRemovingPhone] = useState<string | null>(null);
 
@@ -170,7 +164,6 @@ export default function AdminUserAccessPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to add recipient");
-      setVerifyingPhone(newPhone.trim());
       setNewPhone("");
       setNewLabel("");
       await fetchRecipients();
@@ -178,30 +171,6 @@ export default function AdminUserAccessPage() {
       setAddError(err instanceof Error ? err.message : "Failed to add recipient");
     } finally {
       setAdding(false);
-    }
-  };
-
-  const handleVerify = async (phoneNumber: string) => {
-    if (!verifyCode.trim()) {
-      setVerifyError("Enter the code sent by text");
-      return;
-    }
-    setVerifying(true);
-    setVerifyError("");
-    try {
-      const res = await authedFetch("/admin/sms-recipients/verify", {
-        method: "POST",
-        body: JSON.stringify({ phoneNumber, code: verifyCode.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to verify code");
-      setVerifyingPhone(null);
-      setVerifyCode("");
-      await fetchRecipients();
-    } catch (err: unknown) {
-      setVerifyError(err instanceof Error ? err.message : "Failed to verify code");
-    } finally {
-      setVerifying(false);
     }
   };
 
@@ -222,9 +191,6 @@ export default function AdminUserAccessPage() {
       setRemovingPhone(null);
     }
   };
-
-  const statusColor = (status: SmsRecipient["status"]) =>
-    status === "Verified" ? "#16A34A" : status === "Pending" ? "#D97706" : "#9CA3AF";
 
   return (
     <main style={{ padding: "2rem", maxWidth: "700px", margin: "0 auto" }}>
@@ -291,7 +257,7 @@ export default function AdminUserAccessPage() {
       <div style={{ width: 40, height: 3, background: "#E77A2D", borderRadius: 2, marginBottom: 12 }} />
 
       <div style={{ padding: "10px 14px", borderRadius: 8, background: "#F0FDF4", border: "1.5px solid #BBF7D0", color: "#166534", fontSize: 12.5, marginBottom: 16, lineHeight: 1.5 }}>
-        A number starts receiving alerts as soon as it&apos;s verified below -- no other steps needed.
+        A number starts receiving alerts as soon as it&apos;s added below -- no verification step needed.
       </div>
 
       {/* Add form */}
@@ -317,7 +283,7 @@ export default function AdminUserAccessPage() {
             disabled={adding}
             style={{ padding: "10px 18px", borderRadius: 8, border: "none", background: "#E77A2D", color: "#fff", fontSize: 13, fontWeight: 700, cursor: adding ? "default" : "pointer", fontFamily: "inherit", opacity: adding ? 0.6 : 1, whiteSpace: "nowrap" }}
           >
-            {adding ? "Adding…" : "Add & Send Code"}
+            {adding ? "Adding…" : "Add"}
           </button>
         </div>
         {addError && <p style={{ fontSize: 12, color: "#DC2626", marginTop: 8 }}>{addError}</p>}
@@ -335,60 +301,19 @@ export default function AdminUserAccessPage() {
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {recipients.map((r) => (
-          <div key={r.phoneNumber} style={{ background: "#fff", border: "1.5px solid #E8E2DC", borderRadius: 10, padding: "12px 16px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={{ fontSize: 14, color: "#111111", fontWeight: 600 }}>
-                  {r.label || "(no label)"} <span style={{ color: "#9CA3AF", fontWeight: 400 }}>— {r.phoneNumber}</span>
-                </div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: statusColor(r.status), marginTop: 2 }}>{r.status}</div>
-              </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                {r.status === "Pending" && verifyingPhone !== r.phoneNumber && (
-                  <button
-                    onClick={() => { setVerifyingPhone(r.phoneNumber); setVerifyCode(""); setVerifyError(""); }}
-                    style={{ padding: "6px 14px", borderRadius: 6, border: "1.5px solid #E77A2D", background: "#fff", color: "#E77A2D", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
-                  >
-                    Enter Code
-                  </button>
-                )}
-                <button
-                  onClick={() => handleRemoveRecipient(r.phoneNumber, r.label)}
-                  disabled={removingPhone === r.phoneNumber}
-                  style={{ padding: "6px 14px", borderRadius: 6, border: "1.5px solid #DC2626", background: "#fff", color: "#DC2626", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: removingPhone === r.phoneNumber ? 0.6 : 1 }}
-                >
-                  {removingPhone === r.phoneNumber ? "Removing…" : "Remove"}
-                </button>
+          <div key={r.phoneNumber} style={{ background: "#fff", border: "1.5px solid #E8E2DC", borderRadius: 10, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontSize: 14, color: "#111111", fontWeight: 600 }}>
+                {r.label || "(no label)"} <span style={{ color: "#9CA3AF", fontWeight: 400 }}>— {r.phoneNumber}</span>
               </div>
             </div>
-
-            {verifyingPhone === r.phoneNumber && (
-              <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #E8E2DC", display: "flex", gap: 8, alignItems: "center" }}>
-                <input
-                  type="text"
-                  value={verifyCode}
-                  onChange={(e) => setVerifyCode(e.target.value)}
-                  placeholder="6-digit code"
-                  style={{ flex: 1, boxSizing: "border-box", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit" }}
-                />
-                <button
-                  onClick={() => handleVerify(r.phoneNumber)}
-                  disabled={verifying}
-                  style={{ padding: "8px 14px", borderRadius: 6, border: "none", background: "#16A34A", color: "#fff", fontSize: 12, fontWeight: 700, cursor: verifying ? "default" : "pointer", fontFamily: "inherit", opacity: verifying ? 0.6 : 1, whiteSpace: "nowrap" }}
-                >
-                  {verifying ? "Verifying…" : "Verify"}
-                </button>
-                <button
-                  onClick={() => { setVerifyingPhone(null); setVerifyCode(""); setVerifyError(""); }}
-                  style={{ padding: "8px 14px", borderRadius: 6, border: "1.5px solid #E8E2DC", background: "#fff", color: "#6B7280", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
-                >
-                  Cancel
-                </button>
-              </div>
-            )}
-            {verifyingPhone === r.phoneNumber && verifyError && (
-              <p style={{ fontSize: 12, color: "#DC2626", marginTop: 8 }}>{verifyError}</p>
-            )}
+            <button
+              onClick={() => handleRemoveRecipient(r.phoneNumber, r.label)}
+              disabled={removingPhone === r.phoneNumber}
+              style={{ padding: "6px 14px", borderRadius: 6, border: "1.5px solid #DC2626", background: "#fff", color: "#DC2626", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: removingPhone === r.phoneNumber ? 0.6 : 1 }}
+            >
+              {removingPhone === r.phoneNumber ? "Removing…" : "Remove"}
+            </button>
           </div>
         ))}
       </div>
