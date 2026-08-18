@@ -270,17 +270,12 @@ export default function NewsPostPage() {
               <p key={i} className="text-gray-700 leading-relaxed mb-6">{para}</p>
             ))}
           </div>
-          <div className="mt-12 pt-8 border-t border-spur-tan-light flex flex-wrap items-center justify-between gap-4">
-            <Link href="/news" className="text-spur-orange font-semibold text-sm hover:underline">
-              ← Back to News
-            </Link>
-            <Link
-              href="/ways-to-give"
-              className="bg-spur-orange text-white font-semibold px-6 py-2 rounded hover:bg-spur-orange-dark transition-colors text-sm"
-            >
-              Support the Ranch
-            </Link>
-          </div>
+          {/* REMOVED (Session 20) -- this section used to have a
+              "← Back to News" link (redundant with the header one) and
+              a "Support the Ranch" CTA. Both removed per Jay's
+              direction -- the back link was duplicate, and the donate
+              reminder wasn't wanted here since there are already
+              plenty of other donate touchpoints across the site. */}
 
           {/* Comments -- matches Unboxing Treasures' card-per-comment
               style: light box, circular initial avatar, name + Admin
