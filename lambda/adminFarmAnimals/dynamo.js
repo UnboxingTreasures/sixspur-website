@@ -1,5 +1,5 @@
 // dynamo.js
-// Admin read/write access to farm_animals: type create/rename/delete, and
+// Admin read/write access to farm_animals: type create/update/delete, and
 // managing each type's photo pool (add, remove, set thumbnail).
 
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
@@ -51,16 +51,41 @@ async function createType({ name, description, seedPhotoUrl }) {
   return item;
 }
 
-async function renameType(animalId, newName) {
-  if (!newName || !newName.trim()) throw new Error('Name cannot be empty');
+/**
+ * Updates a type's name and/or description -- either field can be provided
+ * independently, so the admin panel can save each one separately (e.g. a
+ * quick typo fix to the name shouldn't require resending the description,
+ * and vice versa for editing the client-facing bio text). At least one of
+ * the two must be given.
+ */
+async function updateType(animalId, { name, description }) {
+  if (name !== undefined && !name.trim()) throw new Error('Name cannot be empty');
+  if (name === undefined && description === undefined) {
+    throw new Error('Nothing to update -- provide name and/or description');
+  }
+
+  const names = { '#updatedAt': 'updatedAt' };
+  const values = { ':updatedAt': new Date().toISOString() };
+  const sets = ['#updatedAt = :updatedAt'];
+
+  if (name !== undefined) {
+    names['#name'] = 'name';
+    values[':name'] = name.trim();
+    sets.push('#name = :name');
+  }
+  if (description !== undefined) {
+    names['#description'] = 'description';
+    values[':description'] = description.trim();
+    sets.push('#description = :description');
+  }
 
   const result = await ddb.send(new UpdateCommand({
     TableName: TABLE_NAME,
     Key: { animalId },
     ConditionExpression: 'attribute_exists(animalId)',
-    UpdateExpression: 'SET #name = :name, updatedAt = :updatedAt',
-    ExpressionAttributeNames: { '#name': 'name' },
-    ExpressionAttributeValues: { ':name': newName.trim(), ':updatedAt': new Date().toISOString() },
+    UpdateExpression: `SET ${sets.join(', ')}`,
+    ExpressionAttributeNames: names,
+    ExpressionAttributeValues: values,
     ReturnValues: 'ALL_NEW',
   })).catch((err) => {
     if (err.name === 'ConditionalCheckFailedException') return null;
@@ -166,7 +191,7 @@ module.exports = {
   listAll,
   getById,
   createType,
-  renameType,
+  updateType,
   deleteTypeRecord,
   findUrlsUsedByOtherTypes,
   addPhotos,

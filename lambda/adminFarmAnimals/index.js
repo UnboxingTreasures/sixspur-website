@@ -4,7 +4,8 @@
 //   GET    /admin/animals/{id}                — one type's full detail
 //   POST   /admin/animals                     — create a new type (requires seedPhotoUrl,
 //                                                already uploaded via the presign route below)
-//   PATCH  /admin/animals/{id}                — rename (name only -- typo fixes)
+//   PATCH  /admin/animals/{id}                — update name and/or description
+//                                                (either field can be sent alone)
 //   DELETE /admin/animals/{id}                — delete the whole type, recursively removing
 //                                                its photos from S3 EXCEPT any still used by
 //                                                another type
@@ -20,7 +21,7 @@
 // let anyone upload arbitrary files into the bucket under any animalId.
 
 const {
-  listAll, getById, createType, renameType, deleteTypeRecord,
+  listAll, getById, createType, updateType, deleteTypeRecord,
   findUrlsUsedByOtherTypes, addPhotos, removePhoto, setThumbnail,
 } = require('./dynamo');
 const { createPresignedUploadUrl, deletePhoto } = require('./s3');
@@ -63,11 +64,13 @@ async function handleCreate(body) {
   }
 }
 
-async function handleRename(animalId, body) {
-  if (!body.name) return respond(400, { error: 'name is required' });
+async function handleUpdate(animalId, body) {
+  if (body.name === undefined && body.description === undefined) {
+    return respond(400, { error: 'Provide name and/or description to update' });
+  }
 
   try {
-    const updated = await renameType(animalId, body.name);
+    const updated = await updateType(animalId, { name: body.name, description: body.description });
     if (!updated) return respond(404, { error: 'Animal type not found' });
     return respond(200, updated);
   } catch (err) {
@@ -183,7 +186,7 @@ exports.handler = async (event) => {
       case 'GET /admin/animals':                    return await handleList();
       case 'GET /admin/animals/{id}':                return await handleDetail(animalId);
       case 'POST /admin/animals':                    return await handleCreate(body);
-      case 'PATCH /admin/animals/{id}':              return await handleRename(animalId, body);
+      case 'PATCH /admin/animals/{id}':              return await handleUpdate(animalId, body);
       case 'DELETE /admin/animals/{id}':             return await handleDelete(animalId);
       case 'POST /admin/animals/{id}/photos/presign': return await handlePresign(animalId, body);
       case 'POST /admin/animals/{id}/photos':        return await handleAddPhotos(animalId, body);

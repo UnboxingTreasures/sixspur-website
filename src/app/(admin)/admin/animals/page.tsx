@@ -67,6 +67,9 @@ export default function AdminAnimalsPage() {
   const [renameDrafts, setRenameDrafts] = useState<Record<string, string>>({});
   const [renameSaving, setRenameSaving] = useState<string | null>(null);
 
+  const [descriptionDrafts, setDescriptionDrafts] = useState<Record<string, string>>({});
+  const [descriptionSaving, setDescriptionSaving] = useState<string | null>(null);
+
   const [pendingDeleteType, setPendingDeleteType] = useState<AnimalType | null>(null);
   const [deletingType, setDeletingType] = useState(false);
 
@@ -151,6 +154,26 @@ export default function AdminAnimalsPage() {
       alert(err instanceof Error ? err.message : "Rename failed");
     } finally {
       setRenameSaving(null);
+    }
+  };
+
+  // ── Description ──────────────────────────────────────────────────────────
+  const saveDescription = async (animalId: string) => {
+    const newDescription = descriptionDrafts[animalId] ?? "";
+
+    setDescriptionSaving(animalId);
+    try {
+      const res = await authedFetch(`/admin/animals/${animalId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ description: newDescription }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to save description");
+      setAnimals((prev) => prev.map((a) => (a.animalId === animalId ? { ...a, description: data.description } : a)));
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to save description");
+    } finally {
+      setDescriptionSaving(null);
     }
   };
 
@@ -262,6 +285,7 @@ export default function AdminAnimalsPage() {
                 onClick={() => {
                   setExpandedId(isExpanded ? null : animal.animalId);
                   setRenameDrafts((prev) => ({ ...prev, [animal.animalId]: animal.name }));
+                  setDescriptionDrafts((prev) => ({ ...prev, [animal.animalId]: animal.description || "" }));
                 }}
                 style={{ padding: "14px 20px", cursor: "pointer", display: "flex", alignItems: "center", gap: 14 }}
               >
@@ -306,6 +330,39 @@ export default function AdminAnimalsPage() {
                         }}
                       >
                         {renameSaving === animal.animalId ? "Saving…" : "Save"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  <div style={{ marginTop: 20 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                      Description
+                    </div>
+                    <textarea
+                      value={descriptionDrafts[animal.animalId] ?? animal.description ?? ""}
+                      onChange={(e) => setDescriptionDrafts((prev) => ({ ...prev, [animal.animalId]: e.target.value }))}
+                      rows={3}
+                      placeholder="The blurb shown on the homepage and Farm Family page for this animal type."
+                      style={{
+                        width: "100%", boxSizing: "border-box", padding: "8px 12px", borderRadius: 8,
+                        border: "1.5px solid #E8E2DC", fontSize: 13, fontFamily: "inherit", resize: "vertical",
+                      }}
+                    />
+                    <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+                      <button
+                        onClick={() => saveDescription(animal.animalId)}
+                        disabled={
+                          descriptionSaving === animal.animalId ||
+                          (descriptionDrafts[animal.animalId] ?? animal.description ?? "") === (animal.description ?? "")
+                        }
+                        style={{
+                          padding: "8px 16px", borderRadius: 8, border: "none",
+                          background: "#111111", color: "#fff", fontSize: 13, fontWeight: 700,
+                          cursor: "pointer", fontFamily: "inherit", opacity: descriptionSaving === animal.animalId ? 0.6 : 1,
+                        }}
+                      >
+                        {descriptionSaving === animal.animalId ? "Saving…" : "Save"}
                       </button>
                     </div>
                   </div>
