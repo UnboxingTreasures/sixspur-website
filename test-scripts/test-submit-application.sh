@@ -53,7 +53,7 @@ APPLY_RESPONSE=$(curl -s -X POST "${API_URL}/adopt/apply" \
   "primaryPhoneType": "Mobile",
   "secondaryPhone": "",
   "secondaryPhoneType": "",
-  "primaryEmail": "jaylefler1974@gmail.com",
+  "primaryEmail": "sixspurrescue@gmail.com",
   "secondaryEmail": "",
   "interestedIn": "${ANIMAL_NAME}",
   "adoptOrFoster": ["Adopt"],

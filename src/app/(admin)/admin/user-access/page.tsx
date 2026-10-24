@@ -9,9 +9,8 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL;
 // lambda/adminUserAccess/index.js. This frontend copy is UI-only --
 // hiding the Revoke button for everyone else is just good UX so people
 // aren't shown a control that will fail for them. The actual security
-// boundary is the backend check; if these two lists ever drift apart,
-// the backend's list is what actually governs.
-const SUPER_ADMIN_EMAILS = new Set(["sixspurrescue@gmail.com", "jaylefler1974@gmail.com"]);
+// boundary is the backend check; keep both lists identical.
+const SUPER_ADMIN_EMAILS = new Set(["sixspurrescue@gmail.com"]);
 
 interface Admin {
   donorId: string;

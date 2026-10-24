@@ -42,25 +42,32 @@ aws iam put-role-policy \
   --profile "$PROFILE"
 
 ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME}"
-ENV_VARS="Variables={DONORS_TABLE=donors}"
 
 if aws lambda get-function --function-name "$FUNCTION_NAME" --profile "$PROFILE" --region "$REGION" >/dev/null 2>&1; then
   echo "Function exists, updating code..."
   aws lambda update-function-code \
     --function-name "$FUNCTION_NAME" \
     --zip-file fileb://adminUserAccess.zip \
-    --profile "$PROFILE" --region "$REGION"
+    --profile "$PROFILE" --region "$REGION" >/dev/null
 
   aws lambda wait function-updated \
     --function-name "$FUNCTION_NAME" \
     --profile "$PROFILE" --region "$REGION"
 
+  # Fetch-merge-patch: keep every existing env var, set only DONORS_TABLE.
+  # (Never overwrite the whole set -- that has wiped live values before.)
+  MERGED=$(aws lambda get-function-configuration \
+    --function-name "$FUNCTION_NAME" \
+    --profile "$PROFILE" --region "$REGION" \
+    --query 'Environment.Variables' --output json \
+    | python3 -c 'import sys,json; d=json.load(sys.stdin) or {}; d["DONORS_TABLE"]="donors"; print(json.dumps({"Variables":d}))')
+
   aws lambda update-function-configuration \
     --function-name "$FUNCTION_NAME" \
-    --environment "$ENV_VARS" \
+    --environment "$MERGED" \
     --timeout 10 \
     --memory-size 256 \
-    --profile "$PROFILE" --region "$REGION"
+    --profile "$PROFILE" --region "$REGION" >/dev/null
 else
   echo "Creating function..."
   aws lambda create-function \
@@ -71,8 +78,8 @@ else
     --zip-file fileb://adminUserAccess.zip \
     --timeout 10 \
     --memory-size 256 \
-    --environment "$ENV_VARS" \
-    --profile "$PROFILE" --region "$REGION"
+    --environment '{"Variables":{"DONORS_TABLE":"donors"}}' \
+    --profile "$PROFILE" --region "$REGION" >/dev/null
 fi
 
 echo "Done. Function: $FUNCTION_NAME"

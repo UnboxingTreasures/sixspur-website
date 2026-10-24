@@ -2,25 +2,24 @@
 // Admin-only routes for granting/revoking admin access.
 //   GET    /admin/user-access          — list current admins
 //   POST   /admin/user-access          — grant admin access by email
-//   DELETE /admin/user-access/{id}     — revoke admin access (super-admins only, see below)
+//   DELETE /admin/user-access/{id}     — revoke admin access (super-admin only, see below)
 //
 // Self-referential: only an existing admin can grant/revoke admin
 // access, checked via requireAdmin() on every route -- same shared
 // check every other admin Lambda uses.
 //
-// UPDATED -- revoking admin access is now further restricted to just
-// the two super-admin emails below, regardless of who else has
-// isAdmin=true. Any admin can still GRANT access (unchanged), but only
-// these two can pull it back from someone. This is deliberately a
-// hardcoded allowlist rather than a new "role" field on the donor
-// record -- it's two specific people, not a tier of access that's
-// expected to grow, so a database-driven roles system would be more
-// machinery than the actual requirement calls for.
+// Revoking admin access is further restricted to the super-admin
+// email(s) below, regardless of who else has isAdmin=true. Any admin
+// can still GRANT access, but only a super-admin can pull it back.
+// This is deliberately a hardcoded allowlist rather than a "role" field
+// on the donor record. To add or change a super-admin, edit this set
+// AND the matching set in src/app/(admin)/admin/user-access/page.tsx,
+// then redeploy this Lambda (./deploy.sh) and push the frontend.
 
 const { requireAdmin } = require('./adminAuth');
 const { listAdmins, grantAdmin, revokeAdmin } = require('./dynamo');
 
-const SUPER_ADMIN_EMAILS = new Set(['sixspurrescue@gmail.com', 'jaylefler1974@gmail.com']);
+const SUPER_ADMIN_EMAILS = new Set(['sixspurrescue@gmail.com']);
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -73,7 +72,7 @@ exports.handler = async (event) => {
 
       case 'DELETE /admin/user-access/{id}': {
         if (!SUPER_ADMIN_EMAILS.has((auth.email || '').trim().toLowerCase())) {
-          return respond(403, { error: 'Only Six Spur or Jay can revoke admin access.' });
+          return respond(403, { error: 'Only the Six Spur account can revoke admin access.' });
         }
         try {
           const revoked = await revokeAdmin(event.pathParameters?.id, auth.donorId);
